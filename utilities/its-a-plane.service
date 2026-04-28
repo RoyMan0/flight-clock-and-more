@@ -1,0 +1,20 @@
+[Unit]
+Description=its-a-plane
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/royman/its-a-plane-python/its-a-plane.py
+WorkingDirectory=/home/royman
+StandardOutput=append:/home/royman/its-a-plane-python/workdammit.log
+StandardError=append:/home/royman/its-a-plane-python/workdammit.log
+Restart=on-failure
+User=royman
+Group=royman
+Environment=PYTHONUNBUFFERED=1
+Environment=PULSE_RUNTIME_PATH=/run/user/royman/pulse
+Environment=PULSE_SERVER=unix:/run/user/royman/pulse/native
+
+
+[Install]
+WantedBy=multi-user.target

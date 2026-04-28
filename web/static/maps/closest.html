@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_7b070e2ddc37864ef65531ccabc25ef5 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_7b070e2ddc37864ef65531ccabc25ef5" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_7b070e2ddc37864ef65531ccabc25ef5 = L.map(
+                "map_7b070e2ddc37864ef65531ccabc25ef5",
+                {
+                    center: [39.725715, -105.203208],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 10,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_59ed493252bc7627c793f5c717868d96 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_59ed493252bc7627c793f5c717868d96.addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var marker_3fec4dbcea810ba9b54339c459272953 = L.marker(
+                [39.725715, -105.203208],
+                {
+}
+            ).addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var icon_4dfc0e2d1ffed5927d62910c8052d814 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_65d56ee7bd4f55ad6acb3a79d3ca7854 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_26d41a3e9eb5b695ddccef9ba7caba21 = $(`<div id="html_26d41a3e9eb5b695ddccef9ba7caba21" style="width: 100.0%; height: 100.0%;">Home</div>`)[0];
+                popup_65d56ee7bd4f55ad6acb3a79d3ca7854.setContent(html_26d41a3e9eb5b695ddccef9ba7caba21);
+            
+        
+
+        marker_3fec4dbcea810ba9b54339c459272953.bindPopup(popup_65d56ee7bd4f55ad6acb3a79d3ca7854)
+        ;
+
+        
+    
+    
+                marker_3fec4dbcea810ba9b54339c459272953.setIcon(icon_4dfc0e2d1ffed5927d62910c8052d814);
+            
+    
+            var marker_e3a5de557b47107f5a81ee7ca7093330 = L.marker(
+                [39.7256, -105.2033],
+                {
+}
+            ).addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var icon_4437bbbba6975871e7ce9b353394006a = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_8fc9a5dde560be428b09bdf2cd0bbd5e = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_7c373840648e36869be0885feff1b1d2 = $(`<div id="html_7c373840648e36869be0885feff1b1d2" style="width: 100.0%; height: 100.0%;">         <div style="             font-size:14px;             font-family: Arial, sans-serif;             line-height:1.4;             white-space: nowrap;         ">             <b>Timestamp:</b> Mar 23 2026, 11:54:06 AM<br>             <b>Flight:</b> N697RM<br>             <b>From:</b> BJC<br>             <b>To:</b> <br>             <b>Plane:</b> R44<br>             <b>Distance to Home:</b> 0.01 mi<br>             <b>Distance Origin:</b> 13.03 mi<br>             <b>Distance Destination:</b> 0.00 mi         </div>         </div>`)[0];
+                popup_8fc9a5dde560be428b09bdf2cd0bbd5e.setContent(html_7c373840648e36869be0885feff1b1d2);
+            
+        
+
+        marker_e3a5de557b47107f5a81ee7ca7093330.bindPopup(popup_8fc9a5dde560be428b09bdf2cd0bbd5e)
+        ;
+
+        
+    
+    
+                marker_e3a5de557b47107f5a81ee7ca7093330.setIcon(icon_4437bbbba6975871e7ce9b353394006a);
+            
+    
+            var marker_6f0bedc8d0f8d40f834a3b580b7a9ba4 = L.marker(
+                [39.7261, -105.2031],
+                {
+}
+            ).addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var icon_5c8f2ff0ff55f8b28fa35a4603f8e344 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_0679d56d5973c238be5bbbbe74edf114 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_a1b5b773c9f0a7d3fa94f5a82baf32c5 = $(`<div id="html_a1b5b773c9f0a7d3fa94f5a82baf32c5" style="width: 100.0%; height: 100.0%;">         <div style="             font-size:14px;             font-family: Arial, sans-serif;             line-height:1.4;             white-space: nowrap;         ">             <b>Timestamp:</b> Apr 22 2026, 02:17:06 PM<br>             <b>Flight:</b> SWA1877<br>             <b>From:</b> SJC<br>             <b>To:</b> MDW<br>             <b>Plane:</b> B738<br>             <b>Distance to Home:</b> 0.03 mi<br>             <b>Distance Origin:</b> 917.09 mi<br>             <b>Distance Destination:</b> 922.72 mi         </div>         </div>`)[0];
+                popup_0679d56d5973c238be5bbbbe74edf114.setContent(html_a1b5b773c9f0a7d3fa94f5a82baf32c5);
+            
+        
+
+        marker_6f0bedc8d0f8d40f834a3b580b7a9ba4.bindPopup(popup_0679d56d5973c238be5bbbbe74edf114)
+        ;
+
+        
+    
+    
+                marker_6f0bedc8d0f8d40f834a3b580b7a9ba4.setIcon(icon_5c8f2ff0ff55f8b28fa35a4603f8e344);
+            
+    
+            var marker_fac033ba6290fbe1c9f6d6465ba3755e = L.marker(
+                [39.7264, -105.2042],
+                {
+}
+            ).addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var icon_5197778c4cb1d053191917384cc3de13 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a05b6daf242ba4dd6013afc061d81a77 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_641623d035eb463f0b216efe432bce6c = $(`<div id="html_641623d035eb463f0b216efe432bce6c" style="width: 100.0%; height: 100.0%;">         <div style="             font-size:14px;             font-family: Arial, sans-serif;             line-height:1.4;             white-space: nowrap;         ">             <b>Timestamp:</b> Feb 12 2026, 09:21:55 AM<br>             <b>Flight:</b> N1025V<br>             <b>From:</b> <br>             <b>To:</b> <br>             <b>Plane:</b> C172<br>             <b>Distance to Home:</b> 0.07 mi<br>             <b>Distance Origin:</b> 21.64 mi<br>             <b>Distance Destination:</b> 0.00 mi         </div>         </div>`)[0];
+                popup_a05b6daf242ba4dd6013afc061d81a77.setContent(html_641623d035eb463f0b216efe432bce6c);
+            
+        
+
+        marker_fac033ba6290fbe1c9f6d6465ba3755e.bindPopup(popup_a05b6daf242ba4dd6013afc061d81a77)
+        ;
+
+        
+    
+    
+                marker_fac033ba6290fbe1c9f6d6465ba3755e.setIcon(icon_5197778c4cb1d053191917384cc3de13);
+            
+    
+            var marker_61cfcc8fce6dae79ce5824eca1432797 = L.marker(
+                [39.7269, -105.2028],
+                {
+}
+            ).addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var icon_10ccdc87de1019b489a74f8e7e40856c = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_169d9119e6ee5f8e6e75ca35a25aa39b = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_2dd94f08a7f2efa5e57c522bf132a3eb = $(`<div id="html_2dd94f08a7f2efa5e57c522bf132a3eb" style="width: 100.0%; height: 100.0%;">         <div style="             font-size:14px;             font-family: Arial, sans-serif;             line-height:1.4;             white-space: nowrap;         ">             <b>Timestamp:</b> Apr 06 2026, 12:45:32 PM<br>             <b>Flight:</b> PA44<br>             <b>From:</b> <br>             <b>To:</b> <br>             <b>Plane:</b> PA44<br>             <b>Distance to Home:</b> 0.08 mi<br>             <b>Distance Origin:</b> 0.00 mi<br>             <b>Distance Destination:</b> 0.00 mi         </div>         </div>`)[0];
+                popup_169d9119e6ee5f8e6e75ca35a25aa39b.setContent(html_2dd94f08a7f2efa5e57c522bf132a3eb);
+            
+        
+
+        marker_61cfcc8fce6dae79ce5824eca1432797.bindPopup(popup_169d9119e6ee5f8e6e75ca35a25aa39b)
+        ;
+
+        
+    
+    
+                marker_61cfcc8fce6dae79ce5824eca1432797.setIcon(icon_10ccdc87de1019b489a74f8e7e40856c);
+            
+    
+            var marker_9ff441248662ed1753aa1d176c267ea4 = L.marker(
+                [39.7269, -105.2037],
+                {
+}
+            ).addTo(map_7b070e2ddc37864ef65531ccabc25ef5);
+        
+    
+            var icon_a163671d831ee94346f791816b3dad94 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_695e869d8f0b7a62a0d0fa9210038694 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_abd769233577e19891b6b08199249f9e = $(`<div id="html_abd769233577e19891b6b08199249f9e" style="width: 100.0%; height: 100.0%;">         <div style="             font-size:14px;             font-family: Arial, sans-serif;             line-height:1.4;             white-space: nowrap;         ">             <b>Timestamp:</b> Mar 04 2026, 03:48:22 PM<br>             <b>Flight:</b> N618MM<br>             <b>From:</b> APA<br>             <b>To:</b> <br>             <b>Plane:</b> SR20<br>             <b>Distance to Home:</b> 0.09 mi<br>             <b>Distance Origin:</b> 21.63 mi<br>             <b>Distance Destination:</b> 0.00 mi         </div>         </div>`)[0];
+                popup_695e869d8f0b7a62a0d0fa9210038694.setContent(html_abd769233577e19891b6b08199249f9e);
+            
+        
+
+        marker_9ff441248662ed1753aa1d176c267ea4.bindPopup(popup_695e869d8f0b7a62a0d0fa9210038694)
+        ;
+
+        
+    
+    
+                marker_9ff441248662ed1753aa1d176c267ea4.setIcon(icon_a163671d831ee94346f791816b3dad94);
+            
+    
+            map_7b070e2ddc37864ef65531ccabc25ef5.fitBounds(
+                [[39.725715, -105.203208], [39.7256, -105.2033], [39.7261, -105.2031], [39.7264, -105.2042], [39.7269, -105.2028], [39.7269, -105.2037]],
+                {}
+            );
+        
+</script>
+</html>

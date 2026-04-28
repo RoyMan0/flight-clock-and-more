@@ -1,0 +1,19 @@
+[Unit]
+Description=its-a-plane (headless user audio service)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/royman/its-a-plane-python/its-a-plane.py
+WorkingDirectory=/home/royman
+Restart=on-failure
+
+Environment=PYTHONUNBUFFERED=1
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+StandardOutput=append:/home/royman/its-a-plane-python/workdammit.log
+StandardError=append:/home/royman/its-a-plane-python/workdammit.log
+
+[Install]
+WantedBy=default.target
