@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Secrets
+config/secrets.json
+
+# Runtime / logs
+workdammit.log
+*.log
+
+# Editor / OS
+.DS_Store
+.claude/settings.local.json
