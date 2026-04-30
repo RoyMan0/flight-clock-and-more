@@ -1,0 +1,94 @@
+{
+  "display": {
+    "brightness": 100,
+    "brightness_night": 50,
+    "night_brightness": true,
+    "night_start": "18:00",
+    "night_end": "07:00",
+    "gpio_slowdown": 2,
+    "hat_pwm_enabled": false
+  },
+  "location": {
+    "zone_home": {
+      "tl_y": 39.796827,
+      "tl_x": -105.298648,
+      "br_y": 39.666880,
+      "br_x": -105.110076
+    },
+    "location_home": [39.725715, -105.203208],
+    "temperature_location": "39.725715,-105.203208",
+    "clock_format": "12hr",
+    "temperature_units": "imperial",
+    "distance_units": "imperial",
+    "journey_code": "DEN",
+    "journey_blank_filler": " ? "
+  },
+  "plugin_order": ["clock_weather", "stock_ticker", "snow_report", "sports"],
+  "plugins": {
+    "clock_weather": {
+      "enabled": true,
+      "display_duration": 30,
+      "forecast_days": 3
+    },
+    "flight_tracker": {
+      "enabled": true,
+      "min_altitude": 8000,
+      "max_altitude": 100000,
+      "max_flight_lookup": 5
+    },
+    "stock_ticker": {
+      "enabled": true,
+      "display_duration": 25,
+      "etf_symbols": [],
+      "stock_symbols": [],
+      "etf_scroll_speed": 2,
+      "stock_scroll_speed": 5,
+      "update_interval": 60
+    },
+    "snow_report": {
+      "enabled": true,
+      "display_duration": 15,
+      "seconds_per_resort": 8,
+      "resorts": [
+        {"name": "Vail", "id": 490},
+        {"name": "Breckenridge", "id": 54},
+        {"name": "Keystone", "id": 214},
+        {"name": "Arapahoe Basin", "id": 10},
+        {"name": "Copper", "id": 91}
+      ],
+      "update_interval": 3600
+    },
+    "sports": {
+      "enabled": true,
+      "display_duration": 20,
+      "seconds_per_game": 7,
+      "live_priority": false,
+      "leagues": {
+        "nfl": {"enabled": true, "name": "NFL"},
+        "nba": {"enabled": true, "name": "NBA"},
+        "mlb": {"enabled": true, "name": "MLB"},
+        "nhl": {"enabled": true, "name": "NHL"},
+        "soccer": {
+          "enabled": true,
+          "sub_leagues": [
+            {"id": "eng.1", "name": "EPL"},
+            {"id": "usa.1", "name": "MLS"},
+            {"id": "uefa.champions", "name": "UCL"}
+          ]
+        },
+        "college_football": {"enabled": false, "name": "NCAAF"},
+        "college_basketball": {"enabled": false, "name": "NCAAB"}
+      },
+      "update_interval": 30
+    }
+  },
+  "web": {
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "flights": {
+    "max_closest": 5,
+    "max_farthest": 5,
+    "email": "rdhobbs@gmail.com"
+  }
+}

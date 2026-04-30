@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Display Control — LED Matrix{% endblock %}
+
+{% block content %}
+<div x-data="displayPage()" x-init="init()">
+  <div class="row g-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-display me-2"></i>On-Demand Control</div>
+        <div class="card-body">
+          <p class="text-muted">Force a specific plugin to show immediately. Normal rotation resumes when you click Return.</p>
+          <div class="d-flex flex-wrap gap-2 mb-4">
+            <template x-for="p in plugins" :key="p.id">
+              <button class="btn btn-outline-success"
+                      :class="{'btn-success text-dark': p.id === active}"
+                      @click="forcePlugin(p.id)"
+                      x-text="p.id.replace('_',' ')">
+              </button>
+            </template>
+          </div>
+          <button class="btn btn-outline-secondary" @click="returnToRotation()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Return to Rotation
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-eye me-2"></i>Live Preview</div>
+        <div class="card-body d-flex justify-content-center">
+          <img :src="snapshot" class="matrix-preview" width="256" height="128"
+               alt="Display" style="image-rendering:pixelated">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function displayPage() {
+  return {
+    plugins: [],
+    active: '',
+    snapshot: '',
+    _es: null,
+
+    async init() {
+      this.plugins = await fetch('/api/plugins').then(r=>r.json());
+      this.startSSE();
+    },
+
+    startSSE() {
+      this._es = new EventSource('/api/stream/status');
+      this._es.onmessage = (e) => {
+        const d = JSON.parse(e.data);
+        this.active = d.active_plugin || '';
+        if (d.snapshot) this.snapshot = d.snapshot;
+      };
+    },
+
+    forcePlugin(pid) {
+      fetch(`/api/display/show/${pid}`, {method:'POST'})
+        .then(r=>r.json()).then(d=>{ if(d.ok) this.active=pid; });
+    },
+
+    returnToRotation() {
+      fetch('/api/display/return', {method:'POST'});
+    },
+  };
+}
+</script>
+{% endblock %}

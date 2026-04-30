@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Flight History — LED Matrix{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-12">
+    <ul class="nav nav-tabs mb-3" id="flightTabs">
+      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#closest">Closest Flights</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#farthest">Farthest Routes</a></li>
+    </ul>
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="closest">
+        <div class="d-flex gap-2 mb-3">
+          <a href="/closest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
+        </div>
+        <div id="closest-table"></div>
+      </div>
+      <div class="tab-pane fade" id="farthest">
+        <div class="d-flex gap-2 mb-3">
+          <a href="/farthest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
+        </div>
+        <div id="farthest-table"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderTable(data, containerId) {
+  const el = document.getElementById(containerId);
+  if (!data || (Array.isArray(data) && data.length === 0) || (typeof data === 'object' && Object.keys(data).length === 0)) {
+    el.innerHTML = '<p class="text-muted">No data yet.</p>';
+    return;
+  }
+  const rows = Array.isArray(data) ? data : Object.values(data);
+  const fields = ['callsign', 'airline', 'origin', 'destination', 'plane', 'distance', 'direction', 'timestamp'];
+  let html = '<div class="table-responsive"><table class="table table-dark table-hover table-sm"><thead><tr>';
+  for (const f of fields) html += `<th>${f}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of rows) {
+    html += '<tr>';
+    for (const f of fields) {
+      let v = row[f] ?? '—';
+      if (f === 'distance' && typeof v === 'number') v = v.toFixed(2) + ' mi';
+      html += `<td>${v}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+fetch('/api/flights/closest').then(r=>r.json()).then(d => renderTable(d, 'closest-table'));
+fetch('/api/flights/farthest').then(r=>r.json()).then(d => renderTable(d, 'farthest-table'));
+</script>
+{% endblock %}

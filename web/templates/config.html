@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Config — LED Matrix{% endblock %}
+
+{% block content %}
+<div x-data="configPage()" x-init="init()">
+
+  <div class="row g-4">
+
+    <!-- Plugin Rotation Order -->
+    <div class="col-md-5">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-list-ol me-2"></i>Plugin Order &amp; Duration</div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush" id="rotation-list">
+            <template x-for="(pid, idx) in pluginOrder" :key="pid">
+              <li class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-3">
+                <div class="d-flex flex-column gap-1">
+                  <button class="btn btn-sm btn-outline-secondary py-0" @click="moveUp(idx)" :disabled="idx===0">▲</button>
+                  <button class="btn btn-sm btn-outline-secondary py-0" @click="moveDown(idx)" :disabled="idx===pluginOrder.length-1">▼</button>
+                </div>
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox"
+                         :checked="pluginConfigs[pid]?.enabled !== false"
+                         @change="togglePlugin(pid, $event.target.checked)">
+                </div>
+                <span class="flex-grow-1 text-capitalize fw-semibold" x-text="pid.replace('_',' ')"></span>
+                <div class="d-flex align-items-center gap-1" style="width:120px">
+                  <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
+                         style="width:65px"
+                         :value="pluginConfigs[pid]?.display_duration || 30"
+                         @change="setDuration(pid, $event.target.value)">
+                  <span class="text-muted small">s</span>
+                </div>
+              </li>
+            </template>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-success btn-sm" @click="saveOrder()">
+            <i class="bi bi-save me-1"></i>Save Order
+          </button>
+          <span class="ms-3 text-success small" x-show="saved" x-transition>Saved!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Config -->
+    <div class="col-md-7">
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-gear me-2"></i>System Settings</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Clock Format</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.location.clock_format">
+                <option value="12hr">12-hour</option>
+                <option value="24hr">24-hour</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Distance Units</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.location.distance_units">
+                <option value="imperial">Imperial (miles)</option>
+                <option value="metric">Metric (km)</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Day Brightness</label>
+              <input type="range" class="form-range" min="10" max="100"
+                     x-model="sysCfg.display.brightness">
+              <div class="text-muted small" x-text="sysCfg.display.brightness + '%'"></div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Night Brightness</label>
+              <input type="range" class="form-range" min="5" max="100"
+                     x-model="sysCfg.display.brightness_night">
+              <div class="text-muted small" x-text="sysCfg.display.brightness_night + '%'"></div>
+            </div>
+            <div class="col-md-4">
+              <div class="form-check form-switch mt-4">
+                <input class="form-check-input" type="checkbox" x-model="sysCfg.display.night_brightness">
+                <label class="form-check-label">Auto Dim at Night</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Night Start</label>
+              <input type="time" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.display.night_start">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Night End</label>
+              <input type="time" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.display.night_end">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Home Airport</label>
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.location.journey_code" maxlength="3" style="text-transform:uppercase">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Forecast Days</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.clock_weather.forecast_days" min="1" max="5">
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="saveSysConfig()">
+            <i class="bi bi-save me-1"></i>Save System Config
+          </button>
+        </div>
+      </div>
+
+      <!-- Stock Ticker Config -->
+      <div class="card mb-4" x-show="'stock_ticker' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-graph-up-arrow me-2"></i>Stock Ticker</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">ETF Scroll Speed <span class="text-muted small">(px/frame)</span></label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.stock_ticker.etf_scroll_speed" min="1" max="20">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Stock Scroll Speed</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.stock_ticker.stock_scroll_speed" min="1" max="20">
+            </div>
+            <div class="col-12">
+              <label class="form-label">ETF Override Symbols <span class="text-muted small">(leave blank to use all ETF positions)</span></label>
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     :value="(pluginConfigs.stock_ticker.etf_symbols||[]).join(', ')"
+                     @change="pluginConfigs.stock_ticker.etf_symbols = $event.target.value.split(',').map(s=>s.trim()).filter(Boolean)"
+                     placeholder="VOO, QQQ, SPY">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Stock Override Symbols</label>
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     :value="(pluginConfigs.stock_ticker.stock_symbols||[]).join(', ')"
+                     @change="pluginConfigs.stock_ticker.stock_symbols = $event.target.value.split(',').map(s=>s.trim()).filter(Boolean)"
+                     placeholder="AAPL, NVDA, MSFT">
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('stock_ticker')">
+            <i class="bi bi-save me-1"></i>Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Snow Report Config -->
+      <div class="card mb-4" x-show="'snow_report' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-snow me-2"></i>Snow Report</div>
+        <div class="card-body">
+          <label class="form-label">Seconds per Resort</label>
+          <input type="number" class="form-control bg-dark text-light border-secondary w-auto"
+                 x-model="pluginConfigs.snow_report.seconds_per_resort" min="3" max="30">
+          <label class="form-label mt-3">Resorts</label>
+          <template x-for="(resort, idx) in pluginConfigs.snow_report.resorts" :key="idx">
+            <div class="d-flex gap-2 mb-2">
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     x-model="resort.name" placeholder="Resort Name">
+              <input type="number" class="form-control bg-dark text-light border-secondary" style="width:100px"
+                     x-model="resort.id" placeholder="OTS ID">
+              <button class="btn btn-outline-danger btn-sm" @click="pluginConfigs.snow_report.resorts.splice(idx,1)">✕</button>
+            </div>
+          </template>
+          <button class="btn btn-outline-secondary btn-sm me-2"
+                  @click="pluginConfigs.snow_report.resorts.push({name:'',id:null})">+ Add Resort</button>
+          <button class="btn btn-success btn-sm" @click="savePluginConfig('snow_report')">
+            <i class="bi bi-save me-1"></i>Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Sports Config -->
+      <div class="card mb-4" x-show="'sports' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-trophy me-2"></i>Sports</div>
+        <div class="card-body">
+          <div class="row g-2">
+            <template x-for="[lid, lcfg] in Object.entries(pluginConfigs.sports?.leagues || {})" :key="lid">
+              <div class="col-md-4">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" x-model="lcfg.enabled">
+                  <label class="form-check-label text-capitalize" x-text="lcfg.name || lid"></label>
+                </div>
+              </div>
+            </template>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Seconds per Game</label>
+            <input type="number" class="form-control bg-dark text-light border-secondary w-auto"
+                   x-model="pluginConfigs.sports.seconds_per_game" min="3" max="30">
+          </div>
+          <div class="form-check form-switch mt-3">
+            <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.live_priority">
+            <label class="form-check-label">Live game priority (interrupts rotation)</label>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('sports')">
+            <i class="bi bi-save me-1"></i>Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Secrets -->
+      <div class="card">
+        <div class="card-header"><i class="bi bi-key me-2"></i>API Keys &amp; Secrets</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <template x-for="[k, v] in Object.entries(secrets)" :key="k">
+              <div class="col-12">
+                <label class="form-label text-muted small" x-text="k"></label>
+                <input type="password" class="form-control bg-dark text-light border-secondary"
+                       :value="v"
+                       @change="secrets[k] = $event.target.value"
+                       autocomplete="off">
+              </div>
+            </template>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="saveSecrets()">
+            <i class="bi bi-save me-1"></i>Save Secrets
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backup/Restore -->
+  <div class="row g-4 mt-2">
+    <div class="col-md-5">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-archive me-2"></i>Backup &amp; Restore</div>
+        <div class="card-body">
+          <button class="btn btn-outline-info btn-sm me-2" @click="createBackup()">Create Backup</button>
+          <ul class="list-unstyled mt-3 mb-0">
+            <template x-for="b in backups" :key="b">
+              <li class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small font-monospace" x-text="b"></span>
+                <button class="btn btn-outline-warning btn-sm" @click="restoreBackup(b)">Restore</button>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function configPage() {
+  return {
+    pluginOrder: [],
+    pluginConfigs: {},
+    sysCfg: { display: {}, location: {} },
+    secrets: {},
+    backups: [],
+    saved: false,
+
+    async init() {
+      await this.loadAll();
+    },
+
+    async loadAll() {
+      const [plugins, sys, sec, backs] = await Promise.all([
+        fetch('/api/plugins').then(r=>r.json()),
+        fetch('/api/config/system').then(r=>r.json()),
+        fetch('/api/config/secrets').then(r=>r.json()),
+        fetch('/api/config/backups').then(r=>r.json()),
+      ]);
+
+      this.pluginOrder = plugins.map(p => p.id);
+      const cfgs = {};
+      for (const p of plugins) cfgs[p.id] = p.config || {};
+      this.pluginConfigs = cfgs;
+      this.sysCfg = sys;
+      this.secrets = sec;
+      this.backups = backs;
+    },
+
+    moveUp(idx) {
+      if (idx === 0) return;
+      const arr = [...this.pluginOrder];
+      [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+      this.pluginOrder = arr;
+    },
+    moveDown(idx) {
+      if (idx >= this.pluginOrder.length - 1) return;
+      const arr = [...this.pluginOrder];
+      [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+      this.pluginOrder = arr;
+    },
+
+    togglePlugin(pid, enabled) {
+      if (!this.pluginConfigs[pid]) this.pluginConfigs[pid] = {};
+      this.pluginConfigs[pid].enabled = enabled;
+    },
+
+    setDuration(pid, val) {
+      if (!this.pluginConfigs[pid]) this.pluginConfigs[pid] = {};
+      this.pluginConfigs[pid].display_duration = parseInt(val);
+    },
+
+    async saveOrder() {
+      // Save order
+      await fetch('/api/plugins/order', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.pluginOrder),
+      });
+      // Save enabled + duration for each plugin
+      for (const pid of this.pluginOrder) {
+        await this.savePluginConfig(pid);
+      }
+      this.saved = true;
+      setTimeout(() => this.saved = false, 2000);
+    },
+
+    async savePluginConfig(pid) {
+      await fetch(`/api/plugins/${pid}/config`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.pluginConfigs[pid] || {}),
+      });
+    },
+
+    async saveSysConfig() {
+      await fetch('/api/config/system', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.sysCfg),
+      });
+      // Also save clock_weather config (forecast_days)
+      await this.savePluginConfig('clock_weather');
+      this.saved = true;
+      setTimeout(() => this.saved = false, 2000);
+    },
+
+    async saveSecrets() {
+      await fetch('/api/config/secrets', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.secrets),
+      });
+    },
+
+    async createBackup() {
+      await fetch('/api/config/backup', {method: 'POST'});
+      this.backups = await fetch('/api/config/backups').then(r=>r.json());
+    },
+
+    async restoreBackup(name) {
+      if (!confirm(`Restore config from ${name}?`)) return;
+      await fetch(`/api/config/restore/${name}`, {method: 'POST'});
+      await this.loadAll();
+    },
+  };
+}
+</script>
+{% endblock %}
