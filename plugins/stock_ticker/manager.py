@@ -82,15 +82,16 @@ class StockTickerPlugin(BasePlugin):
         app_key = self.secrets.get("schwab_app_key", "")
         app_secret = self.secrets.get("schwab_app_secret", "")
         token_path = self.secrets.get("schwab_token_path", "")
-        account_hash = self.secrets.get("schwab_account_hash", "")
+        account_hashes = self.secrets.get("schwab_account_hashes", [])
+        callback_url = self.secrets.get("schwab_callback_url", "https://flightsstockticker.duckdns.org/")
 
         # Also support manual override lists from config
         cfg_etfs = self.config.get("etf_symbols", [])
         cfg_stocks = self.config.get("stock_symbols", [])
 
-        if app_key and app_secret and token_path and account_hash:
+        if app_key and app_secret and token_path and account_hashes:
             from plugins.stock_ticker.schwab_client import get_positions
-            all_positions = get_positions(app_key, app_secret, token_path, account_hash)
+            all_positions = get_positions(app_key, app_secret, token_path, account_hashes, callback_url)
 
             etfs = [p for p in all_positions if p["asset_type"] == "ETF"]
             stocks = [p for p in all_positions if p["asset_type"] == "EQUITY"]
