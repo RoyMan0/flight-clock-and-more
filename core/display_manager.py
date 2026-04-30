@@ -68,12 +68,19 @@ class DisplayManager:
     # ------------------------------------------------------------------
 
     def swap(self):
-        """Push current canvas to display and get next writable canvas."""
+        """Push current canvas to display.
+
+        Deliberately does NOT capture SwapOnVSync's return value, matching the
+        original its-a-plane.py behaviour. The scenes draw incrementally on a
+        single persistent canvas object; SwapOnVSync just pushes it to the
+        hardware each frame. Capturing the return value would introduce true
+        double-buffering which causes the scenes to flicker because they only
+        update one buffer per N frames.
+        """
         if self.software_mode:
             self.canvas._flush_to_pil(self._pil_image)
         else:
-            self.canvas = self.matrix.SwapOnVSync(self.canvas)
-            self._sync_pil_from_hardware()
+            self.matrix.SwapOnVSync(self.canvas)
 
     def clear(self):
         self.canvas.Clear()
@@ -104,11 +111,6 @@ class DisplayManager:
         with self._lock:
             return self._pil_image.copy()
 
-    def _sync_pil_from_hardware(self):
-        # rgbmatrix doesn't support pixel readback, so the PIL mirror is
-        # maintained by plugins writing to both canvas and the PIL image.
-        # This is a no-op stub for hardware mode.
-        pass
 
 
 class _SoftwareCanvas:
