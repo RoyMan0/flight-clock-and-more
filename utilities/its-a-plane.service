@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/royman/its-a-plane-python/main.py
+ExecStart=/home/royman/venv/bin/python3 /home/royman/its-a-plane-python/main.py
 WorkingDirectory=/home/royman/its-a-plane-python
 StandardOutput=append:/home/royman/its-a-plane-python/workdammit.log
 StandardError=append:/home/royman/its-a-plane-python/workdammit.log
