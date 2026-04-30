@@ -23,7 +23,7 @@ TEMP_POSITION = DISTANCE_FROM_TOP
 NIGHT_START_TIME = datetime.strptime(NIGHT_START, "%H:%M")
 NIGHT_END_TIME = datetime.strptime(NIGHT_END, "%H:%M")
 
-FORECAST_REFRESH_HOURS = 3   # fetch at most once every 3 hours
+FORECAST_REFRESH_HOURS = 1
 
 class DaysForecastScene(object):
     def __init__(self):
