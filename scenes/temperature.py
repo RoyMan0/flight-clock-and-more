@@ -7,7 +7,7 @@ from utilities.temperature import grab_temperature_and_humidity
 from config import NIGHT_START, NIGHT_END
 
 # Scene Setup
-TEMPERATURE_REFRESH_SECONDS = 600
+TEMPERATURE_REFRESH_SECONDS = 900   # 15 min — 4 requests/hr vs 6/hr at 10 min
 TEMPERATURE_FONT = fonts.small
 TEMPERATURE_FONT_HEIGHT = 6
 NIGHT_START_TIME = datetime.strptime(NIGHT_START, "%H:%M")
@@ -45,7 +45,7 @@ class TemperatureScene(object):
 
         # Determine seconds since last update
         seconds_since_update = (datetime.now() - self._last_updated).total_seconds() if self._last_updated else TEMPERATURE_REFRESH_SECONDS
-        retry_interval_on_error = 60
+        retry_interval_on_error = 300  # 5 min retry on error, not 60 s
 
         # Determine if we need to fetch new data
         need_fetch = (

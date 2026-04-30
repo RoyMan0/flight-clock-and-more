@@ -3,11 +3,16 @@ import time
 import logging
 import socket
 import json
+from typing import Optional
 
 from requests import Session
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 from urllib3.util.retry import Retry
+
+# After a 429 response, block all API calls for this many minutes
+_RATE_LIMIT_BACKOFF_MINUTES = 10
+_rate_limited_until: Optional[datetime] = None
 
 # Attempt to load config data
 try:
@@ -47,7 +52,8 @@ def get_session() -> Session:
             read=3,
             backoff_factor=2,
             allowed_methods=["GET", "POST"],
-            status_forcelist=[429, 500, 502, 503, 504],
+            # 429 intentionally excluded — we handle rate limits ourselves with backoff
+            status_forcelist=[500, 502, 503, 504],
             raise_on_status=False,
         )
 
@@ -65,7 +71,26 @@ def get_session() -> Session:
 # Weather API
 TOMORROW_API_URL = "https://api.tomorrow.io/v4"
 
+def _is_rate_limited() -> bool:
+    global _rate_limited_until
+    if _rate_limited_until and datetime.now() < _rate_limited_until:
+        remaining = (_rate_limited_until - datetime.now()).seconds // 60
+        logging.warning(f"Tomorrow.io rate-limited; skipping request ({remaining}m remaining backoff)")
+        return True
+    return False
+
+
+def _set_rate_limited():
+    global _rate_limited_until
+    until = datetime.now() + timedelta(minutes=_RATE_LIMIT_BACKOFF_MINUTES)
+    _rate_limited_until = until
+    logging.error(f"Tomorrow.io 429 — backing off until {until.strftime('%H:%M')}")
+
+
 def grab_temperature_and_humidity():
+    if _is_rate_limited():
+        return None, None
+
     try:
         s = get_session()
         request = s.get(
@@ -79,7 +104,7 @@ def grab_temperature_and_humidity():
         )
 
         if request.status_code == 429:
-            logging.error("Rate limit reached, returning error state")
+            _set_rate_limited()
             return None, None
 
         request.raise_for_status()
@@ -92,7 +117,6 @@ def grab_temperature_and_humidity():
             logging.error("Incomplete data from API")
             return None, None
 
-        #print(f"{datetime.now()} [Temp] {datetime.now()}: {temperature}{TEMPERATURE_UNITS}, {humidity}% RH")
         return temperature, humidity
 
     except (RequestException, ValueError) as e:
@@ -111,6 +135,9 @@ def grab_temperature_and_humidity():
         
         
 def grab_forecast(tag="unknown"):
+    if _is_rate_limited():
+        return []
+
     dt = datetime.now() - timedelta(days=1)
 
     try:
@@ -141,6 +168,10 @@ def grab_forecast(tag="unknown"):
             },
             timeout=(5, 20)
         )
+
+        if resp.status_code == 429:
+            _set_rate_limited()
+            return []
 
         resp.raise_for_status()
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Optional
 from PIL import Image
 
 from utilities.animator import Animator
@@ -22,12 +23,15 @@ TEMP_POSITION = DISTANCE_FROM_TOP
 NIGHT_START_TIME = datetime.strptime(NIGHT_START, "%H:%M")
 NIGHT_END_TIME = datetime.strptime(NIGHT_END, "%H:%M")
 
+FORECAST_REFRESH_HOURS = 3   # fetch at most once every 3 hours
+
 class DaysForecastScene(object):
     def __init__(self):
         super().__init__()
         self._redraw_forecast = True
         self._last_hour = None
         self._cached_forecast = None
+        self._last_forecast_fetch: Optional[datetime] = None
 
     @Animator.KeyFrame.add(frames.PER_SECOND * 1)
     def day(self, count):
@@ -50,7 +54,9 @@ class DaysForecastScene(object):
         need_fetch = False
         if self._cached_forecast is None:
             need_fetch = True
-        elif self._last_hour != current_hour:
+        elif self._last_forecast_fetch is None:
+            need_fetch = True
+        elif (datetime.now() - self._last_forecast_fetch).total_seconds() >= FORECAST_REFRESH_HOURS * 3600:
             need_fetch = True
 
         # Draw only when hour changes or when scene is newly activated
@@ -75,8 +81,9 @@ class DaysForecastScene(object):
                         # Nothing cached yet ? wait for next cycle
                         return
                 else:
-                    # Valid data ? update cache
+                    # Valid data — update cache and record fetch time
                     self._cached_forecast = forecast
+                    self._last_forecast_fetch = datetime.now()
             else:
                 # Use cached forecast
                 forecast = self._cached_forecast
