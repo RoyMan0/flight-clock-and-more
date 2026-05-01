@@ -70,8 +70,8 @@ def _load_font(size: int):
             pass
     return ImageFont.load_default()
 
-FONT_HDR = _load_font(5)   # header: league + status
-FONT_SCR = _load_font(7)   # score numbers (slightly smaller to reclaim space)
+FONT_HDR = _load_font(4)   # header: league + status (tiny, no stroke)
+FONT_SCR = _load_font(7)   # score numbers
 FONT_TXT = _load_font(6)   # team name fallback
 
 def _measure_font_h(font) -> int:
@@ -81,9 +81,9 @@ def _measure_font_h(font) -> int:
     except Exception:
         return 8
 
-_SCR_H  = _measure_font_h(FONT_SCR) + 2   # score zone height (stroke + 1px margin)
-_HDR_H  = _measure_font_h(FONT_HDR) + 2   # header zone height (text + 2px padding)
-HEADER_H = max(_HDR_H, 7)                  # at least 7px reserved for header row
+_SCR_H   = _measure_font_h(FONT_SCR) + 2  # score zone height (stroke + 1px margin)
+_HDR_H   = _measure_font_h(FONT_HDR) + 2  # header zone height (text + 2px gap below)
+HEADER_H = max(_HDR_H, 6)                  # at least 6px reserved for header row
 
 
 # ------------------------------------------------------------------
@@ -372,12 +372,10 @@ def _render_game(game: dict) -> Image.Image:
     else:
         status_str = game["status_detail"][:14]
 
-    # ── Header drawn first on clean black so logos never overlap it ──
-    draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER,
-              stroke_width=1, stroke_fill=(0, 0, 0))
+    # ── Header drawn first on clean black (no stroke needed) ──────────
+    draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER)
     sw = _tw(draw, status_str, FONT_HDR)
-    draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col,
-              stroke_width=1, stroke_fill=(0, 0, 0))
+    draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col)
 
     # ── Logo slots occupy the space below the header ─────────────────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
