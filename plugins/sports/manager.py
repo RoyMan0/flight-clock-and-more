@@ -105,6 +105,15 @@ class SportsPlugin(BasePlugin):
                 )
                 games.extend(fetched)
 
+        # Filter to favorite teams if configured (abbreviations, case-insensitive)
+        favorites = {t.upper() for t in self.config.get("favorite_teams", [])}
+        if favorites:
+            games = [
+                g for g in games
+                if g["away"]["name"].upper() in favorites
+                or g["home"]["name"].upper() in favorites
+            ]
+
         # Sort: live first, then recent, then upcoming
         live = [g for g in games if g["state"] == "in"]
         done = [g for g in games if g["state"] == "post"]
