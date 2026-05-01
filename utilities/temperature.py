@@ -13,6 +13,7 @@ from urllib3.util.retry import Retry
 # After a 429 response, block all API calls for this many minutes
 _RATE_LIMIT_BACKOFF_MINUTES = 10
 _rate_limited_until: Optional[datetime] = None
+_rate_limit_logged_until: Optional[datetime] = None  # suppress repeated warnings
 
 # Attempt to load config data
 try:
@@ -72,10 +73,13 @@ def get_session() -> Session:
 TOMORROW_API_URL = "https://api.tomorrow.io/v4"
 
 def _is_rate_limited() -> bool:
-    global _rate_limited_until
+    global _rate_limited_until, _rate_limit_logged_until
     if _rate_limited_until and datetime.now() < _rate_limited_until:
-        remaining = (_rate_limited_until - datetime.now()).seconds // 60
-        logging.warning(f"Tomorrow.io rate-limited; skipping request ({remaining}m remaining backoff)")
+        # Log at most once per minute to avoid flooding the log
+        if _rate_limit_logged_until is None or datetime.now() >= _rate_limit_logged_until:
+            remaining = int((_rate_limited_until - datetime.now()).total_seconds() // 60)
+            logging.warning(f"Tomorrow.io rate-limited; skipping requests for {remaining}m more")
+            _rate_limit_logged_until = datetime.now() + timedelta(minutes=1)
         return True
     return False
 
