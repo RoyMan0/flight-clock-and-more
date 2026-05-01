@@ -288,21 +288,21 @@ def restore_backup(filename):
 def sports_teams():
     import requests as _req
 
-    ESPN = "https://site.api.espn.com/apis/site/v2/sports"
+    ESPN  = "https://site.api.espn.com/apis/site/v2/sports"
+    ESPNW = "https://site.web.api.espn.com/apis/site/v2/sports"
     # (league_label, url_base, paginate)
-    # paginate=True: fetch pages until a page returns < PAGE_SIZE teams
     SOURCES = [
         ("NFL",       f"{ESPN}/football/nfl/teams",                          False),
         ("NBA",       f"{ESPN}/basketball/nba/teams",                        False),
         ("MLB",       f"{ESPN}/baseball/mlb/teams",                          False),
-        ("NHL",       f"{ESPN}/icehockey/nhl/teams",                         False),
+        ("NHL",       f"{ESPNW}/hockey/nhl/teams",                           False),
         ("NCAAF",     f"{ESPN}/football/college-football/teams",              True),
         ("NCAAB",     f"{ESPN}/basketball/mens-college-basketball/teams",     True),
         ("MLS",       f"{ESPN}/soccer/usa.1/teams",                          False),
         ("EPL",       f"{ESPN}/soccer/eng.1/teams",                          False),
         ("UCL",       f"{ESPN}/soccer/uefa.champions/teams",                 False),
         ("La Liga",   f"{ESPN}/soccer/esp.1/teams",                          False),
-        ("World Cup", f"{ESPN}/soccer/fifa.world/teams",                     False),
+        ("World Cup", f"{ESPNW}/soccer/fifa.world/teams",                    False),
     ]
     PAGE_SIZE = 200
 

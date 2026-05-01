@@ -64,6 +64,7 @@
       "seconds_per_game": 7,
       "live_priority": false,
       "favorite_teams": [],
+      "show_all_leagues": [],
       "leagues": {
         "nfl": {"enabled": true, "name": "NFL"},
         "nba": {"enabled": true, "name": "NBA"},

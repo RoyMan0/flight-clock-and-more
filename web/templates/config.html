@@ -220,6 +220,14 @@
                 <div style="max-height:220px;overflow-y:auto">
                   <template x-for="league in Object.keys(teamsData)" :key="league">
                     <div x-show="teamTab===league">
+                      <div class="form-check form-switch mb-2 border-bottom border-secondary pb-2">
+                        <input class="form-check-input" type="checkbox"
+                               :id="'showall-'+league"
+                               :checked="(pluginConfigs.sports.show_all_leagues||[]).includes(league)"
+                               @change="toggleShowAll(league, $event.target.checked)">
+                        <label class="form-check-label small fw-semibold" :for="'showall-'+league"
+                               x-text="'Show all ' + league + ' games (ignore team filter)'"></label>
+                      </div>
                       <div x-show="teamsData[league].length === 0" class="text-muted small p-2">No teams available for this league.</div>
                       <div class="row g-1">
                         <template x-for="team in teamsData[league]" :key="league+':'+team.abbrev">
@@ -418,6 +426,15 @@ function configPage() {
         } finally {
           this.teamsLoading = false;
         }
+      }
+    },
+
+    toggleShowAll(league, checked) {
+      const list = this.pluginConfigs.sports.show_all_leagues || [];
+      if (checked) {
+        if (!list.includes(league)) this.pluginConfigs.sports.show_all_leagues = [...list, league].sort();
+      } else {
+        this.pluginConfigs.sports.show_all_leagues = list.filter(l => l !== league);
       }
     },
 

@@ -35,7 +35,7 @@ LEAGUE_URLS = {
     "nfl":              f"{ESPN_BASE}/football/nfl/scoreboard",
     "nba":              f"{ESPN_BASE}/basketball/nba/scoreboard",
     "mlb":              f"{ESPN_BASE}/baseball/mlb/scoreboard",
-    "nhl":              f"{ESPN_BASE}/icehockey/nhl/scoreboard",
+    "nhl":              f"{ESPN_BASE}/hockey/nhl/scoreboard",
     "college_football": f"{ESPN_BASE}/football/college-football/scoreboard",
     "college_basketball": f"{ESPN_BASE}/basketball/mens-college-basketball/scoreboard",
 }
@@ -108,9 +108,13 @@ class SportsPlugin(BasePlugin):
         # Filter to favorite teams if configured.
         # Entries are "LEAGUE:ABBREV" (e.g. "NFL:DEN") so CHI/NBA ≠ CHI/NFL.
         # Plain abbreviations without a colon are matched against any league (legacy).
+        # show_all_leagues bypasses the filter for specific leagues (e.g. World Cup).
         favorites = {t.upper() for t in self.config.get("favorite_teams", [])}
+        show_all = {s.upper() for s in self.config.get("show_all_leagues", [])}
         if favorites:
             def _matches(game):
+                if game["league"].upper() in show_all:
+                    return True
                 lg = game["league"].upper()
                 for side in ("away", "home"):
                     ab = game[side]["name"].upper()
