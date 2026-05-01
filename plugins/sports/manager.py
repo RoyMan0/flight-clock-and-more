@@ -60,15 +60,37 @@ _logo_failed: set = set()
 
 
 def _load_font(size: int):
-    for path in [
+    _ttf_paths = [
+        # Debian/Raspberry Pi OS with fonts-dejavu-core installed
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-    ]:
-        try:
-            return ImageFont.truetype(path, size)
-        except Exception:
-            pass
-    return ImageFont.load_default()
+        # Liberation (often pre-installed on Pi OS)
+        "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+        # FreeFont (fonts-freefont-ttf)
+        "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+        # Noto (common on Pi OS Desktop)
+        "/usr/share/fonts/truetype/noto/NotoMono-Regular.ttf",
+        # Piboto (Pi OS bundled)
+        "/usr/share/fonts/truetype/piboto/Piboto-Regular.ttf",
+    ]
+    for path in _ttf_paths:
+        if os.path.exists(path):
+            try:
+                font = ImageFont.truetype(path, size)
+                log.debug(f"[sports] Font {size}pt loaded from {path}")
+                return font
+            except Exception:
+                pass
+    # Pillow ≥ 9.2 supports size= on load_default (uses bundled NotoSans/FreeType)
+    try:
+        font = ImageFont.load_default(size=size)
+        log.debug(f"[sports] Font {size}pt loaded via load_default(size=)")
+        return font
+    except TypeError:
+        log.warning(f"[sports] Font {size}pt: no TTF found, falling back to fixed bitmap")
+        return ImageFont.load_default()
 
 FONT_HDR = _load_font(4)   # header: league + status (tiny, no stroke)
 FONT_SCR = _load_font(7)   # score numbers
