@@ -6,6 +6,9 @@ __pycache__/
 # Secrets
 config/secrets.json
 
+# Runtime config (copy config.example.json → config.json on new installs)
+config/config.json
+
 # Runtime / logs
 workdammit.log
 *.log

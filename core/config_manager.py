@@ -5,9 +5,17 @@ import threading
 from datetime import datetime
 from typing import Any
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.json")
+EXAMPLE_PATH = os.path.join(BASE_DIR, "config", "config.example.json")
 SECRETS_PATH = os.path.join(BASE_DIR, "config", "secrets.json")
+
+
+def _bootstrap_config():
+    """Copy config.example.json → config.json on first install if missing."""
+    if not os.path.exists(CONFIG_PATH) and os.path.exists(EXAMPLE_PATH):
+        shutil.copy2(EXAMPLE_PATH, CONFIG_PATH)
+        print(f"[config] Created config.json from config.example.json")
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -34,6 +42,7 @@ class ConfigManager:
     # ------------------------------------------------------------------
 
     def load(self):
+        _bootstrap_config()
         with self._lock:
             self._config = self._load_json(CONFIG_PATH)
             self._secrets = self._load_json(SECRETS_PATH)
