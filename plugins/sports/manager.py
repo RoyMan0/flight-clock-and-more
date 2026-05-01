@@ -83,7 +83,7 @@ def _measure_font_h(font) -> int:
         return 10
 
 _SCR_H = _measure_font_h(FONT_SCR) + 2   # +2 for stroke + 1px bottom margin
-HEADER_H = 6                               # pixels for league/status row
+_HDR_H = _measure_font_h(FONT_HDR) + 1   # actual header text height
 
 
 # ------------------------------------------------------------------
@@ -373,36 +373,36 @@ def _render_game(game: dict) -> Image.Image:
     else:
         status_str = game["status_detail"][:14]
 
-    draw.text((1, 0), game["league"][:7], font=FONT_HDR, fill=COL_HEADER)
-    sw = _tw(draw, status_str, FONT_HDR)
-    draw.text((MATRIX_W - sw - 1, 0), status_str, font=FONT_HDR, fill=status_col)
-    draw.line([(0, HEADER_H), (MATRIX_W - 1, HEADER_H)], fill=(40, 40, 40))
-
-    # ── Logo slots (no centre divider — it cuts through logos) ───────
+    # ── Logo slots fill the full height ─────────────────────────────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
     _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
+
+    # ── League + status overlaid at top (drawn last so always visible)
+    draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER,
+              stroke_width=1, stroke_fill=(0, 0, 0))
+    sw = _tw(draw, status_str, FONT_HDR)
+    draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col,
+              stroke_width=1, stroke_fill=(0, 0, 0))
 
     return img
 
 
 def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
                team: dict, slot_x: int, game: dict):
-    """Render one team's logo + score into its 32-wide slot."""
-    AREA_TOP   = HEADER_H + 1
-    AREA_H     = MATRIX_H - AREA_TOP   # usable px below header
+    """Render one team's logo + score into its 32-wide slot (full height)."""
     MARGIN     = 2
 
-    # Score sits at the very bottom; logo fills the rest
-    sy         = MATRIX_H - _SCR_H     # first row of score text
+    # Logo fills from top down to just above the score row
+    sy         = MATRIX_H - _SCR_H
     logo_max_w = SLOT_W - MARGIN * 2
-    logo_max_h = AREA_H - _SCR_H - 1  # stop 1px above score row
+    logo_max_h = sy - 1
 
     logo = _logo_cache.get(_logo_cache_key(game["league"], team["name"]))
 
     if logo:
         fitted = _fit_logo(logo, logo_max_w, logo_max_h)
         lx = slot_x + (SLOT_W - fitted.width)  // 2
-        ly = AREA_TOP + (logo_max_h - fitted.height) // 2
+        ly = (logo_max_h - fitted.height) // 2
         img.paste(fitted, (lx, ly), fitted)
     else:
         col = _clamp_color(team["color"]) or COL_HEADER
@@ -413,7 +413,7 @@ def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
         except Exception:
             txt_h = 7
         draw.text(
-            (slot_x + (SLOT_W - tw) // 2, AREA_TOP + (logo_max_h - txt_h) // 2),
+            (slot_x + (SLOT_W - tw) // 2, (logo_max_h - txt_h) // 2),
             label, font=FONT_TXT, fill=col,
         )
 
