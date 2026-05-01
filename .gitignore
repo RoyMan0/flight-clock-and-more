@@ -13,3 +13,6 @@ workdammit.log
 # Editor / OS
 .DS_Store
 .claude/settings.local.json
+
+# Downloaded team logos (cached at runtime)
+assets/sports/logos/*/

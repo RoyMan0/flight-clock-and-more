@@ -63,6 +63,7 @@
       "display_duration": 20,
       "seconds_per_game": 7,
       "live_priority": false,
+      "show_upcoming": false,
       "favorite_teams": [],
       "show_all_leagues": [],
       "leagues": {

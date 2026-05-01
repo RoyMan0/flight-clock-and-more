@@ -2,22 +2,22 @@
 SportsPlugin — shows live and recent scores from multiple leagues.
 
 Data source: ESPN unofficial public API (no auth required).
-
-Supported leagues: NFL, NBA, MLB, NHL, Soccer (multiple), NCAAF, NCAAB.
+Logos: downloaded from ESPN CDN and cached in assets/sports/logos/.
 
 Display layout (64×32):
-  Row 0–8:   League + game clock / status
-  Row 9–20:  Team 1  |  Score 1
-  Row 21–31: Team 2  |  Score 2
-
-Cycles through each game for seconds_per_game, then signals cycle complete.
-Live games (state=="in") can optionally trigger live_priority.
+  Row 0–6:   League name (left) + status/clock (right)
+  Row 7:     Divider line
+  Row 8–31:  Away logo (left 32px slot) | Home logo (right 32px slot)
+             Scores overlaid at bottom of each slot with black stroke
 """
 
+import io
 import logging
+import os
 import time
 import threading
 import requests
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -28,40 +28,128 @@ log = logging.getLogger(__name__)
 
 MATRIX_W = 64
 MATRIX_H = 32
+SLOT_W   = 32   # each team occupies half the width
+HEADER_H = 7    # pixels tall for league/status row
 
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 
 LEAGUE_URLS = {
-    "nfl":              f"{ESPN_BASE}/football/nfl/scoreboard",
-    "nba":              f"{ESPN_BASE}/basketball/nba/scoreboard",
-    "mlb":              f"{ESPN_BASE}/baseball/mlb/scoreboard",
-    "nhl":              f"{ESPN_BASE}/hockey/nhl/scoreboard",
-    "college_football": f"{ESPN_BASE}/football/college-football/scoreboard",
+    "nfl":                f"{ESPN_BASE}/football/nfl/scoreboard",
+    "nba":                f"{ESPN_BASE}/basketball/nba/scoreboard",
+    "mlb":                f"{ESPN_BASE}/baseball/mlb/scoreboard",
+    "nhl":                f"{ESPN_BASE}/hockey/nhl/scoreboard",
+    "college_football":   f"{ESPN_BASE}/football/college-football/scoreboard",
     "college_basketball": f"{ESPN_BASE}/basketball/mens-college-basketball/scoreboard",
 }
 
-# Soccer sub-leagues use a different URL pattern
 def _soccer_url(league_id: str) -> str:
     return f"{ESPN_BASE}/soccer/{league_id}/scoreboard"
 
-# Colors
-COL_HEADER  = (180, 180, 180)
-COL_LIVE    = (255, 80, 0)
-COL_TEAM1   = (255, 255, 255)
-COL_TEAM2   = (200, 200, 255)
-COL_SCORE   = (255, 220, 0)
-COL_FINAL   = (120, 120, 120)
+COL_HEADER = (180, 180, 180)
+COL_LIVE   = (255, 80,  0)
+COL_FINAL  = (120, 120, 120)
+COL_PRE    = (100, 180, 255)
+COL_SCORE  = (255, 220, 0)
 
-def _load_font(size: int = 6):
-    try:
-        return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", size)
-    except Exception:
-        return ImageFont.load_default()
+LOGO_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "assets", "sports", "logos")
+)
 
-FONT_HD = _load_font(6)
-FONT_TM = _load_font(7)
-FONT_SC = _load_font(8)
+# Module-level logo cache: "LEAGUE:ABBREV" → PIL RGBA image or None
+_logo_cache: dict = {}
+_logo_failed: set = set()
 
+
+def _load_font(size: int):
+    for path in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    ]:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+FONT_HDR = _load_font(6)   # header: league + status
+FONT_SCR = _load_font(9)   # score numbers
+FONT_TXT = _load_font(7)   # team name fallback
+
+
+# ------------------------------------------------------------------
+# Date helpers
+# ------------------------------------------------------------------
+
+def _eastern_now() -> datetime:
+    utc = datetime.now(timezone.utc)
+    offset = -4 if 3 <= utc.month <= 11 else -5   # approximate DST
+    return utc + timedelta(hours=offset)
+
+
+def _dates_param() -> str:
+    """ESPN 'dates' param: yesterday–today in Eastern time."""
+    et = _eastern_now()
+    today     = et.strftime("%Y%m%d")
+    yesterday = (et - timedelta(days=1)).strftime("%Y%m%d")
+    return f"{yesterday}-{today}"
+
+
+# ------------------------------------------------------------------
+# Logo helpers
+# ------------------------------------------------------------------
+
+def _logo_cache_key(league: str, abbrev: str) -> str:
+    return f"{league}:{abbrev}"
+
+
+def _logo_disk_path(league: str, abbrev: str) -> str:
+    return os.path.join(LOGO_DIR, league.lower(), f"{abbrev.upper()}.png")
+
+
+def _get_logo(logo_url: str, league: str, abbrev: str) -> Optional[Image.Image]:
+    key = _logo_cache_key(league, abbrev)
+    if key in _logo_cache:
+        return _logo_cache[key]
+    if key in _logo_failed:
+        return None
+
+    path = _logo_disk_path(league, abbrev)
+    if os.path.exists(path):
+        try:
+            img = Image.open(path).convert("RGBA")
+            _logo_cache[key] = img
+            return img
+        except Exception:
+            pass
+
+    if logo_url:
+        try:
+            r = requests.get(logo_url, timeout=8, headers={"User-Agent": "LEDMatrix/1.0"})
+            ct = r.headers.get("content-type", "")
+            if r.status_code == 200 and "image" in ct:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(r.content)
+                img = Image.open(io.BytesIO(r.content)).convert("RGBA")
+                _logo_cache[key] = img
+                return img
+        except Exception as e:
+            log.debug(f"[sports] Logo download failed ({abbrev}): {e}")
+
+    _logo_failed.add(key)
+    _logo_cache[key] = None
+    return None
+
+
+def _fit_logo(logo: Image.Image, max_w: int, max_h: int) -> Image.Image:
+    result = logo.copy()
+    result.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+    return result
+
+
+# ------------------------------------------------------------------
+# Plugin class
+# ------------------------------------------------------------------
 
 class SportsPlugin(BasePlugin):
     PLUGIN_ID = "sports"
@@ -75,10 +163,6 @@ class SportsPlugin(BasePlugin):
         self._cycle_done = False
         self._has_live = False
 
-    # ------------------------------------------------------------------
-    # BasePlugin
-    # ------------------------------------------------------------------
-
     def reset(self):
         self._current_idx = 0
         self._idx_start = time.monotonic()
@@ -86,31 +170,29 @@ class SportsPlugin(BasePlugin):
 
     def update(self):
         leagues_cfg = self.config.get("leagues", {})
+        dates = _dates_param()
         games = []
 
-        # Standard leagues
         for league_id, url in LEAGUE_URLS.items():
-            league_cfg = leagues_cfg.get(league_id, {})
-            if not league_cfg.get("enabled", False):
+            lcfg = leagues_cfg.get(league_id, {})
+            if not lcfg.get("enabled", False):
                 continue
-            fetched = _fetch_league(url, league_cfg.get("name", league_id.upper()))
-            games.extend(fetched)
+            games.extend(_fetch_league(url, lcfg.get("name", league_id.upper()), dates))
 
-        # Soccer sub-leagues
         soccer_cfg = leagues_cfg.get("soccer", {})
         if soccer_cfg.get("enabled", False):
             for sub in soccer_cfg.get("sub_leagues", []):
-                fetched = _fetch_league(
-                    _soccer_url(sub["id"]), sub.get("name", sub["id"])
-                )
-                games.extend(fetched)
+                games.extend(_fetch_league(
+                    _soccer_url(sub["id"]), sub.get("name", sub["id"]), dates
+                ))
 
-        # Filter to favorite teams if configured.
-        # Entries are "LEAGUE:ABBREV" (e.g. "NFL:DEN") so CHI/NBA ≠ CHI/NFL.
-        # Plain abbreviations without a colon are matched against any league (legacy).
-        # show_all_leagues bypasses the filter for specific leagues (e.g. World Cup).
+        # Filter upcoming if disabled
+        if not self.config.get("show_upcoming", False):
+            games = [g for g in games if g["state"] != "pre"]
+
+        # Favorite teams filter
         favorites = {t.upper() for t in self.config.get("favorite_teams", [])}
-        show_all = {s.upper() for s in self.config.get("show_all_leagues", [])}
+        show_all  = {s.upper() for s in self.config.get("show_all_leagues", [])}
         if favorites:
             def _matches(game):
                 if game["league"].upper() in show_all:
@@ -123,22 +205,26 @@ class SportsPlugin(BasePlugin):
                 return False
             games = [g for g in games if _matches(g)]
 
-        # Sort: live first, then recent, then upcoming
         live = [g for g in games if g["state"] == "in"]
         done = [g for g in games if g["state"] == "post"]
         pre  = [g for g in games if g["state"] == "pre"]
         games = live + done + pre
 
+        # Prefetch logos in this background thread so draw() never blocks on I/O
+        for game in games:
+            for side in ("away", "home"):
+                t = game[side]
+                _get_logo(t.get("logo_url", ""), game["league"], t["name"])
+
         with self._lock:
-            self._games = games
-            self._has_live = len(live) > 0
+            self._games  = games
+            self._has_live = bool(live)
 
         log.debug(f"[sports] Updated: {len(games)} games ({len(live)} live)")
 
     def draw(self) -> bool:
         with self._lock:
             games = list(self._games)
-            has_live = self._has_live
 
         if not games:
             return False
@@ -146,7 +232,6 @@ class SportsPlugin(BasePlugin):
         spr = float(self.config.get("seconds_per_game", 7))
         now = time.monotonic()
 
-        # Advance to next game when timer expires
         if now - self._idx_start >= spr:
             self._current_idx += 1
             self._idx_start = now
@@ -173,15 +258,18 @@ class SportsPlugin(BasePlugin):
 # ESPN API
 # ------------------------------------------------------------------
 
-def _fetch_league(url: str, league_name: str) -> list[dict]:
+def _fetch_league(url: str, league_name: str, dates: str) -> list[dict]:
     try:
-        r = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
+        r = requests.get(
+            url,
+            params={"dates": dates},
+            timeout=10,
+            headers={"User-Agent": "LEDMatrix/1.0"},
+        )
         if r.status_code != 200:
             return []
-        data = r.json()
-        events = data.get("events", [])
         games = []
-        for event in events:
+        for event in r.json().get("events", []):
             game = _parse_event(event, league_name)
             if game:
                 games.append(game)
@@ -193,46 +281,48 @@ def _fetch_league(url: str, league_name: str) -> list[dict]:
 
 def _parse_event(event: dict, league: str) -> Optional[dict]:
     try:
-        competitions = event.get("competitions", [])
-        if not competitions:
-            return None
-        comp = competitions[0]
+        comp = (event.get("competitions") or [{}])[0]
         competitors = comp.get("competitors", [])
         if len(competitors) < 2:
             return None
 
         status = event.get("status", {})
-        state = status.get("type", {}).get("state", "pre")  # pre / in / post
-        clock = status.get("displayClock", "")
-        period = status.get("period", 0)
+        state         = status.get("type", {}).get("state", "pre")
+        clock         = status.get("displayClock", "")
+        period        = status.get("period", 0)
         status_detail = status.get("type", {}).get("shortDetail", "")
 
         teams = []
         for c in competitors[:2]:
             team = c.get("team", {})
-            score = c.get("score", "0")
-            home_away = c.get("homeAway", "")
-            abbrev = team.get("abbreviation", team.get("displayName", "?"))[:6]
-            color = team.get("color", "")
+            abbrev = team.get("abbreviation", team.get("shortDisplayName", "?"))[:6]
+
+            logo_url = team.get("logo", "")
+            if not logo_url:
+                logos = team.get("logos", [])
+                if logos:
+                    logo_url = logos[0].get("href", "")
+
             teams.append({
-                "name": abbrev,
-                "score": score,
-                "home_away": home_away,
-                "color": _hex_to_rgb(color),
+                "name":     abbrev,
+                "score":    c.get("score", ""),
+                "home_away": c.get("homeAway", ""),
+                "color":    _hex_to_rgb(team.get("color", "")),
+                "logo_url": logo_url,
             })
 
-        # Ensure home team is listed second
+        # Ensure away is index 0, home is index 1
         if len(teams) == 2 and teams[0].get("home_away") == "home":
             teams = [teams[1], teams[0]]
 
         return {
-            "league": league,
-            "state": state,
-            "clock": clock,
-            "period": period,
+            "league":        league,
+            "state":         state,
+            "clock":         clock,
+            "period":        period,
             "status_detail": status_detail,
-            "away": teams[0],
-            "home": teams[1],
+            "away":          teams[0],
+            "home":          teams[1],
         }
     except Exception:
         return None
@@ -252,49 +342,82 @@ def _hex_to_rgb(hex_color: str) -> tuple:
 # Rendering
 # ------------------------------------------------------------------
 
+def _tw(draw: ImageDraw.ImageDraw, text: str, font) -> int:
+    return int(draw.textlength(text, font=font))
+
+
 def _render_game(game: dict) -> Image.Image:
-    img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
+    img  = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    state = game["state"]
-    is_live = state == "in"
+    state    = game["state"]
+    is_live  = state == "in"
     is_final = state == "post"
 
-    # Header: league + status
-    header_color = COL_LIVE if is_live else (COL_FINAL if is_final else COL_HEADER)
-    league_str = game["league"]
+    # ── Header ──────────────────────────────────────────────────────
+    status_col = COL_LIVE if is_live else (COL_FINAL if is_final else COL_PRE)
     if is_live:
-        clock_str = f"P{game['period']} {game['clock']}"
-        header = f"{league_str} {clock_str}"
+        status_str = f"P{game['period']} {game['clock']}"
     elif is_final:
-        header = f"{league_str} FINAL"
+        status_str = "FINAL"
     else:
-        header = f"{league_str} {game['status_detail'][:12]}"
+        status_str = game["status_detail"][:14]
 
-    draw.text((1, 1), header[:16], font=FONT_HD, fill=header_color)
+    draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER)
+    sw = _tw(draw, status_str, FONT_HDR)
+    draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col)
+    draw.line([(0, HEADER_H), (MATRIX_W - 1, HEADER_H)], fill=(40, 40, 40))
 
-    # Divider line
-    draw.line([(0, 10), (MATRIX_W, 10)], fill=(40, 40, 40))
+    # ── Logo slots ───────────────────────────────────────────────────
+    _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
+    _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
 
-    # Away team (row 1)
-    away = game["away"]
-    team_col = _clamp_color(away["color"]) or COL_TEAM1
-    draw.text((1, 12), away["name"], font=FONT_TM, fill=team_col)
-    score_str = str(away["score"])
-    draw.text((MATRIX_W - len(score_str) * 6 - 1, 12), score_str, font=FONT_SC, fill=COL_SCORE)
-
-    # Home team (row 2)
-    home = game["home"]
-    team_col2 = _clamp_color(home["color"]) or COL_TEAM2
-    draw.text((1, 22), home["name"], font=FONT_TM, fill=team_col2)
-    score_str2 = str(home["score"])
-    draw.text((MATRIX_W - len(score_str2) * 6 - 1, 22), score_str2, font=FONT_SC, fill=COL_SCORE)
+    # Centre divider
+    cx = MATRIX_W // 2
+    draw.line([(cx, HEADER_H + 1), (cx, MATRIX_H - 1)], fill=(50, 50, 50))
 
     return img
 
 
+def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
+               team: dict, slot_x: int, game: dict):
+    """Render one team's logo + score into its 32×(32-HEADER_H) slot."""
+    AREA_TOP = HEADER_H + 1
+    AREA_H   = MATRIX_H - AREA_TOP      # 24 px
+    MARGIN   = 2
+    SCORE_H  = 9                         # reserve px at bottom for score
+
+    logo_max_w = SLOT_W - MARGIN * 2
+    logo_max_h = AREA_H - SCORE_H - 1
+
+    logo = _logo_cache.get(_logo_cache_key(game["league"], team["name"]))
+
+    if logo:
+        fitted = _fit_logo(logo, logo_max_w, logo_max_h)
+        lx = slot_x + (SLOT_W - fitted.width)  // 2
+        ly = AREA_TOP + (logo_max_h - fitted.height) // 2
+        img.paste(fitted, (lx, ly), fitted)
+    else:
+        # Text fallback
+        col = _clamp_color(team["color"]) or COL_HEADER
+        label = team["name"][:5]
+        tw = _tw(draw, label, FONT_TXT)
+        draw.text(
+            (slot_x + (SLOT_W - tw) // 2, AREA_TOP + (logo_max_h - 7) // 2),
+            label, font=FONT_TXT, fill=col,
+        )
+
+    # Score (or "–" for pre-game)
+    score_str = str(team["score"]) if (game["state"] != "pre" and team["score"] != "") else "-"
+    sc_w = _tw(draw, score_str, FONT_SCR)
+    sx   = slot_x + (SLOT_W - sc_w) // 2
+    sy   = MATRIX_H - SCORE_H
+    # Black stroke for readability over any logo colour
+    draw.text((sx, sy), score_str, font=FONT_SCR, fill=COL_SCORE,
+              stroke_width=1, stroke_fill=(0, 0, 0))
+
+
 def _clamp_color(rgb: tuple) -> Optional[tuple]:
-    """Ensure color is visible (not too dark)."""
     if not rgb or sum(rgb) < 60:
         return None
     return rgb
