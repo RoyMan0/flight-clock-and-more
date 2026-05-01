@@ -289,24 +289,25 @@ def sports_teams():
     import requests as _req
 
     ESPN = "https://site.api.espn.com/apis/site/v2/sports"
+    # (league_label, url_base, paginate)
+    # paginate=True: fetch pages until a page returns < PAGE_SIZE teams
     SOURCES = [
-        ("NFL",   f"{ESPN}/football/nfl/teams"),
-        ("NBA",   f"{ESPN}/basketball/nba/teams"),
-        ("MLB",   f"{ESPN}/baseball/mlb/teams"),
-        ("NHL",   f"{ESPN}/icehockey/nhl/teams"),
-        ("NCAAF", f"{ESPN}/football/college-football/teams?limit=900"),
-        ("NCAAB", f"{ESPN}/basketball/mens-college-basketball/teams?limit=900"),
-        ("MLS",   f"{ESPN}/soccer/usa.1/teams"),
-        ("EPL",   f"{ESPN}/soccer/eng.1/teams"),
-        ("UCL",   f"{ESPN}/soccer/uefa.champions/teams"),
-        ("LaLiga",f"{ESPN}/soccer/esp.1/teams"),
-        ("World Cup", f"{ESPN}/soccer/fifa.world/teams"),
+        ("NFL",       f"{ESPN}/football/nfl/teams",                          False),
+        ("NBA",       f"{ESPN}/basketball/nba/teams",                        False),
+        ("MLB",       f"{ESPN}/baseball/mlb/teams",                          False),
+        ("NHL",       f"{ESPN}/icehockey/nhl/teams",                         False),
+        ("NCAAF",     f"{ESPN}/football/college-football/teams",              True),
+        ("NCAAB",     f"{ESPN}/basketball/mens-college-basketball/teams",     True),
+        ("MLS",       f"{ESPN}/soccer/usa.1/teams",                          False),
+        ("EPL",       f"{ESPN}/soccer/eng.1/teams",                          False),
+        ("UCL",       f"{ESPN}/soccer/uefa.champions/teams",                 False),
+        ("La Liga",   f"{ESPN}/soccer/esp.1/teams",                          False),
+        ("World Cup", f"{ESPN}/soccer/fifa.world/teams",                     False),
     ]
+    PAGE_SIZE = 200
 
-    def _extract(data):
+    def _parse_page(data, seen):
         teams = []
-        seen = set()
-        # Standard wrapper: {"sports": [{"leagues": [{"teams": [...]}]}]}
         for sport in data.get("sports", []):
             for lg in sport.get("leagues", []):
                 for entry in lg.get("teams", []):
@@ -316,7 +317,6 @@ def sports_teams():
                     if abbrev and name and abbrev not in seen:
                         teams.append({"abbrev": abbrev, "name": name})
                         seen.add(abbrev)
-        # Flat wrapper: {"teams": [...]}
         for entry in data.get("teams", []):
             t = entry.get("team", entry)
             abbrev = t.get("abbreviation", "")
@@ -324,13 +324,31 @@ def sports_teams():
             if abbrev and name and abbrev not in seen:
                 teams.append({"abbrev": abbrev, "name": name})
                 seen.add(abbrev)
-        return sorted(teams, key=lambda t: t["name"])
+        return teams
+
+    def _fetch(url_base, paginate):
+        seen = set()
+        all_teams = []
+        hdrs = {"User-Agent": "LEDMatrix/1.0"}
+        if not paginate:
+            r = _req.get(url_base, timeout=15, headers=hdrs)
+            all_teams = _parse_page(r.json(), seen)
+        else:
+            page = 1
+            while True:
+                url = f"{url_base}?limit={PAGE_SIZE}&page={page}"
+                r = _req.get(url, timeout=15, headers=hdrs)
+                batch = _parse_page(r.json(), seen)
+                all_teams.extend(batch)
+                if len(batch) < PAGE_SIZE:
+                    break
+                page += 1
+        return sorted(all_teams, key=lambda t: t["name"])
 
     result = {}
-    for league, url in SOURCES:
+    for league, url, paginate in SOURCES:
         try:
-            r = _req.get(url, timeout=15, headers={"User-Agent": "LEDMatrix/1.0"})
-            result[league] = _extract(r.json())
+            result[league] = _fetch(url, paginate)
         except Exception:
             result[league] = []
     return jsonify(result)
