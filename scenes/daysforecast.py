@@ -1,10 +1,9 @@
 from datetime import datetime, timedelta
-from typing import Optional
 from PIL import Image
 
 from utilities.animator import Animator
 from setup import colours, fonts, frames, screen
-from utilities.temperature import grab_forecast
+from utilities.temperature import get_forecast_cached
 from config import NIGHT_START, NIGHT_END
 from rgbmatrix import graphics
 
@@ -23,15 +22,11 @@ TEMP_POSITION = DISTANCE_FROM_TOP
 NIGHT_START_TIME = datetime.strptime(NIGHT_START, "%H:%M")
 NIGHT_END_TIME = datetime.strptime(NIGHT_END, "%H:%M")
 
-FORECAST_REFRESH_HOURS = 1
-
 class DaysForecastScene(object):
     def __init__(self):
         super().__init__()
         self._redraw_forecast = True
         self._last_hour = None
-        self._cached_forecast = None
-        self._last_forecast_fetch: Optional[datetime] = None
 
     @Animator.KeyFrame.add(frames.PER_SECOND * 1)
     def day(self, count):
@@ -50,45 +45,16 @@ class DaysForecastScene(object):
 
         current_hour = datetime.now().hour
 
-        # Determine if we need to fetch BEFORE updating last_hour
-        need_fetch = False
-        if self._cached_forecast is None:
-            need_fetch = True
-        elif self._last_forecast_fetch is None:
-            need_fetch = True
-        elif (datetime.now() - self._last_forecast_fetch).total_seconds() >= FORECAST_REFRESH_HOURS * 3600:
-            need_fetch = True
-
-        # Draw only when hour changes or when scene is newly activated
         if self._last_hour != current_hour or self._redraw_forecast:
-
-            # Clear previous area
             if self._last_hour is not None:
                 self.draw_square(0, 12, 64, 32, colours.BLACK)
 
-            # Update last_hour AFTER deciding if we need to fetch
             self._last_hour = current_hour
+            forecast = get_forecast_cached()
 
-            # FETCH OR USE CACHE
-            if need_fetch:
-                forecast = grab_forecast(tag="days")
+            if not forecast:
+                return
 
-                # If the API failed ? use old cache (if any)
-                if not forecast:
-                    if self._cached_forecast:
-                        forecast = self._cached_forecast
-                    else:
-                        # Nothing cached yet ? wait for next cycle
-                        return
-                else:
-                    # Valid data — update cache and record fetch time
-                    self._cached_forecast = forecast
-                    self._last_forecast_fetch = datetime.now()
-            else:
-                # Use cached forecast
-                forecast = self._cached_forecast
-
-            # Done with forced redraw
             self._redraw_forecast = False
             
             # --- RENDER FORECAST ---

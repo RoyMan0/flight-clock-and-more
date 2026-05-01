@@ -15,6 +15,16 @@ _RATE_LIMIT_BACKOFF_MINUTES = 10
 _rate_limited_until: Optional[datetime] = None
 _rate_limit_logged_until: Optional[datetime] = None  # suppress repeated warnings
 
+# Module-level cache — survives plugin mode switches for the process lifetime
+_TEMP_TTL = 300       # 5 min between successful fetches
+_FORECAST_TTL = 3600  # 1 hr between successful fetches
+
+_temp_data: Optional[tuple] = None
+_temp_next_fetch: Optional[datetime] = None
+
+_forecast_data: Optional[list] = None
+_forecast_next_fetch: Optional[datetime] = None
+
 # Attempt to load config data
 try:
     from config import TOMORROW_API_KEY
@@ -212,3 +222,31 @@ def grab_forecast(tag="unknown"):
     except KeyError as e:
         logging.error(f"[Forecast:{tag}] Unexpected data format: {e}")
         return []
+
+
+def get_temperature_cached() -> tuple:
+    """Return (temperature, humidity) from module-level cache; fetch only when TTL expires."""
+    global _temp_data, _temp_next_fetch
+    now = datetime.now()
+    if _temp_next_fetch is None or now >= _temp_next_fetch:
+        result = grab_temperature_and_humidity()
+        if result[0] is not None:
+            _temp_data = result
+            _temp_next_fetch = now + timedelta(seconds=_TEMP_TTL)
+        else:
+            _temp_next_fetch = now + timedelta(seconds=60)
+    return _temp_data if _temp_data is not None else (None, None)
+
+
+def get_forecast_cached() -> list:
+    """Return forecast intervals from module-level cache; fetch only when TTL expires."""
+    global _forecast_data, _forecast_next_fetch
+    now = datetime.now()
+    if _forecast_next_fetch is None or now >= _forecast_next_fetch:
+        result = grab_forecast()
+        if result:
+            _forecast_data = result
+            _forecast_next_fetch = now + timedelta(seconds=_FORECAST_TTL)
+        else:
+            _forecast_next_fetch = now + timedelta(seconds=300)
+    return _forecast_data or []
