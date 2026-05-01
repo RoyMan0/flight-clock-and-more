@@ -287,28 +287,50 @@ def restore_backup(filename):
 @api_bp.get("/sports/teams")
 def sports_teams():
     import requests as _req
+
+    ESPN = "https://site.api.espn.com/apis/site/v2/sports"
     SOURCES = [
-        ("NFL",   "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams"),
-        ("NBA",   "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"),
-        ("MLB",   "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"),
-        ("NHL",   "https://site.api.espn.com/apis/site/v2/sports/icehockey/nhl/teams"),
-        ("NCAAF", "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?limit=300"),
-        ("NCAAB", "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams?limit=400"),
+        ("NFL",   f"{ESPN}/football/nfl/teams"),
+        ("NBA",   f"{ESPN}/basketball/nba/teams"),
+        ("MLB",   f"{ESPN}/baseball/mlb/teams"),
+        ("NHL",   f"{ESPN}/icehockey/nhl/teams"),
+        ("NCAAF", f"{ESPN}/football/college-football/teams?limit=900"),
+        ("NCAAB", f"{ESPN}/basketball/mens-college-basketball/teams?limit=900"),
+        ("MLS",   f"{ESPN}/soccer/usa.1/teams"),
+        ("EPL",   f"{ESPN}/soccer/eng.1/teams"),
+        ("UCL",   f"{ESPN}/soccer/uefa.champions/teams"),
+        ("LaLiga",f"{ESPN}/soccer/esp.1/teams"),
+        ("World Cup", f"{ESPN}/soccer/fifa.world/teams"),
     ]
+
+    def _extract(data):
+        teams = []
+        seen = set()
+        # Standard wrapper: {"sports": [{"leagues": [{"teams": [...]}]}]}
+        for sport in data.get("sports", []):
+            for lg in sport.get("leagues", []):
+                for entry in lg.get("teams", []):
+                    t = entry.get("team", entry)
+                    abbrev = t.get("abbreviation", "")
+                    name = t.get("displayName", "")
+                    if abbrev and name and abbrev not in seen:
+                        teams.append({"abbrev": abbrev, "name": name})
+                        seen.add(abbrev)
+        # Flat wrapper: {"teams": [...]}
+        for entry in data.get("teams", []):
+            t = entry.get("team", entry)
+            abbrev = t.get("abbreviation", "")
+            name = t.get("displayName", "")
+            if abbrev and name and abbrev not in seen:
+                teams.append({"abbrev": abbrev, "name": name})
+                seen.add(abbrev)
+        return sorted(teams, key=lambda t: t["name"])
+
     result = {}
     for league, url in SOURCES:
         try:
-            r = _req.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
-            teams = []
-            for sport in r.json().get("sports", []):
-                for lg in sport.get("leagues", []):
-                    for entry in lg.get("teams", []):
-                        t = entry.get("team", {})
-                        abbrev = t.get("abbreviation", "")
-                        name = t.get("displayName", "")
-                        if abbrev and name:
-                            teams.append({"abbrev": abbrev, "name": name})
-            result[league] = sorted(teams, key=lambda t: t["name"])
+            r = _req.get(url, timeout=15, headers={"User-Agent": "LEDMatrix/1.0"})
+            result[league] = _extract(r.json())
         except Exception:
             result[league] = []
     return jsonify(result)

@@ -105,14 +105,19 @@ class SportsPlugin(BasePlugin):
                 )
                 games.extend(fetched)
 
-        # Filter to favorite teams if configured (abbreviations, case-insensitive)
+        # Filter to favorite teams if configured.
+        # Entries are "LEAGUE:ABBREV" (e.g. "NFL:DEN") so CHI/NBA ≠ CHI/NFL.
+        # Plain abbreviations without a colon are matched against any league (legacy).
         favorites = {t.upper() for t in self.config.get("favorite_teams", [])}
         if favorites:
-            games = [
-                g for g in games
-                if g["away"]["name"].upper() in favorites
-                or g["home"]["name"].upper() in favorites
-            ]
+            def _matches(game):
+                lg = game["league"].upper()
+                for side in ("away", "home"):
+                    ab = game[side]["name"].upper()
+                    if f"{lg}:{ab}" in favorites or ab in favorites:
+                        return True
+                return False
+            games = [g for g in games if _matches(g)]
 
         # Sort: live first, then recent, then upcoming
         live = [g for g in games if g["state"] == "in"]
