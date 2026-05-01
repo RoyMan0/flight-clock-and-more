@@ -281,6 +281,40 @@ def restore_backup(filename):
 
 
 # ------------------------------------------------------------------
+# Sports team browser
+# ------------------------------------------------------------------
+
+@api_bp.get("/sports/teams")
+def sports_teams():
+    import requests as _req
+    SOURCES = [
+        ("NFL",   "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams"),
+        ("NBA",   "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"),
+        ("MLB",   "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"),
+        ("NHL",   "https://site.api.espn.com/apis/site/v2/sports/icehockey/nhl/teams"),
+        ("NCAAF", "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams?limit=300"),
+        ("NCAAB", "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams?limit=400"),
+    ]
+    result = {}
+    for league, url in SOURCES:
+        try:
+            r = _req.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
+            teams = []
+            for sport in r.json().get("sports", []):
+                for lg in sport.get("leagues", []):
+                    for entry in lg.get("teams", []):
+                        t = entry.get("team", {})
+                        abbrev = t.get("abbreviation", "")
+                        name = t.get("displayName", "")
+                        if abbrev and name:
+                            teams.append({"abbrev": abbrev, "name": name})
+            result[league] = sorted(teams, key=lambda t: t["name"])
+        except Exception:
+            result[league] = []
+    return jsonify(result)
+
+
+# ------------------------------------------------------------------
 # Flight data (for dashboard panel)
 # ------------------------------------------------------------------
 

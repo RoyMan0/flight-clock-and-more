@@ -191,11 +191,56 @@
           </div>
           <div class="mt-3">
             <label class="form-label">Favorite Teams</label>
-            <input type="text" class="form-control bg-dark text-light border-secondary"
-                   placeholder="e.g. DEN, LAL, COL, NYY — leave blank to show all"
-                   :value="(pluginConfigs.sports.favorite_teams || []).join(', ')"
-                   @change="pluginConfigs.sports.favorite_teams = $event.target.value.split(',').map(t => t.trim().toUpperCase()).filter(t => t)">
-            <div class="form-text text-secondary">Team abbreviations from ESPN (comma-separated). Leave blank to show all games.</div>
+            <div class="mb-2 d-flex flex-wrap gap-1" x-show="(pluginConfigs.sports.favorite_teams||[]).length">
+              <template x-for="t in (pluginConfigs.sports.favorite_teams||[])" :key="t">
+                <span class="badge bg-primary d-flex align-items-center gap-1">
+                  <span x-text="t"></span>
+                  <button type="button" class="btn-close btn-close-white" style="font-size:.6rem"
+                          @click="pluginConfigs.sports.favorite_teams = pluginConfigs.sports.favorite_teams.filter(x=>x!==t)"></button>
+                </span>
+              </template>
+            </div>
+            <p class="text-muted small mb-2" x-show="!(pluginConfigs.sports.favorite_teams||[]).length">No favorites set — all games shown.</p>
+            <button class="btn btn-outline-secondary btn-sm" @click="toggleTeamBrowser()">
+              <i class="bi bi-search me-1"></i>
+              <span x-text="teamBrowserOpen ? 'Hide Team Browser' : 'Browse & Select Teams'"></span>
+            </button>
+            <div x-show="teamBrowserOpen" x-transition class="mt-3 border border-secondary rounded p-2">
+              <div x-show="teamsLoading" class="text-muted small">Loading teams…</div>
+              <div x-show="!teamsLoading && Object.keys(teamsData).length">
+                <ul class="nav nav-tabs mb-2" id="teamTabs">
+                  <template x-for="league in Object.keys(teamsData)" :key="league">
+                    <li class="nav-item">
+                      <button class="nav-link py-1 px-2 small"
+                              :class="teamTab===league ? 'active' : 'text-secondary'"
+                              @click="teamTab=league" x-text="league"></button>
+                    </li>
+                  </template>
+                </ul>
+                <div style="max-height:220px;overflow-y:auto">
+                  <template x-for="league in Object.keys(teamsData)" :key="league">
+                    <div x-show="teamTab===league">
+                      <div class="row g-1">
+                        <template x-for="team in teamsData[league]" :key="team.abbrev">
+                          <div class="col-6 col-md-4">
+                            <div class="form-check">
+                              <input class="form-check-input" type="checkbox"
+                                     :id="'tm-'+team.abbrev"
+                                     :checked="(pluginConfigs.sports.favorite_teams||[]).includes(team.abbrev)"
+                                     @change="toggleTeam(team.abbrev, $event.target.checked)">
+                              <label class="form-check-label small" :for="'tm-'+team.abbrev">
+                                <span class="fw-bold" x-text="team.abbrev"></span>
+                                <span class="text-muted ms-1 small" x-text="team.name"></span>
+                              </label>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="form-check form-switch mt-3">
             <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.live_priority">
@@ -263,6 +308,10 @@ function configPage() {
     secrets: {},
     backups: [],
     saved: false,
+    teamBrowserOpen: false,
+    teamsLoading: false,
+    teamsData: {},
+    teamTab: '',
 
     async init() {
       await this.loadAll();
@@ -356,6 +405,28 @@ function configPage() {
       if (!confirm(`Restore config from ${name}?`)) return;
       await fetch(`/api/config/restore/${name}`, {method: 'POST'});
       await this.loadAll();
+    },
+
+    async toggleTeamBrowser() {
+      this.teamBrowserOpen = !this.teamBrowserOpen;
+      if (this.teamBrowserOpen && Object.keys(this.teamsData).length === 0) {
+        this.teamsLoading = true;
+        try {
+          this.teamsData = await fetch('/api/sports/teams').then(r => r.json());
+          this.teamTab = Object.keys(this.teamsData)[0] || '';
+        } finally {
+          this.teamsLoading = false;
+        }
+      }
+    },
+
+    toggleTeam(abbrev, checked) {
+      const favs = this.pluginConfigs.sports.favorite_teams || [];
+      if (checked) {
+        if (!favs.includes(abbrev)) this.pluginConfigs.sports.favorite_teams = [...favs, abbrev].sort();
+      } else {
+        this.pluginConfigs.sports.favorite_teams = favs.filter(t => t !== abbrev);
+      }
     },
   };
 }
