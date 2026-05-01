@@ -70,20 +70,20 @@ def _load_font(size: int):
             pass
     return ImageFont.load_default()
 
-FONT_HDR = _load_font(5)   # header: league + status (small, top-aligned)
-FONT_SCR = _load_font(8)   # score numbers
-FONT_TXT = _load_font(7)   # team name fallback
+FONT_HDR = _load_font(5)   # header: league + status
+FONT_SCR = _load_font(7)   # score numbers (slightly smaller to reclaim space)
+FONT_TXT = _load_font(6)   # team name fallback
 
-# Measure actual rendered score height so sy is never cut off
 def _measure_font_h(font) -> int:
     try:
         bb = font.getbbox("0")
         return bb[3] - bb[1]
     except Exception:
-        return 10
+        return 8
 
-_SCR_H = _measure_font_h(FONT_SCR) + 2   # +2 for stroke + 1px bottom margin
-_HDR_H = _measure_font_h(FONT_HDR) + 1   # actual header text height
+_SCR_H  = _measure_font_h(FONT_SCR) + 2   # score zone height (stroke + 1px margin)
+_HDR_H  = _measure_font_h(FONT_HDR) + 2   # header zone height (text + 2px padding)
+HEADER_H = max(_HDR_H, 7)                  # at least 7px reserved for header row
 
 
 # ------------------------------------------------------------------
@@ -364,7 +364,6 @@ def _render_game(game: dict) -> Image.Image:
     is_live  = state == "in"
     is_final = state == "post"
 
-    # ── Header ──────────────────────────────────────────────────────
     status_col = COL_LIVE if is_live else (COL_FINAL if is_final else COL_PRE)
     if is_live:
         status_str = f"P{game['period']} {game['clock']}"
@@ -373,36 +372,37 @@ def _render_game(game: dict) -> Image.Image:
     else:
         status_str = game["status_detail"][:14]
 
-    # ── Logo slots fill the full height ─────────────────────────────
-    _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
-    _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
-
-    # ── League + status overlaid at top (drawn last so always visible)
+    # ── Header drawn first on clean black so logos never overlap it ──
     draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER,
               stroke_width=1, stroke_fill=(0, 0, 0))
     sw = _tw(draw, status_str, FONT_HDR)
     draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col,
               stroke_width=1, stroke_fill=(0, 0, 0))
 
+    # ── Logo slots occupy the space below the header ─────────────────
+    _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
+    _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
+
     return img
 
 
 def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
                team: dict, slot_x: int, game: dict):
-    """Render one team's logo + score into its 32-wide slot (full height)."""
-    MARGIN     = 2
+    """Render one team's logo + score into its 32-wide slot."""
+    MARGIN = 2
 
-    # Logo fills from top down to just above the score row
-    sy         = MATRIX_H - _SCR_H
+    # Logo zone: starts just below the header row, ends just above the score row
+    sy         = MATRIX_H - _SCR_H          # y where score text starts
+    logo_top   = HEADER_H                   # first pixel available for logo
     logo_max_w = SLOT_W - MARGIN * 2
-    logo_max_h = sy - 1
+    logo_max_h = sy - logo_top - 1          # height available for logo
 
     logo = _logo_cache.get(_logo_cache_key(game["league"], team["name"]))
 
-    if logo:
+    if logo and logo_max_h > 0:
         fitted = _fit_logo(logo, logo_max_w, logo_max_h)
-        lx = slot_x + (SLOT_W - fitted.width)  // 2
-        ly = (logo_max_h - fitted.height) // 2
+        lx = slot_x + (SLOT_W - fitted.width) // 2
+        ly = logo_top + (logo_max_h - fitted.height) // 2
         img.paste(fitted, (lx, ly), fitted)
     else:
         col = _clamp_color(team["color"]) or COL_HEADER
@@ -411,13 +411,11 @@ def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
         try:
             txt_h = FONT_TXT.getbbox("A")[3]
         except Exception:
-            txt_h = 7
-        draw.text(
-            (slot_x + (SLOT_W - tw) // 2, (logo_max_h - txt_h) // 2),
-            label, font=FONT_TXT, fill=col,
-        )
+            txt_h = 6
+        ty = logo_top + max(0, (logo_max_h - txt_h) // 2)
+        draw.text((slot_x + (SLOT_W - tw) // 2, ty), label, font=FONT_TXT, fill=col)
 
-    # Score (or "–" for pre-game); black stroke keeps it readable over logos
+    # Score at the bottom; black stroke keeps it readable over any logo bleed
     score_str = str(team["score"]) if (game["state"] != "pre" and team["score"] != "") else "-"
     sc_w = _tw(draw, score_str, FONT_SCR)
     sx   = slot_x + (SLOT_W - sc_w) // 2
