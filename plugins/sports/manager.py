@@ -29,7 +29,6 @@ log = logging.getLogger(__name__)
 MATRIX_W = 64
 MATRIX_H = 32
 SLOT_W   = 32   # each team occupies half the width
-HEADER_H = 7    # pixels tall for league/status row
 
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 
@@ -71,9 +70,20 @@ def _load_font(size: int):
             pass
     return ImageFont.load_default()
 
-FONT_HDR = _load_font(6)   # header: league + status
-FONT_SCR = _load_font(9)   # score numbers
+FONT_HDR = _load_font(5)   # header: league + status (small, top-aligned)
+FONT_SCR = _load_font(8)   # score numbers
 FONT_TXT = _load_font(7)   # team name fallback
+
+# Measure actual rendered score height so sy is never cut off
+def _measure_font_h(font) -> int:
+    try:
+        bb = font.getbbox("0")
+        return bb[3] - bb[1]
+    except Exception:
+        return 10
+
+_SCR_H = _measure_font_h(FONT_SCR) + 2   # +2 for stroke + 1px bottom margin
+HEADER_H = 6                               # pixels for league/status row
 
 
 # ------------------------------------------------------------------
@@ -363,32 +373,29 @@ def _render_game(game: dict) -> Image.Image:
     else:
         status_str = game["status_detail"][:14]
 
-    draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER)
+    draw.text((1, 0), game["league"][:7], font=FONT_HDR, fill=COL_HEADER)
     sw = _tw(draw, status_str, FONT_HDR)
-    draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col)
+    draw.text((MATRIX_W - sw - 1, 0), status_str, font=FONT_HDR, fill=status_col)
     draw.line([(0, HEADER_H), (MATRIX_W - 1, HEADER_H)], fill=(40, 40, 40))
 
-    # ── Logo slots ───────────────────────────────────────────────────
+    # ── Logo slots (no centre divider — it cuts through logos) ───────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
     _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
-
-    # Centre divider
-    cx = MATRIX_W // 2
-    draw.line([(cx, HEADER_H + 1), (cx, MATRIX_H - 1)], fill=(50, 50, 50))
 
     return img
 
 
 def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
                team: dict, slot_x: int, game: dict):
-    """Render one team's logo + score into its 32×(32-HEADER_H) slot."""
-    AREA_TOP = HEADER_H + 1
-    AREA_H   = MATRIX_H - AREA_TOP      # 24 px
-    MARGIN   = 2
-    SCORE_H  = 9                         # reserve px at bottom for score
+    """Render one team's logo + score into its 32-wide slot."""
+    AREA_TOP   = HEADER_H + 1
+    AREA_H     = MATRIX_H - AREA_TOP   # usable px below header
+    MARGIN     = 2
 
+    # Score sits at the very bottom; logo fills the rest
+    sy         = MATRIX_H - _SCR_H     # first row of score text
     logo_max_w = SLOT_W - MARGIN * 2
-    logo_max_h = AREA_H - SCORE_H - 1
+    logo_max_h = AREA_H - _SCR_H - 1  # stop 1px above score row
 
     logo = _logo_cache.get(_logo_cache_key(game["league"], team["name"]))
 
@@ -398,21 +405,22 @@ def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
         ly = AREA_TOP + (logo_max_h - fitted.height) // 2
         img.paste(fitted, (lx, ly), fitted)
     else:
-        # Text fallback
         col = _clamp_color(team["color"]) or COL_HEADER
         label = team["name"][:5]
         tw = _tw(draw, label, FONT_TXT)
+        try:
+            txt_h = FONT_TXT.getbbox("A")[3]
+        except Exception:
+            txt_h = 7
         draw.text(
-            (slot_x + (SLOT_W - tw) // 2, AREA_TOP + (logo_max_h - 7) // 2),
+            (slot_x + (SLOT_W - tw) // 2, AREA_TOP + (logo_max_h - txt_h) // 2),
             label, font=FONT_TXT, fill=col,
         )
 
-    # Score (or "–" for pre-game)
+    # Score (or "–" for pre-game); black stroke keeps it readable over logos
     score_str = str(team["score"]) if (game["state"] != "pre" and team["score"] != "") else "-"
     sc_w = _tw(draw, score_str, FONT_SCR)
     sx   = slot_x + (SLOT_W - sc_w) // 2
-    sy   = MATRIX_H - SCORE_H
-    # Black stroke for readability over any logo colour
     draw.text((sx, sy), score_str, font=FONT_SCR, fill=COL_SCORE,
               stroke_width=1, stroke_fill=(0, 0, 0))
 
