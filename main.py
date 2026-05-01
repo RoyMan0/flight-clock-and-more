@@ -17,7 +17,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("workdammit.log", mode="a"),
     ],
 )
 log = logging.getLogger(__name__)
