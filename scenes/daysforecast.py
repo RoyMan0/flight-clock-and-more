@@ -28,6 +28,11 @@ class DaysForecastScene(object):
         self._redraw_forecast = True
         self._last_hour = None
 
+    @Animator.KeyFrame.add(0)
+    def _forecast_on_reset(self, count):
+        """Fired by reset_scene() so forecast redraws after a canvas clear."""
+        self._redraw_forecast = True
+
     @Animator.KeyFrame.add(frames.PER_SECOND * 1)
     def day(self, count):
         # Ensure redraw when there's new scene selection or midnight brightness events

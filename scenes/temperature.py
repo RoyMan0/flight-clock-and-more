@@ -18,6 +18,11 @@ class TemperatureScene(object):
         self._last_temperature_str = None
         self._redraw_temp = True
 
+    @Animator.KeyFrame.add(0)
+    def _temp_on_reset(self, count):
+        """Fired by reset_scene() so temperature redraws after a canvas clear."""
+        self._redraw_temp = True
+
     def colour_gradient(self, colour_A, colour_B, ratio):
         return graphics.Color(
             int(colour_A.red + ((colour_B.red - colour_A.red) * ratio)),

@@ -53,59 +53,93 @@ COL_SCORE  = (255, 220, 0)
 LOGO_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "assets", "sports", "logos")
 )
+_FONTS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "fonts")
+)
 
 # Module-level logo cache: "LEAGUE:ABBREV" → PIL RGBA image or None
 _logo_cache: dict = {}
 _logo_failed: set = set()
 
 
-def _load_font(size: int):
-    _ttf_paths = [
-        # Debian/Raspberry Pi OS with fonts-dejavu-core installed
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        # Liberation (often pre-installed on Pi OS)
-        "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
-        # FreeFont (fonts-freefont-ttf)
-        "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeMono.ttf",
-        # Noto (common on Pi OS Desktop)
-        "/usr/share/fonts/truetype/noto/NotoMono-Regular.ttf",
-        # Piboto (Pi OS bundled)
-        "/usr/share/fonts/truetype/piboto/Piboto-Regular.ttf",
-    ]
-    for path in _ttf_paths:
-        if os.path.exists(path):
-            try:
-                font = ImageFont.truetype(path, size)
-                log.debug(f"[sports] Font {size}pt loaded from {path}")
-                return font
-            except Exception:
-                pass
-    # Pillow ≥ 9.2 supports size= on load_default (uses bundled NotoSans/FreeType)
+# ------------------------------------------------------------------
+# BDF pixel-font renderer  (same font family as temperature/clock scenes)
+# ------------------------------------------------------------------
+
+def _parse_bdf(path: str) -> dict:
+    """Parse BDF font file → {char_code: {dw, bbw, bbh, rows}}."""
+    glyphs: dict = {}
+    cur: dict = {}
+    rows: list = []
+    reading = False
     try:
-        font = ImageFont.load_default(size=size)
-        log.debug(f"[sports] Font {size}pt loaded via load_default(size=)")
-        return font
-    except TypeError:
-        log.warning(f"[sports] Font {size}pt: no TTF found, falling back to fixed bitmap")
-        return ImageFont.load_default()
+        with open(path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("ENCODING"):
+                    cur = {"code": int(line.split()[1])}
+                elif line.startswith("DWIDTH"):
+                    cur["dw"] = int(line.split()[1])
+                elif line.startswith("BBX"):
+                    p = line.split()
+                    cur.update(bbw=int(p[1]), bbh=int(p[2]), xoff=int(p[3]), yoff=int(p[4]))
+                elif line == "BITMAP":
+                    reading, rows = True, []
+                elif line == "ENDCHAR" and reading:
+                    cur["rows"] = rows
+                    glyphs[cur["code"]] = cur
+                    reading = False
+                elif reading:
+                    rows.append(int(line, 16))
+    except Exception as e:
+        log.warning(f"[sports] BDF parse error ({path}): {e}")
+    return glyphs
 
-FONT_HDR = _load_font(4)   # header: league + status (tiny, no stroke)
-FONT_SCR = _load_font(7)   # score numbers
-FONT_TXT = _load_font(6)   # team name fallback
 
-def _measure_font_h(font) -> int:
-    try:
-        bb = font.getbbox("0")
-        return bb[3] - bb[1]
-    except Exception:
-        return 8
+def _bdf_width(text: str, font: dict) -> int:
+    return sum(font[ord(c)]["dw"] for c in text if ord(c) in font)
 
-_SCR_H   = _measure_font_h(FONT_SCR) + 2  # score zone height (stroke + 1px margin)
-_HDR_H   = _measure_font_h(FONT_HDR) + 2  # header zone height (text + 2px gap below)
-HEADER_H = max(_HDR_H, 6)                  # at least 6px reserved for header row
+
+def _bdf_draw(img: Image.Image, x: int, y: int, text: str,
+              font: dict, color: tuple, outline: bool = False):
+    """Stamp BDF glyphs directly into img pixels. y = top of character cell."""
+    if not font:
+        return
+    px = img.load()
+    iw, ih = img.size
+    cx = x
+    for ch in text:
+        g = font.get(ord(ch))
+        if g is None:
+            cx += 4
+            continue
+        bbw = g["bbw"]
+        total_bits = ((bbw + 7) // 8) * 8
+        if outline:
+            for ri, rv in enumerate(g["rows"]):
+                for bi in range(bbw):
+                    if (rv >> (total_bits - 1 - bi)) & 1:
+                        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                            ox, oy = cx + bi + dx, y + ri + dy
+                            if 0 <= ox < iw and 0 <= oy < ih:
+                                px[ox, oy] = (0, 0, 0)
+        for ri, rv in enumerate(g["rows"]):
+            py = y + ri
+            if py < 0 or py >= ih:
+                continue
+            for bi in range(bbw):
+                if (rv >> (total_bits - 1 - bi)) & 1:
+                    ox = cx + bi
+                    if 0 <= ox < iw:
+                        px[ox, py] = color
+        cx += g["dw"]
+
+
+# 4x6 BDF: 4px-wide × 6px-tall characters — same family as the clock/temp scenes
+_BDF = _parse_bdf(os.path.join(_FONTS_DIR, "4x6.bdf"))
+_BDF_H   = 6   # character cell height of 4x6.bdf
+HEADER_H = 7   # header zone: 6px text + 1px gap
+_SCR_H   = 7   # score zone:  6px text + 1px bottom margin
 
 
 # ------------------------------------------------------------------
@@ -374,10 +408,6 @@ def _hex_to_rgb(hex_color: str) -> tuple:
 # Rendering
 # ------------------------------------------------------------------
 
-def _tw(draw: ImageDraw.ImageDraw, text: str, font) -> int:
-    return int(draw.textlength(text, font=font))
-
-
 def _render_game(game: dict) -> Image.Image:
     img  = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -394,28 +424,27 @@ def _render_game(game: dict) -> Image.Image:
     else:
         status_str = game["status_detail"][:14]
 
-    # ── Header drawn first on clean black (no stroke needed) ──────────
-    draw.text((1, 1), game["league"][:7], font=FONT_HDR, fill=COL_HEADER)
-    sw = _tw(draw, status_str, FONT_HDR)
-    draw.text((MATRIX_W - sw - 1, 1), status_str, font=FONT_HDR, fill=status_col)
+    # ── Header: BDF pixel text on clean black, y=1 (centered in HEADER_H zone)
+    _bdf_draw(img, 1, 1, game["league"][:7], _BDF, COL_HEADER)
+    sw = _bdf_width(status_str, _BDF)
+    _bdf_draw(img, MATRIX_W - sw - 1, 1, status_str, _BDF, status_col)
 
-    # ── Logo slots occupy the space below the header ─────────────────
+    # ── Logo slots fill the space below header ────────────────────────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
     _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
 
     return img
 
 
-def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
+def _draw_slot(img: Image.Image, draw,
                team: dict, slot_x: int, game: dict):
     """Render one team's logo + score into its 32-wide slot."""
     MARGIN = 2
 
-    # Logo zone: starts just below the header row, ends just above the score row
-    sy         = MATRIX_H - _SCR_H          # y where score text starts
-    logo_top   = HEADER_H                   # first pixel available for logo
+    sy         = MATRIX_H - _SCR_H     # y where score text starts
+    logo_top   = HEADER_H              # first pixel available for logo
     logo_max_w = SLOT_W - MARGIN * 2
-    logo_max_h = sy - logo_top - 1          # height available for logo
+    logo_max_h = sy - logo_top - 1    # height available for logo
 
     logo = _logo_cache.get(_logo_cache_key(game["league"], team["name"]))
 
@@ -427,20 +456,15 @@ def _draw_slot(img: Image.Image, draw: ImageDraw.ImageDraw,
     else:
         col = _clamp_color(team["color"]) or COL_HEADER
         label = team["name"][:5]
-        tw = _tw(draw, label, FONT_TXT)
-        try:
-            txt_h = FONT_TXT.getbbox("A")[3]
-        except Exception:
-            txt_h = 6
-        ty = logo_top + max(0, (logo_max_h - txt_h) // 2)
-        draw.text((slot_x + (SLOT_W - tw) // 2, ty), label, font=FONT_TXT, fill=col)
+        tw = _bdf_width(label, _BDF)
+        ty = logo_top + max(0, (logo_max_h - _BDF_H) // 2)
+        _bdf_draw(img, slot_x + (SLOT_W - tw) // 2, ty, label, _BDF, col)
 
-    # Score at the bottom; black stroke keeps it readable over any logo bleed
+    # Score: BDF pixel text with black outline so it reads over logos
     score_str = str(team["score"]) if (game["state"] != "pre" and team["score"] != "") else "-"
-    sc_w = _tw(draw, score_str, FONT_SCR)
+    sc_w = _bdf_width(score_str, _BDF)
     sx   = slot_x + (SLOT_W - sc_w) // 2
-    draw.text((sx, sy), score_str, font=FONT_SCR, fill=COL_SCORE,
-              stroke_width=1, stroke_fill=(0, 0, 0))
+    _bdf_draw(img, sx, sy, score_str, _BDF, COL_SCORE, outline=True)
 
 
 def _clamp_color(rgb: tuple) -> Optional[tuple]:

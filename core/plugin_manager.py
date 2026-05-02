@@ -153,14 +153,14 @@ class PluginManager:
         old = self._active_id
         self._active_id = plugin_id
         self._active_start = time.monotonic()
-        self.display.clear()
+        if old != plugin_id:
+            self.display.clear()
+            log.debug(f"[plugins] Switched: {old} → {plugin_id}")
         plugin = self._plugins[plugin_id]
         try:
             plugin.reset()
         except Exception as e:
             log.error(f"[plugins] Reset error ({plugin_id}): {e}")
-        if old != plugin_id:
-            log.debug(f"[plugins] Switched: {old} → {plugin_id}")
 
     def _advance_rotation(self):
         if not self._rotation:
