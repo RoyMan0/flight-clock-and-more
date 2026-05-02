@@ -19,7 +19,7 @@ class TemperatureScene(object):
         self._redraw_temp = True
 
     @Animator.KeyFrame.add(0)
-    def _temp_on_reset(self, count):
+    def _temp_on_reset(self):
         """Fired by reset_scene() so temperature redraws after a canvas clear."""
         self._redraw_temp = True
 

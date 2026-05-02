@@ -29,7 +29,7 @@ class DaysForecastScene(object):
         self._last_hour = None
 
     @Animator.KeyFrame.add(0)
-    def _forecast_on_reset(self, count):
+    def _forecast_on_reset(self):
         """Fired by reset_scene() so forecast redraws after a canvas clear."""
         self._redraw_forecast = True
 
