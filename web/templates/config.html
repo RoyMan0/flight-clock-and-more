@@ -82,6 +82,17 @@
                 <label class="form-check-label">Auto Dim at Night</label>
               </div>
             </div>
+            <div class="col-12 border-top border-secondary pt-3 mt-1" x-show="'flight_tracker' in pluginConfigs">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox"
+                       :checked="pluginConfigs.flight_tracker?.enabled !== false"
+                       @change="pluginConfigs.flight_tracker.enabled = $event.target.checked">
+                <label class="form-check-label fw-semibold">
+                  <i class="bi bi-airplane me-1"></i>Flight Tracker
+                </label>
+              </div>
+              <p class="text-muted small mb-0 ms-4">When enabled, overhead flights interrupt the display rotation automatically.</p>
+            </div>
             <div class="col-md-3">
               <label class="form-label">Night Start</label>
               <input type="time" class="form-control bg-dark text-light border-secondary"
@@ -338,7 +349,8 @@ function configPage() {
         fetch('/api/config/backups').then(r=>r.json()),
       ]);
 
-      this.pluginOrder = plugins.map(p => p.id);
+      // flight_tracker is a priority interrupt, not a rotation plugin
+      this.pluginOrder = plugins.filter(p => p.id !== 'flight_tracker').map(p => p.id);
       const cfgs = {};
       for (const p of plugins) cfgs[p.id] = p.config || {};
       this.pluginConfigs = cfgs;
@@ -396,8 +408,11 @@ function configPage() {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(this.sysCfg),
       });
-      // Also save clock_weather config (forecast_days)
+      // Also save clock_weather config (forecast_days) and flight_tracker enabled state
       await this.savePluginConfig('clock_weather');
+      if ('flight_tracker' in this.pluginConfigs) {
+        await this.savePluginConfig('flight_tracker');
+      }
       this.saved = true;
       setTimeout(() => this.saved = false, 2000);
     },

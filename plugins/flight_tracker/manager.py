@@ -136,7 +136,7 @@ class FlightTrackerPlugin(BasePlugin):
     # ------------------------------------------------------------------
 
     def has_live_priority(self) -> bool:
-        return True
+        return self.enabled
 
     def has_live_content(self) -> bool:
         return not self.overhead.data_is_empty
