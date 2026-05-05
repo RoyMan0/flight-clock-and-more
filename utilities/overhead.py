@@ -226,8 +226,9 @@ def _fa_budget_ok(limit: float) -> bool:
 
 def play_plane_sound():
     try:
+        mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), "airbus.mp3")
         subprocess.Popen(
-            ["paplay", "/home/royman/its-a-plane-python/airbus.mp3"],
+            ["mpg123", mp3],
             start_new_session=True,
         )
     except Exception as e:
