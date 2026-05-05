@@ -104,11 +104,15 @@ class JourneyScene(object):
         else:
             destination_color = colours.LIGHT_DARK_BLUE
 
+        # Clear the full journey area including the distance row at y=16.
+        # Airport codes (7x13 font, descent=2) reach y=12; distance text
+        # (4x6 font, ascent=5) starts at y=11.  The old clear stopped at
+        # y=9, leaving stale pixels that overlapped on redraws.
         self.draw_square(
             JOURNEY_POSITION[0],
             JOURNEY_POSITION[1],
             JOURNEY_POSITION[0] + JOURNEY_WIDTH - 1,
-            JOURNEY_POSITION[1] + JOURNEY_HEIGHT - 1,
+            DISTANCE_POSITION[1],
             colours.BLACK,
         )
 
