@@ -330,6 +330,7 @@ class Overhead:
         self._alerted_callsigns: set = set()
         self._route_cache: dict    = {}   # callsign → {"data": {...}, "expires": monotonic}
         self._schedule_cache: dict = {}   # callsign → {"data": {...}, "expires": monotonic}
+        self._airport_cache: dict  = {}   # iata → (lat, lon) or (None, None)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -481,6 +482,13 @@ class Overhead:
                     dest_lat    = route.get("dest_lat")
                     dest_lon    = route.get("dest_lon")
 
+                # Airport coordinate fallback — look up via adsbdb when we have
+                # IATA codes but no coordinates (e.g. AirLabs won over adsbdb route)
+                if origin and not origin_lat:
+                    origin_lat, origin_lon = self._get_airport_coords(origin)
+                if destination and not dest_lat:
+                    dest_lat, dest_lon = self._get_airport_coords(destination)
+
                 dist_o = haversine(plane_lat, plane_lon, origin_lat, origin_lon, units) if origin_lat else 0
                 dist_d = haversine(plane_lat, plane_lon, dest_lat, dest_lon, units) if dest_lat else 0
 
@@ -598,6 +606,33 @@ class Overhead:
 
     def _cache_route(self, callsign: str, data: dict, now: float):
         self._route_cache[callsign] = {"data": data, "expires": now + ROUTE_CACHE_TTL}
+
+    # ------------------------------------------------------------------
+    # Airport coordinate lookup — adsbdb airport endpoint (permanent cache)
+    # ------------------------------------------------------------------
+
+    def _get_airport_coords(self, iata: str):
+        """Return (lat, lon) for an IATA airport code, or (None, None) on failure."""
+        if not iata:
+            return None, None
+        if iata in self._airport_cache:
+            return self._airport_cache[iata]
+        try:
+            resp = requests.get(
+                f"https://api.adsbdb.com/v0/airport/{iata}", timeout=6
+            )
+            if resp.status_code == 200:
+                ap = (resp.json().get("response") or {}).get("airport") or {}
+                lat = ap.get("latitude")
+                lon = ap.get("longitude")
+                if lat is not None and lon is not None:
+                    result = (float(lat), float(lon))
+                    self._airport_cache[iata] = result
+                    return result
+        except Exception as e:
+            log.debug(f"[overhead] airport coords {iata}: {e}")
+        self._airport_cache[iata] = (None, None)
+        return None, None
 
     # ------------------------------------------------------------------
     # Schedule lookup — AirLabs → FlightAware (12 h cache)
