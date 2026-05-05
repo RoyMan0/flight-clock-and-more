@@ -11,7 +11,7 @@ Priority behavior:
 
 from plugins.base_plugin import BasePlugin
 from utilities.animator import Animator
-from utilities.overhead import Overhead
+from utilities.overhead import Overhead, play_plane_sound
 from scenes.flightdetails import FlightDetailsScene
 from scenes.flightlogo import FlightLogoScene
 from scenes.journey import JourneyScene
@@ -117,12 +117,15 @@ class FlightTrackerPlugin(BasePlugin):
 
         # Pull in fresh data from Overhead if available
         if self.overhead.new_data:
+            was_empty = len(self._display._data) == 0
             new_data = self.overhead.data
             if _callsigns(self._display._data) != _callsigns(new_data):
                 self._display._data_index = 0
                 self._display._data_all_looped = False
                 self._display._data = new_data
                 self._display.reset_scene()
+            if was_empty and len(new_data) > 0:
+                play_plane_sound()
 
         self._display.tick()
         return len(self._display._data) > 0
