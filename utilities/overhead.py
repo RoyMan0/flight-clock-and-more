@@ -25,7 +25,11 @@ import requests
 
 from core.config_manager import get_config
 from setup import email_alerts
-from web import map_generator, upload_helper
+try:
+    from web import map_generator, upload_helper
+    _MAP_ENABLED = True
+except Exception:
+    _MAP_ENABLED = False
 
 log = logging.getLogger(__name__)
 
@@ -204,8 +208,10 @@ def log_flight_data(entry: dict, max_closest: int):
         safe_write_json(LOG_FILE, top_n)
 
         if notify:
-            html = map_generator.generate_closest_map(top_n, filename="closest.html")
-            url  = upload_helper.upload_map_to_server(html)
+            url = None
+            if _MAP_ENABLED:
+                html = map_generator.generate_closest_map(top_n, filename="closest.html")
+                url  = upload_helper.upload_map_to_server(html)
             subject = f"New {ordinal(rank)} Closest Flight - {entry.get('callsign', 'Unknown')}"
             email_alerts.send_flight_summary(subject, entry, map_url=url)
 
@@ -254,9 +260,9 @@ def log_farthest_flight(entry: dict, max_farthest: int):
         safe_write_json(LOG_FILE_FARTHEST, lst)
 
         if notify or updated:
-            html = map_generator.generate_farthest_map(lst, filename="farthest.html")
+            html = map_generator.generate_farthest_map(lst, filename="farthest.html") if _MAP_ENABLED else None
         if notify:
-            url  = upload_helper.upload_map_to_server(html)
+            url  = upload_helper.upload_map_to_server(html) if _MAP_ENABLED and html else None
             rank = next(i for i, f in enumerate(lst) if f["_airport"] == airport) + 1
             cs   = entry.get("callsign", "UNKNOWN")
             subject = (
