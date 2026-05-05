@@ -86,7 +86,7 @@ def main():
 
     secrets = {k: cfg.get_secret(k) for k in [
         "tomorrow_api_key", "schwab_app_key", "schwab_app_secret",
-        "schwab_token_path", "schwab_account_hash",
+        "schwab_token_path", "schwab_account_hashes", "schwab_callback_url",
         "email_sender", "email_password",
     ]}
 
