@@ -229,11 +229,15 @@ def play_plane_sound():
         try:
             mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), "airbus.mp3")
             log.info(f"[overhead] Playing sound: {mp3}")
+            uid = os.getuid()
+            env = os.environ.copy()
+            env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
             subprocess.Popen(
                 ["mpg123", "-q", mp3],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
+                env=env,
             )
         except Exception as e:
             log.error(f"[overhead] Audio failed: {e}")
