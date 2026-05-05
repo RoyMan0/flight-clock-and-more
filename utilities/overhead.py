@@ -656,7 +656,9 @@ class Overhead:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
 
         # ── FlightAware (fallback) ────────────────────────────────────
-        if not result and fa_key and _fa_budget_ok(fa_budget):
+        # Also try FA when AirLabs returned partial data (origin but no destination)
+        airlabs_incomplete = result and not result.get("al_destination")
+        if (not result or airlabs_incomplete) and fa_key and _fa_budget_ok(fa_budget):
             try:
                 resp = requests.get(
                     FLIGHTAWARE_URL.format(ident=callsign),
