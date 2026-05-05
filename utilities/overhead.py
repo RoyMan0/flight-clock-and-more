@@ -435,11 +435,19 @@ class Overhead:
 
                 # Route (adsbdb)
                 route = self._get_route(callsign, plane_lat, plane_lon)
-                airline     = route.get("airline", "")
                 owner_iata  = route.get("owner_iata", "")
-                owner_icao  = route.get("owner_icao", "")
-                origin      = route.get("origin", "")
-                destination = route.get("destination", "")
+
+                # Schedule / delay (AirLabs → FlightAware)
+                # Done before building the entry so AirLabs route data can fill
+                # gaps when adsbdb sanity check fails.
+                sched = self._get_schedule(callsign, owner_iata)
+
+                # Merge: adsbdb wins when available; AirLabs fills the rest
+                airline     = route.get("airline", "")     or sched.get("al_airline", "")
+                owner_iata  = owner_iata                   or sched.get("al_owner_iata", "")
+                owner_icao  = route.get("owner_icao", "")  or sched.get("al_owner_icao", "")
+                origin      = route.get("origin", "")      or sched.get("al_origin", "")
+                destination = route.get("destination", "") or sched.get("al_destination", "")
                 origin_lat  = route.get("origin_lat")
                 origin_lon  = route.get("origin_lon")
                 dest_lat    = route.get("dest_lat")
@@ -447,9 +455,6 @@ class Overhead:
 
                 dist_o = haversine(plane_lat, plane_lon, origin_lat, origin_lon, units) if origin_lat else 0
                 dist_d = haversine(plane_lat, plane_lon, dest_lat, dest_lon, units) if dest_lat else 0
-
-                # Schedule / delay (AirLabs → FlightAware)
-                sched = self._get_schedule(callsign, owner_iata)
 
                 direction = degrees_to_cardinal(
                     bearing_to(home_lat, home_lon, plane_lat, plane_lon)
@@ -556,6 +561,7 @@ class Overhead:
 
     # ------------------------------------------------------------------
     # Schedule lookup — AirLabs → FlightAware (12 h cache)
+    # Also returns origin/destination from AirLabs when adsbdb data is stale.
     # ------------------------------------------------------------------
 
     def _get_schedule(self, callsign: str, owner_iata: str) -> dict:
@@ -570,38 +576,42 @@ class Overhead:
         fa_budget   = float(self._secrets.get("flightaware_monthly_budget", 4.50))
 
         # ── AirLabs (primary) ─────────────────────────────────────────
-        if airlabs_key and owner_iata:
-            # Build IATA flight number from airline IATA code + numeric suffix
-            # e.g. callsign "UAL1234", owner_iata "UA" → "UA1234"
-            digits      = "".join(c for c in callsign if c.isdigit())
-            iata_flight = owner_iata + digits if digits else ""
-
-            if iata_flight:
+        # Try flight_icao=callsign first (no IATA mapping needed), then
+        # fall back to flight_iata=owner_iata+digits if that returns nothing.
+        if airlabs_key:
+            for params in self._airlabs_params(callsign, owner_iata):
                 try:
-                    resp = requests.get(
-                        AIRLABS_URL,
-                        params={"flight_iata": iata_flight, "api_key": airlabs_key},
-                        timeout=8,
-                    )
-                    if resp.status_code == 200:
-                        r = resp.json().get("response") or {}
-                        sched_dep = iso_to_unix(r.get("dep_scheduled"))
-                        real_dep  = iso_to_unix(r.get("dep_actual") or r.get("dep_estimated"))
-                        sched_arr = iso_to_unix(r.get("arr_scheduled"))
-                        est_arr   = iso_to_unix(r.get("arr_estimated") or r.get("arr_actual"))
+                    resp = requests.get(AIRLABS_URL, params={**params, "api_key": airlabs_key}, timeout=8)
+                    if resp.status_code != 200:
+                        continue
+                    r = resp.json().get("response") or {}
+                    if not r:
+                        continue
 
-                        if sched_dep or sched_arr:
-                            result = {
-                                "time_scheduled_departure": sched_dep,
-                                "time_real_departure":      real_dep,
-                                "time_scheduled_arrival":   sched_arr,
-                                "time_estimated_arrival":   est_arr,
-                            }
-                            delay = (
-                                f"{(real_dep - sched_dep) // 60:+.0f} min"
-                                if real_dep and sched_dep else "N/A"
-                            )
-                            log.debug(f"[overhead] AirLabs {iata_flight}: dep delay {delay}")
+                    sched_dep = iso_to_unix(r.get("dep_scheduled"))
+                    real_dep  = iso_to_unix(r.get("dep_actual") or r.get("dep_estimated"))
+                    sched_arr = iso_to_unix(r.get("arr_scheduled"))
+                    est_arr   = iso_to_unix(r.get("arr_estimated") or r.get("arr_actual"))
+
+                    result = {
+                        "time_scheduled_departure": sched_dep,
+                        "time_real_departure":      real_dep,
+                        "time_scheduled_arrival":   sched_arr,
+                        "time_estimated_arrival":   est_arr,
+                        # Route fallback — used when adsbdb data fails sanity check
+                        "al_origin":      _clean(r.get("dep_iata", "")),
+                        "al_destination": _clean(r.get("arr_iata", "")),
+                        "al_airline":     _clean(r.get("airline_name", "")),
+                        "al_owner_iata":  _clean(r.get("airline_iata", "")),
+                        "al_owner_icao":  _clean(r.get("airline_icao", "")),
+                    }
+                    delay = (
+                        f"{(real_dep - sched_dep) // 60:+.0f} min"
+                        if real_dep and sched_dep else "N/A"
+                    )
+                    log.debug(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
+                              f"{result['al_origin']}→{result['al_destination']}")
+                    break
                 except Exception as e:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
 
@@ -615,12 +625,13 @@ class Overhead:
                 )
                 if resp.status_code == 200:
                     flights = resp.json().get("flights", [])
-                    # Prefer an in-progress flight; fall back to most recent
                     fa = next(
                         (f for f in flights if f.get("progress_percent", 0) > 0),
                         flights[0] if flights else None,
                     )
                     if fa:
+                        orig = (fa.get("origin") or {})
+                        dest = (fa.get("destination") or {})
                         result = {
                             "time_scheduled_departure": iso_to_unix(fa.get("scheduled_out")),
                             "time_real_departure":      iso_to_unix(fa.get("actual_out")),
@@ -628,14 +639,29 @@ class Overhead:
                             "time_estimated_arrival":   iso_to_unix(
                                 fa.get("estimated_in") or fa.get("actual_in")
                             ),
+                            "al_origin":      _clean(orig.get("code_iata", "")),
+                            "al_destination": _clean(dest.get("code_iata", "")),
+                            "al_airline":     "",
+                            "al_owner_iata":  "",
+                            "al_owner_icao":  "",
                         }
                         _fa_record_call()
-                        log.debug(f"[overhead] FlightAware schedule for {callsign}")
+                        log.debug(f"[overhead] FlightAware schedule for {callsign}: "
+                                  f"{result['al_origin']}→{result['al_destination']}")
             except Exception as e:
                 log.debug(f"[overhead] FlightAware error ({callsign}): {e}")
 
         self._schedule_cache[callsign] = {"data": result, "expires": now + SCHEDULE_CACHE_TTL}
         return result
+
+    @staticmethod
+    def _airlabs_params(callsign: str, owner_iata: str):
+        """Yield AirLabs query param dicts to try in order."""
+        yield {"flight_icao": callsign}
+        if owner_iata:
+            digits = "".join(c for c in callsign if c.isdigit())
+            if digits:
+                yield {"flight_iata": owner_iata + digits}
 
 
 # ------------------------------------------------------------------
