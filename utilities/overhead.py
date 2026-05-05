@@ -225,17 +225,19 @@ def _fa_budget_ok(limit: float) -> bool:
 # ------------------------------------------------------------------
 
 def play_plane_sound():
-    try:
-        mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), "airbus.mp3")
-        log.info(f"[overhead] Playing sound: {mp3}")
-        subprocess.Popen(
-            ["mpg123", "-q", mp3],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except Exception as e:
-        log.error(f"[overhead] Audio failed: {e}")
+    def _play():
+        try:
+            mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), "airbus.mp3")
+            log.info(f"[overhead] Playing sound: {mp3}")
+            subprocess.Popen(
+                ["mpg123", "-q", mp3],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception as e:
+            log.error(f"[overhead] Audio failed: {e}")
+    Thread(target=_play, daemon=True).start()
 
 
 # ------------------------------------------------------------------
