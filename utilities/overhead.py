@@ -47,8 +47,8 @@ FLIGHTAWARE_URL = "https://aeroapi.flightaware.com/aeroapi/flights/{ident}"
 # ------------------------------------------------------------------
 
 MAX_ALTITUDE       = 100000   # ft hard cap
-ROUTE_CACHE_TTL    = 12 * 3600   # seconds
-SCHEDULE_CACHE_TTL = 12 * 3600
+ROUTE_CACHE_TTL    = 24 * 3600   # seconds — persisted to disk, wall-clock expiry
+SCHEDULE_CACHE_TTL = 24 * 3600
 
 EARTH_RADIUS_M = 3958.8   # miles
 
@@ -66,6 +66,7 @@ LOG_FILE          = os.path.join(BASE_DIR, "close.txt")
 LOG_FILE_FARTHEST = os.path.join(BASE_DIR, "farthest.txt")
 FA_USAGE_FILE     = os.path.join(BASE_DIR, "flightaware_usage.json")
 AIRPORT_DB_FILE   = os.path.join(BASE_DIR, "data", "airports_cache.json")
+API_CACHE_FILE    = os.path.join(BASE_DIR, "data", "api_cache.json")
 
 # OpenFlights airports CSV — fetched once and cached locally
 OPENFLIGHTS_URL = (
@@ -384,8 +385,43 @@ class Overhead:
         self._new_data    = False
         self._processing  = False
         self._alerted_callsigns: set = set()
-        self._route_cache: dict    = {}   # callsign → {"data": {...}, "expires": monotonic}
-        self._schedule_cache: dict = {}   # callsign → {"data": {...}, "expires": monotonic}
+        self._route_cache: dict    = {}   # callsign → {"data": {...}, "expires": wall-clock unix}
+        self._schedule_cache: dict = {}   # callsign → {"data": {...}, "expires": wall-clock unix}
+        self._load_disk_cache()
+
+    # ------------------------------------------------------------------
+    # Persistent cache — survives service restarts
+    # ------------------------------------------------------------------
+
+    def _load_disk_cache(self):
+        try:
+            with open(API_CACHE_FILE, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            now = time.time()
+            self._route_cache = {
+                k: v for k, v in raw.get("routes", {}).items()
+                if v.get("expires", 0) > now
+            }
+            self._schedule_cache = {
+                k: v for k, v in raw.get("schedules", {}).items()
+                if v.get("expires", 0) > now
+            }
+            log.info(
+                f"[overhead] Cache loaded: {len(self._route_cache)} routes, "
+                f"{len(self._schedule_cache)} schedules"
+            )
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        except Exception as e:
+            log.debug(f"[overhead] Cache load error: {e}")
+
+    def _save_disk_cache(self):
+        try:
+            os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+            with open(API_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump({"routes": self._route_cache, "schedules": self._schedule_cache}, f)
+        except Exception as e:
+            log.debug(f"[overhead] Cache save error: {e}")
 
     # ------------------------------------------------------------------
     # Public interface
@@ -596,7 +632,7 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def _get_route(self, callsign: str, plane_lat: float, plane_lon: float) -> dict:
-        now    = time.monotonic()
+        now    = time.time()
         cached = self._route_cache.get(callsign)
         if cached and now < cached["expires"]:
             return cached["data"]
@@ -661,6 +697,7 @@ class Overhead:
 
     def _cache_route(self, callsign: str, data: dict, now: float):
         self._route_cache[callsign] = {"data": data, "expires": now + ROUTE_CACHE_TTL}
+        self._save_disk_cache()
 
     # ------------------------------------------------------------------
     # Airport coordinate lookup — OpenFlights DB (lazy-loaded, cached to disk)
@@ -679,7 +716,7 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def _get_schedule(self, callsign: str, owner_iata: str) -> dict:
-        now    = time.monotonic()
+        now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
             return cached["data"]
@@ -768,6 +805,7 @@ class Overhead:
                 log.debug(f"[overhead] FlightAware error ({callsign}): {e}")
 
         self._schedule_cache[callsign] = {"data": result, "expires": now + SCHEDULE_CACHE_TTL}
+        self._save_disk_cache()
         return result
 
     @staticmethod
