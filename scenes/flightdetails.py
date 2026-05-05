@@ -31,10 +31,11 @@ class FlightDetailsScene(object):
         if len(self._data) == 0:
             return
 
-        # Clear the whole area
+        # Clear the flight text area (start at y=17, not y=16, to preserve
+        # the distance row whose baseline sits at y=16)
         self.draw_square(
             0,
-            FLIGHT_NO_DISTANCE_FROM_TOP - FLIGHT_NO_TEXT_HEIGHT,
+            FLIGHT_NO_DISTANCE_FROM_TOP - FLIGHT_NO_TEXT_HEIGHT + 1,
             screen.WIDTH,
             FLIGHT_NO_DISTANCE_FROM_TOP,
             colours.BLACK,

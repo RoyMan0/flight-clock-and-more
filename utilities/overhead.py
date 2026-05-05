@@ -604,11 +604,10 @@ class Overhead:
                     if not r:
                         continue
 
-                    log.debug(f"[overhead] AirLabs raw keys: {list(r.keys())}")
-                    sched_dep = iso_to_unix(r.get("dep_time_utc"))
-                    real_dep  = iso_to_unix(r.get("dep_actual_utc") or r.get("dep_estimated_utc"))
-                    sched_arr = iso_to_unix(r.get("arr_time_utc"))
-                    est_arr   = iso_to_unix(r.get("arr_estimated_utc") or r.get("arr_actual_utc"))
+                    sched_dep = r.get("dep_time_ts")
+                    real_dep  = r.get("dep_actual_ts") or r.get("dep_estimated_ts")
+                    sched_arr = r.get("arr_time_ts")
+                    est_arr   = r.get("arr_estimated_ts") or r.get("arr_actual_ts")
 
                     result = {
                         "time_scheduled_departure": sched_dep,
