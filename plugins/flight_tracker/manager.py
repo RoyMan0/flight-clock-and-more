@@ -147,7 +147,11 @@ class FlightTrackerPlugin(BasePlugin):
         return self.enabled
 
     def has_live_content(self) -> bool:
-        return not self.overhead.data_is_empty
+        if self.overhead.data_is_empty:
+            if self._display is not None:
+                self._display._data = []
+            return False
+        return True
 
     # ------------------------------------------------------------------
     # Public accessors (used by web dashboard)
