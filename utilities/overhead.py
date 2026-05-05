@@ -446,16 +446,39 @@ class Overhead:
                 # gaps when adsbdb sanity check fails.
                 sched = self._get_schedule(callsign, owner_iata)
 
-                # Merge: adsbdb wins when available; AirLabs fills the rest
-                airline     = route.get("airline", "")     or sched.get("al_airline", "")
-                owner_iata  = owner_iata                   or sched.get("al_owner_iata", "")
-                owner_icao  = route.get("owner_icao", "")  or sched.get("al_owner_icao", "")
-                origin      = route.get("origin", "")      or sched.get("al_origin", "")
-                destination = route.get("destination", "") or sched.get("al_destination", "")
-                origin_lat  = route.get("origin_lat")
-                origin_lon  = route.get("origin_lon")
-                dest_lat    = route.get("dest_lat")
-                dest_lon    = route.get("dest_lon")
+                # Merge sources — AirLabs has live daily assignments, adsbdb is
+                # historical. AirLabs wins for origin/destination; adsbdb
+                # coordinates are only used when its route matches AirLabs.
+                airline    = route.get("airline", "")    or sched.get("al_airline", "")
+                owner_iata = owner_iata                  or sched.get("al_owner_iata", "")
+                owner_icao = route.get("owner_icao", "") or sched.get("al_owner_icao", "")
+
+                al_origin = sched.get("al_origin", "")
+                al_dest   = sched.get("al_destination", "")
+                db_origin = route.get("origin", "")
+                db_dest   = route.get("destination", "")
+
+                if al_origin and al_dest:
+                    origin      = al_origin
+                    destination = al_dest
+                    # Only use adsbdb coordinates when routes agree
+                    if al_origin == db_origin and al_dest == db_dest:
+                        origin_lat = route.get("origin_lat")
+                        origin_lon = route.get("origin_lon")
+                        dest_lat   = route.get("dest_lat")
+                        dest_lon   = route.get("dest_lon")
+                    else:
+                        if al_origin != db_origin or al_dest != db_dest:
+                            log.debug(f"[overhead] Route mismatch {callsign}: "
+                                      f"adsbdb={db_origin}→{db_dest} AirLabs={al_origin}→{al_dest}")
+                        origin_lat = origin_lon = dest_lat = dest_lon = None
+                else:
+                    origin      = db_origin
+                    destination = db_dest
+                    origin_lat  = route.get("origin_lat")
+                    origin_lon  = route.get("origin_lon")
+                    dest_lat    = route.get("dest_lat")
+                    dest_lon    = route.get("dest_lon")
 
                 dist_o = haversine(plane_lat, plane_lon, origin_lat, origin_lon, units) if origin_lat else 0
                 dist_d = haversine(plane_lat, plane_lon, dest_lat, dest_lon, units) if dest_lat else 0
