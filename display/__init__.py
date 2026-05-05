@@ -1,5 +1,8 @@
 import sys
+import logging
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 from setup import frames
 from utilities.animator import Animator
 from utilities.overhead import Overhead, play_plane_sound
@@ -151,8 +154,11 @@ class Display(
                 self._data_all_looped = False
                 self._data = new_data
 
+            log.info(f"[display] data check: was_showing={was_showing_flights}, there_is_data={there_is_data}, new_data_len={len(new_data)}, different={data_is_different}")
+
             # Play sound only when transitioning from clock/weather page to flight page
             if not was_showing_flights and there_is_data:
+                log.info("[display] Triggering sound (clock->flight transition)")
                 play_plane_sound()
 
             # Only reset if there's flight data already
