@@ -76,7 +76,7 @@ class FlightDetailsScene(object):
             # Clear are where N of M might have been
             self.draw_square(
                 DATA_INDEX_POSITION[0],
-                FLIGHT_NO_DISTANCE_FROM_TOP - FLIGHT_NO_TEXT_HEIGHT,
+                FLIGHT_NO_DISTANCE_FROM_TOP - FLIGHT_NO_TEXT_HEIGHT + 1,
                 screen.WIDTH,
                 FLIGHT_NO_DISTANCE_FROM_TOP,
                 colours.BLACK,
