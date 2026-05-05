@@ -34,9 +34,10 @@ class _FlightDisplay(
 ):
     """Internal display class for flight scenes."""
 
-    def __init__(self, display_manager):
+    def __init__(self, display_manager, overhead):
         self.canvas = display_manager.canvas
         self.matrix = display_manager.matrix
+        self.overhead = overhead
         self._data = []
         self._data_index = 0
         self._data_all_looped = False
@@ -86,7 +87,7 @@ class FlightTrackerPlugin(BasePlugin):
 
     def _ensure_display(self):
         if self._display is None:
-            self._display = _FlightDisplay(self.display_manager)
+            self._display = _FlightDisplay(self.display_manager, self.overhead)
 
     # ------------------------------------------------------------------
     # BasePlugin interface
