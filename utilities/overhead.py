@@ -293,15 +293,20 @@ def _route_makes_sense(plane_lat, plane_lon,
     dist_dest  = haversine(plane_lat, plane_lon, dest_lat, dest_lon)
     route_dist = haversine(orig_lat, orig_lon, dest_lat, dest_lon)
 
+    log.debug(
+        f"[overhead] sanity: dist_orig={dist_orig:.0f} dist_dest={dist_dest:.0f} "
+        f"route_dist={route_dist:.0f} sum={dist_orig+dist_dest:.0f}"
+    )
+
     if route_dist < 50:
         return True   # very short hop — skip sanity check
 
-    # Plane should be within roughly 1.5× route dist of its two endpoints combined
-    if dist_orig + dist_dest > route_dist * 2.0:
+    # Plane should be within roughly 2× route dist of its two endpoints combined
+    if dist_orig + dist_dest > route_dist * 2.5:
         return False
 
-    # Plane shouldn't be further from origin than the full route length
-    if dist_orig > route_dist * 1.5:
+    # Plane shouldn't be further from origin than 2× the full route length
+    if dist_orig > route_dist * 2.0:
         return False
 
     return True
