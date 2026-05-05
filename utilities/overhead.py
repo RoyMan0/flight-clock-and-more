@@ -468,9 +468,10 @@ class Overhead:
                         dest_lat   = route.get("dest_lat")
                         dest_lon   = route.get("dest_lon")
                     else:
-                        if al_origin != db_origin or al_dest != db_dest:
-                            log.debug(f"[overhead] Route mismatch {callsign}: "
-                                      f"adsbdb={db_origin}→{db_dest} AirLabs={al_origin}→{al_dest}")
+                        if db_origin and db_dest:
+                            log.debug(f"[overhead] Route conflict {callsign}: "
+                                      f"adsbdb={db_origin}→{db_dest} AirLabs={al_origin}→{al_dest} "
+                                      f"(using AirLabs)")
                         origin_lat = origin_lon = dest_lat = dest_lon = None
                 else:
                     origin      = db_origin
