@@ -536,20 +536,32 @@ class Overhead:
                     d_lat = dest.get("latitude")
                     d_lon = dest.get("longitude")
 
+                    # Airline info (name/codes) is reliable even when the specific
+                    # route is stale — always extract it.
+                    result = {
+                        "airline":     _clean(airline_info.get("name", "")),
+                        "owner_iata":  _clean(airline_info.get("iata", "")),
+                        "owner_icao":  _clean(airline_info.get("icao", "")),
+                        "origin":      "",
+                        "destination": "",
+                        "origin_lat":  None,
+                        "origin_lon":  None,
+                        "dest_lat":    None,
+                        "dest_lon":    None,
+                    }
+
+                    # Only trust origin/destination if the plane is plausibly on this route
                     if _route_makes_sense(plane_lat, plane_lon, o_lat, o_lon, d_lat, d_lon):
-                        result = {
-                            "airline":     _clean(airline_info.get("name", "")),
-                            "owner_iata":  _clean(airline_info.get("iata", "")),
-                            "owner_icao":  _clean(airline_info.get("icao", "")),
+                        result.update({
                             "origin":      _clean(orig.get("iata_code", "")),
                             "destination": _clean(dest.get("iata_code", "")),
                             "origin_lat":  o_lat,
                             "origin_lon":  o_lon,
                             "dest_lat":    d_lat,
                             "dest_lon":    d_lon,
-                        }
+                        })
                     else:
-                        log.debug(f"[overhead] adsbdb route for {callsign} failed sanity check")
+                        log.debug(f"[overhead] adsbdb route for {callsign} failed sanity check — keeping airline info")
         except Exception as e:
             log.debug(f"[overhead] adsbdb error ({callsign}): {e}")
 
