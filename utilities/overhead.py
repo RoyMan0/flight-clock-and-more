@@ -65,6 +65,62 @@ BASE_DIR          = os.path.dirname(os.path.dirname(__file__))
 LOG_FILE          = os.path.join(BASE_DIR, "close.txt")
 LOG_FILE_FARTHEST = os.path.join(BASE_DIR, "farthest.txt")
 FA_USAGE_FILE     = os.path.join(BASE_DIR, "flightaware_usage.json")
+AIRPORT_DB_FILE   = os.path.join(BASE_DIR, "data", "airports_cache.json")
+
+# OpenFlights airports CSV — fetched once and cached locally
+OPENFLIGHTS_URL = (
+    "https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat"
+)
+
+# Module-level airport DB: iata → (lat, lon).  Populated lazily.
+_airport_db: dict = {}
+_airport_db_loaded: bool = False
+
+
+def _load_airport_db():
+    """Load IATA→(lat,lon) from local cache or fetch from OpenFlights."""
+    global _airport_db, _airport_db_loaded
+    if _airport_db_loaded:
+        return
+
+    cache_path = AIRPORT_DB_FILE
+    # Try loading from local cache first
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        _airport_db = {k: tuple(v) for k, v in raw.items()}
+        _airport_db_loaded = True
+        log.debug(f"[overhead] Loaded {len(_airport_db)} airports from cache")
+        return
+    except (FileNotFoundError, json.JSONDecodeError, Exception):
+        pass
+
+    # Fetch from OpenFlights
+    try:
+        resp = requests.get(OPENFLIGHTS_URL, timeout=15)
+        resp.raise_for_status()
+        db = {}
+        import csv, io
+        reader = csv.reader(io.StringIO(resp.text))
+        for row in reader:
+            try:
+                iata = row[4].strip().strip('"')
+                lat  = float(row[6])
+                lon  = float(row[7])
+                if iata and iata != r"\N" and len(iata) == 3:
+                    db[iata] = (lat, lon)
+            except (IndexError, ValueError):
+                continue
+        _airport_db = db
+        _airport_db_loaded = True
+        # Cache to disk
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump({k: list(v) for k, v in db.items()}, f)
+        log.info(f"[overhead] Fetched and cached {len(db)} airports from OpenFlights")
+    except Exception as e:
+        log.warning(f"[overhead] Could not load airport database: {e}")
+        _airport_db_loaded = True  # don't retry on every call
 
 # ------------------------------------------------------------------
 # Utility functions
@@ -330,7 +386,6 @@ class Overhead:
         self._alerted_callsigns: set = set()
         self._route_cache: dict    = {}   # callsign → {"data": {...}, "expires": monotonic}
         self._schedule_cache: dict = {}   # callsign → {"data": {...}, "expires": monotonic}
-        self._airport_cache: dict  = {}   # iata → (lat, lon) or (None, None)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -608,31 +663,15 @@ class Overhead:
         self._route_cache[callsign] = {"data": data, "expires": now + ROUTE_CACHE_TTL}
 
     # ------------------------------------------------------------------
-    # Airport coordinate lookup — adsbdb airport endpoint (permanent cache)
+    # Airport coordinate lookup — OpenFlights DB (lazy-loaded, cached to disk)
     # ------------------------------------------------------------------
 
     def _get_airport_coords(self, iata: str):
         """Return (lat, lon) for an IATA airport code, or (None, None) on failure."""
         if not iata:
             return None, None
-        if iata in self._airport_cache:
-            return self._airport_cache[iata]
-        try:
-            resp = requests.get(
-                f"https://api.adsbdb.com/v0/airport/{iata}", timeout=6
-            )
-            if resp.status_code == 200:
-                ap = (resp.json().get("response") or {}).get("airport") or {}
-                lat = ap.get("latitude")
-                lon = ap.get("longitude")
-                if lat is not None and lon is not None:
-                    result = (float(lat), float(lon))
-                    self._airport_cache[iata] = result
-                    return result
-        except Exception as e:
-            log.debug(f"[overhead] airport coords {iata}: {e}")
-        self._airport_cache[iata] = (None, None)
-        return None, None
+        _load_airport_db()
+        return _airport_db.get(iata, (None, None))
 
     # ------------------------------------------------------------------
     # Schedule lookup — AirLabs → FlightAware (12 h cache)
