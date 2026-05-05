@@ -524,10 +524,8 @@ class Overhead:
                 vert_speed = ac.get("baro_rate") or 0
                 plane_type = ac.get("t", "") or ""
 
-                # Audio / deduplication alert
                 if callsign not in self._alerted_callsigns:
                     log.info(f"[overhead] New flight: {callsign}")
-                    play_plane_sound()
                     self._alerted_callsigns.add(callsign)
 
                 # Route (adsbdb)

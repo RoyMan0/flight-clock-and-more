@@ -2,7 +2,7 @@ import sys
 from datetime import datetime
 from setup import frames
 from utilities.animator import Animator
-from utilities.overhead import Overhead
+from utilities.overhead import Overhead, play_plane_sound
 
 from scenes.temperature import TemperatureScene
 from scenes.flightdetails import FlightDetailsScene
@@ -144,14 +144,16 @@ class Display(
             # callsigns, regardless or order
             data_is_different = not flight_updated(self._data, new_data)
 
+            was_showing_flights = len(self._data) > 0
+
             if data_is_different:
                 self._data_index = 0
                 self._data_all_looped = False
                 self._data = new_data
-            #Play airbus ding sound only on the first display of new data - not working trying in overhead file
-               # if len(self._data)==1:
-                   # import os
-                   # os.system('mpg123 /home/royman/its-a-plane-python/airbus.mp3 &')
+
+            # Play sound only when transitioning from clock/weather page to flight page
+            if not was_showing_flights and there_is_data:
+                play_plane_sound()
 
             # Only reset if there's flight data already
             # on the screen, of if there's some new
