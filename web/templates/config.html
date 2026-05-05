@@ -126,14 +126,26 @@
         <div class="card-body">
           <div class="row g-3">
             <div class="col-md-6">
-              <label class="form-label">ETF Scroll Speed <span class="text-muted small">(px/frame)</span></label>
-              <input type="number" class="form-control bg-dark text-light border-secondary"
-                     x-model="pluginConfigs.stock_ticker.etf_scroll_speed" min="1" max="20">
+              <label class="form-label d-flex justify-content-between">
+                <span>ETF Row Speed</span>
+                <span class="text-muted small" x-text="pluginConfigs.stock_ticker.etf_scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="1" max="10"
+                     x-model="pluginConfigs.stock_ticker.etf_scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>Slow</span><span>Fast</span>
+              </div>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Stock Scroll Speed</label>
-              <input type="number" class="form-control bg-dark text-light border-secondary"
-                     x-model="pluginConfigs.stock_ticker.stock_scroll_speed" min="1" max="20">
+              <label class="form-label d-flex justify-content-between">
+                <span>Stock Row Speed</span>
+                <span class="text-muted small" x-text="pluginConfigs.stock_ticker.stock_scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="1" max="10"
+                     x-model="pluginConfigs.stock_ticker.stock_scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>Slow</span><span>Fast</span>
+              </div>
             </div>
             <div class="col-12">
               <label class="form-label">ETF Override Symbols <span class="text-muted small">(leave blank to use all ETF positions)</span></label>
