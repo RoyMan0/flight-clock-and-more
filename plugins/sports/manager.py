@@ -243,13 +243,13 @@ class SportsPlugin(BasePlugin):
             lcfg = leagues_cfg.get(league_id, {})
             if not lcfg.get("enabled", False):
                 continue
-            games.extend(_fetch_league(url, lcfg.get("name", league_id.upper()), dates))
+            games.extend(_fetch_league(url, lcfg.get("name", league_id.upper()), dates, league_id))
 
         soccer_cfg = leagues_cfg.get("soccer", {})
         if soccer_cfg.get("enabled", False):
             for sub in soccer_cfg.get("sub_leagues", []):
                 games.extend(_fetch_league(
-                    _soccer_url(sub["id"]), sub.get("name", sub["id"]), dates
+                    _soccer_url(sub["id"]), sub.get("name", sub["id"]), dates, "soccer"
                 ))
 
         # Filter upcoming if disabled
@@ -324,7 +324,7 @@ class SportsPlugin(BasePlugin):
 # ESPN API
 # ------------------------------------------------------------------
 
-def _fetch_league(url: str, league_name: str, dates: str) -> list[dict]:
+def _fetch_league(url: str, league_name: str, dates: str, league_id: str = "") -> list[dict]:
     try:
         r = requests.get(
             url,
@@ -336,7 +336,7 @@ def _fetch_league(url: str, league_name: str, dates: str) -> list[dict]:
             return []
         games = []
         for event in r.json().get("events", []):
-            game = _parse_event(event, league_name)
+            game = _parse_event(event, league_name, league_id)
             if game:
                 games.append(game)
         return games
@@ -345,7 +345,7 @@ def _fetch_league(url: str, league_name: str, dates: str) -> list[dict]:
         return []
 
 
-def _parse_event(event: dict, league: str) -> Optional[dict]:
+def _parse_event(event: dict, league: str, league_id: str = "") -> Optional[dict]:
     try:
         comp = (event.get("competitions") or [{}])[0]
         competitors = comp.get("competitors", [])
@@ -357,6 +357,20 @@ def _parse_event(event: dict, league: str) -> Optional[dict]:
         clock         = status.get("displayClock", "")
         period        = status.get("period", 0)
         status_detail = status.get("type", {}).get("shortDetail", "")
+
+        # Situation block — used by baseball (balls/strikes/outs) and
+        # football (down/distance/possession).  Safe to capture for all sports.
+        raw_sit = comp.get("situation", {}) or {}
+        situation = {
+            # Baseball
+            "balls":     raw_sit.get("balls",     0),
+            "strikes":   raw_sit.get("strikes",   0),
+            "outs":      raw_sit.get("outs",      0),
+            # Football
+            "down":       raw_sit.get("down",       0),
+            "distance":   raw_sit.get("distance",   0),
+            "possession": raw_sit.get("possession", ""),  # team id of possessing team
+        }
 
         teams = []
         for c in competitors[:2]:
@@ -371,6 +385,7 @@ def _parse_event(event: dict, league: str) -> Optional[dict]:
 
             teams.append({
                 "name":     abbrev,
+                "team_id":  str(team.get("id", "")),   # used for possession matching
                 "score":    c.get("score", ""),
                 "home_away": c.get("homeAway", ""),
                 "color":    _hex_to_rgb(team.get("color", "")),
@@ -383,10 +398,12 @@ def _parse_event(event: dict, league: str) -> Optional[dict]:
 
         return {
             "league":        league,
+            "league_id":     league_id,
             "state":         state,
             "clock":         clock,
             "period":        period,
             "status_detail": status_detail,
+            "situation":     situation,
             "away":          teams[0],
             "home":          teams[1],
         }
@@ -408,6 +425,95 @@ def _hex_to_rgb(hex_color: str) -> tuple:
 # Rendering
 # ------------------------------------------------------------------
 
+def _mlb_status(game: dict) -> str:
+    """Build a baseball-specific status string: 'T5 S1-B2 O2'."""
+    detail = (game.get("status_detail") or "").lower()
+    period = game["period"]
+
+    if detail.startswith("top") or detail.startswith("t "):
+        half = "T"
+    elif detail.startswith("bot") or detail.startswith("b "):
+        half = "B"
+    elif detail.startswith("mid"):
+        return f"MID{period}"
+    else:
+        return f"END{period}"
+
+    sit = game.get("situation", {})
+    s = sit.get("strikes", 0)
+    b = sit.get("balls",   0)
+    o = sit.get("outs",    0)
+    return f"{half}{period} S{s}-B{b} O{o}"
+
+
+_FOOTBALL_LEAGUES    = {"nfl", "college_football"}
+_TIMED_SPORT_LEAGUES = {"nba", "college_basketball", "nhl"}
+
+
+def _timed_status(game: dict) -> str:
+    """Period + clock for NBA, NCAAB, and NHL."""
+    period = game["period"]
+    clock  = game["clock"] or ""
+    lid    = game.get("league_id", "")
+
+    if lid == "nba":
+        label = f"Q{period}" if period <= 4 else "OT"
+    elif lid == "college_basketball":
+        label = f"H{period}" if period <= 2 else "OT"
+    else:  # nhl
+        if period <= 3:
+            label = f"P{period}"
+        elif period == 4:
+            label = "OT"
+        else:
+            label = "SO"   # shootout
+
+    return f"{label} {clock}" if clock else label
+
+
+def _soccer_status(game: dict) -> str:
+    """Half label + elapsed clock for soccer, e.g. '1st 45+2'."""
+    period = game["period"]
+    clock  = game["clock"] or ""
+
+    if period == 1:
+        half = "1st"
+    elif period == 2:
+        half = "2nd"
+    elif period in (3, 4):
+        half = "OT"
+    else:
+        half = "PKS"   # penalty shootout
+
+    return f"{half} {clock}" if clock else half
+
+
+def _football_status(game: dict) -> str:
+    """Build football status: 'Q4 2:14 4&1'. Falls back to clock-only if too long."""
+    period = game["period"]
+    clock  = game["clock"] or ""
+    detail = (game.get("status_detail") or "")
+
+    if not period or not clock:
+        return detail[:10]
+
+    if "half" in detail.lower():
+        return "HALF"
+
+    qtr = f"Q{period}" if period <= 4 else "OT"
+
+    sit  = game.get("situation", {})
+    down = sit.get("down", 0)
+    dist = sit.get("distance", 0)
+
+    if down:
+        full = f"{qtr} {clock} {down}&{dist}"
+        if len(full) <= 12:   # ~48px — fits alongside a 3-char league name
+            return full
+
+    return f"{qtr} {clock}"
+
+
 def _render_game(game: dict) -> Image.Image:
     img  = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -415,9 +521,18 @@ def _render_game(game: dict) -> Image.Image:
     state    = game["state"]
     is_live  = state == "in"
     is_final = state == "post"
+    lid      = game.get("league_id", "")
 
     status_col = COL_LIVE if is_live else (COL_FINAL if is_final else COL_PRE)
-    if is_live:
+    if is_live and lid == "mlb":
+        status_str = _mlb_status(game)
+    elif is_live and lid in _FOOTBALL_LEAGUES:
+        status_str = _football_status(game)
+    elif is_live and lid in _TIMED_SPORT_LEAGUES:
+        status_str = _timed_status(game)
+    elif is_live and lid == "soccer":
+        status_str = _soccer_status(game)
+    elif is_live:
         status_str = f"P{game['period']} {game['clock']}"
     elif is_final:
         status_str = "FINAL"
@@ -432,6 +547,25 @@ def _render_game(game: dict) -> Image.Image:
     # ── Logo slots fill the space below header ────────────────────────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
     _draw_slot(img, draw, game["home"], slot_x=SLOT_W, game=game)
+
+    score_y = MATRIX_H - _SCR_H
+
+    # ── Batting indicator (MLB): < away batting, > home batting ───────
+    if is_live and lid == "mlb":
+        detail = (game.get("status_detail") or "").lower()
+        if detail.startswith("top") or detail.startswith("t "):
+            _bdf_draw(img, 30, score_y, "<", _BDF, (255, 200, 0))
+        elif detail.startswith("bot") or detail.startswith("b "):
+            _bdf_draw(img, 30, score_y, ">", _BDF, (255, 200, 0))
+
+    # ── Possession indicator (football): < away ball, > home ball ─────
+    elif is_live and lid in _FOOTBALL_LEAGUES:
+        poss = game.get("situation", {}).get("possession", "")
+        if poss:
+            if game["away"]["team_id"] == poss:
+                _bdf_draw(img, 30, score_y, "<", _BDF, (255, 200, 0))
+            elif game["home"]["team_id"] == poss:
+                _bdf_draw(img, 30, score_y, ">", _BDF, (255, 200, 0))
 
     return img
 
