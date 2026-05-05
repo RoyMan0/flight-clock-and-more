@@ -59,7 +59,6 @@ BLANK_FIELDS = {"", "N/A", "NONE"}
 SKIP_ADSBDB_PREFIXES = {
     "KAP",   # Cape Air
     "EJA",   # NetJets
-    "SWA",   # Southwest (ICAO)
 }
 
 BASE_DIR          = os.path.dirname(os.path.dirname(__file__))
