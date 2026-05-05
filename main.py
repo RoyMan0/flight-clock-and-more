@@ -88,6 +88,7 @@ def main():
         "tomorrow_api_key", "schwab_app_key", "schwab_app_secret",
         "schwab_token_path", "schwab_account_hashes", "schwab_callback_url",
         "email_sender", "email_password",
+        "airlabs_api_key", "flightaware_api_key", "flightaware_monthly_budget",
     ]}
 
     pm.register("clock_weather", ClockWeatherPlugin(
