@@ -80,7 +80,7 @@ class FlightTrackerPlugin(BasePlugin):
     def __init__(self, display_manager, config: dict, secrets: dict):
         super().__init__(display_manager, config, secrets)
         self._display: _FlightDisplay | None = None
-        self.overhead = Overhead()
+        self.overhead = Overhead(secrets=secrets)
         self.overhead.grab_data()
         self._last_data: list = []
 
