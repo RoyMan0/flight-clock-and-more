@@ -9,6 +9,7 @@ Priority behavior:
   when the sky clears.
 """
 
+import logging
 from plugins.base_plugin import BasePlugin
 from utilities.animator import Animator
 from utilities.overhead import Overhead, play_plane_sound
@@ -18,6 +19,8 @@ from scenes.journey import JourneyScene
 from scenes.planedetails import PlaneDetailsScene
 from scenes.loadingpulse import LoadingPulseScene
 from setup import frames
+
+log = logging.getLogger(__name__)
 
 
 def _callsigns(flights):
@@ -119,6 +122,7 @@ class FlightTrackerPlugin(BasePlugin):
         if self.overhead.new_data:
             was_empty = len(self._display._data) == 0
             new_data = self.overhead.data
+            log.info(f"[flight_tracker] draw: was_empty={was_empty}, flights={len(new_data)}")
             if _callsigns(self._display._data) != _callsigns(new_data):
                 self._display._data_index = 0
                 self._display._data_all_looped = False
