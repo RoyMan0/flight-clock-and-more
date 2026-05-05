@@ -116,11 +116,15 @@ def bearing_to(home_lat, home_lon, plane_lat, plane_lon) -> float:
 
 
 def iso_to_unix(iso_str: Optional[str]) -> Optional[int]:
-    """Convert ISO 8601 string → Unix timestamp, or None."""
+    """Convert ISO 8601 / UTC datetime string → Unix timestamp, or None.
+    Naive datetimes (no timezone) are assumed UTC, as returned by AirLabs *_utc fields."""
     if not iso_str:
         return None
     try:
+        from datetime import timezone as _tz
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
         return int(dt.timestamp())
     except Exception:
         return None
@@ -600,10 +604,10 @@ class Overhead:
                     if not r:
                         continue
 
-                    sched_dep = iso_to_unix(r.get("dep_scheduled"))
-                    real_dep  = iso_to_unix(r.get("dep_actual") or r.get("dep_estimated"))
-                    sched_arr = iso_to_unix(r.get("arr_scheduled"))
-                    est_arr   = iso_to_unix(r.get("arr_estimated") or r.get("arr_actual"))
+                    sched_dep = iso_to_unix(r.get("dep_time_utc"))
+                    real_dep  = iso_to_unix(r.get("dep_actual_utc") or r.get("dep_estimated_utc"))
+                    sched_arr = iso_to_unix(r.get("arr_time_utc"))
+                    est_arr   = iso_to_unix(r.get("arr_estimated_utc") or r.get("arr_actual_utc"))
 
                     result = {
                         "time_scheduled_departure": sched_dep,
