@@ -65,8 +65,28 @@ BASE_DIR          = os.path.dirname(os.path.dirname(__file__))
 LOG_FILE          = os.path.join(BASE_DIR, "close.txt")
 LOG_FILE_FARTHEST = os.path.join(BASE_DIR, "farthest.txt")
 FA_USAGE_FILE     = os.path.join(BASE_DIR, "flightaware_usage.json")
+AL_USAGE_FILE     = os.path.join(BASE_DIR, "data", "airlabs_usage.json")
 AIRPORT_DB_FILE   = os.path.join(BASE_DIR, "data", "airports_cache.json")
 API_CACHE_FILE    = os.path.join(BASE_DIR, "data", "api_cache.json")
+
+AIRLABS_MONTHLY_LIMIT = 1000
+
+# Marketing carrier lookup for codeshare flights: IATA → (display name, ICAO)
+# When AirLabs returns cs_airline_iata, use this to show the marketing brand
+# (e.g. Delta instead of SkyWest) and load the correct logo.
+_CODESHARE_CARRIERS = {
+    "AA": ("American",   "AAL"),
+    "AS": ("Alaska",     "ASA"),
+    "B6": ("JetBlue",    "JBU"),
+    "DL": ("Delta",      "DAL"),
+    "F9": ("Frontier",   "FFT"),
+    "G4": ("Allegiant",  "AAY"),
+    "HA": ("Hawaiian",   "HAL"),
+    "NK": ("Spirit",     "NKS"),
+    "SY": ("Sun Country","SCX"),
+    "UA": ("United",     "UAL"),
+    "WN": ("Southwest",  "SWA"),
+}
 
 # OpenFlights airports CSV — fetched once and cached locally
 OPENFLIGHTS_URL = (
@@ -208,7 +228,7 @@ def _fa_load_usage() -> dict:
         return {"month": datetime.now().strftime("%Y-%m"), "calls": 0, "cost": 0.0}
 
 
-def _fa_record_call(cost_per_call: float = 0.01):
+def _fa_record_call(cost_per_call: float = 0.005):
     usage = _fa_load_usage()
     usage["calls"] += 1
     usage["cost"]  = round(usage["cost"] + cost_per_call, 4)
@@ -218,6 +238,38 @@ def _fa_record_call(cost_per_call: float = 0.01):
 
 def _fa_budget_ok(limit: float) -> bool:
     return _fa_load_usage().get("cost", 0.0) < limit
+
+
+# ------------------------------------------------------------------
+# AirLabs call tracking
+# ------------------------------------------------------------------
+
+def _al_load_usage() -> dict:
+    try:
+        with open(AL_USAGE_FILE, "r") as f:
+            d = json.load(f)
+        if d.get("month") != datetime.now().strftime("%Y-%m"):
+            raise ValueError("month changed")
+        return d
+    except Exception:
+        return {"month": datetime.now().strftime("%Y-%m"), "calls": 0}
+
+
+def _al_record_call():
+    usage = _al_load_usage()
+    usage["calls"] += 1
+    os.makedirs(os.path.dirname(AL_USAGE_FILE), exist_ok=True)
+    with open(AL_USAGE_FILE, "w") as f:
+        json.dump(usage, f)
+    calls = usage["calls"]
+    if calls >= AIRLABS_MONTHLY_LIMIT:
+        log.warning(f"[overhead] AirLabs monthly limit reached ({calls} calls)")
+    elif calls > AIRLABS_MONTHLY_LIMIT * 0.8:
+        log.warning(f"[overhead] AirLabs: {calls}/{AIRLABS_MONTHLY_LIMIT} calls used this month")
+
+
+def _al_available() -> bool:
+    return _al_load_usage().get("calls", 0) < AIRLABS_MONTHLY_LIMIT
 
 
 # ------------------------------------------------------------------
@@ -737,7 +789,7 @@ class Overhead:
         # ── AirLabs (primary) ─────────────────────────────────────────
         # Try flight_icao=callsign first (no IATA mapping needed), then
         # fall back to flight_iata=owner_iata+digits if that returns nothing.
-        if airlabs_key:
+        if airlabs_key and _al_available():
             for params in self._airlabs_params(callsign, owner_iata):
                 try:
                     resp = requests.get(AIRLABS_URL, params={**params, "api_key": airlabs_key}, timeout=8)
@@ -752,6 +804,18 @@ class Overhead:
                     sched_arr = r.get("arr_time_ts")
                     est_arr   = r.get("arr_estimated_ts") or r.get("arr_actual_ts")
 
+                    # Codeshare detection: prefer the marketing carrier (e.g. Delta)
+                    # over the operating carrier (e.g. SkyWest) for name and logo.
+                    cs_iata = _clean(r.get("cs_airline_iata", ""))
+                    if cs_iata and cs_iata in _CODESHARE_CARRIERS:
+                        al_airline, al_owner_icao = _CODESHARE_CARRIERS[cs_iata]
+                        al_owner_iata = cs_iata
+                        log.debug(f"[overhead] Codeshare: {callsign} operating as {al_airline} ({cs_iata})")
+                    else:
+                        al_airline    = _clean(r.get("airline_name", ""))
+                        al_owner_iata = _clean(r.get("airline_iata", ""))
+                        al_owner_icao = _clean(r.get("airline_icao", ""))
+
                     result = {
                         "time_scheduled_departure": sched_dep,
                         "time_real_departure":      real_dep,
@@ -760,9 +824,9 @@ class Overhead:
                         # Route fallback — used when adsbdb data fails sanity check
                         "al_origin":      _clean(r.get("dep_iata", "")),
                         "al_destination": _clean(r.get("arr_iata", "")),
-                        "al_airline":     _clean(r.get("airline_name", "")),
-                        "al_owner_iata":  _clean(r.get("airline_iata", "")),
-                        "al_owner_icao":  _clean(r.get("airline_icao", "")),
+                        "al_airline":     al_airline,
+                        "al_owner_iata":  al_owner_iata,
+                        "al_owner_icao":  al_owner_icao,
                     }
                     delay = (
                         f"{(real_dep - sched_dep) // 60:+.0f} min"
@@ -770,6 +834,7 @@ class Overhead:
                     )
                     log.debug(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
                               f"{result['al_origin']}→{result['al_destination']}")
+                    _al_record_call()
                     break
                 except Exception as e:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
