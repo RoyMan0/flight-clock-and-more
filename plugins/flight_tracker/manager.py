@@ -85,7 +85,8 @@ class FlightTrackerPlugin(BasePlugin):
         super().__init__(display_manager, config, secrets)
         self._display: _FlightDisplay | None = None
         self.overhead = Overhead(secrets=secrets)
-        self.overhead.grab_data()
+        if self.enabled:
+            self.overhead.grab_data()
         self._last_data: list = []
 
     def _ensure_display(self):
@@ -98,6 +99,8 @@ class FlightTrackerPlugin(BasePlugin):
 
     def update(self):
         """Periodic data refresh — called from plugin_manager background thread."""
+        if not self.enabled:
+            return
         if not (self.overhead.processing and self.overhead.new_data) and (
             self._display is None
             or self._display._data_all_looped

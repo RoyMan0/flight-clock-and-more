@@ -204,6 +204,8 @@ class PluginManager:
         while not self._stop_event.is_set():
             now = time.monotonic()
             for pid, plugin in list(self._plugins.items()):
+                if not plugin.enabled:
+                    continue
                 last = self._update_last.get(pid, 0)
                 if now - last >= plugin.update_interval:
                     try:
