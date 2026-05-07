@@ -4,6 +4,22 @@
 {% block content %}
 <div x-data="configPage()" x-init="init()">
 
+  <!-- Tab navigation -->
+  <ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+      <a class="nav-link" :class="activeTab === 'config' ? 'active' : ''" href="#" @click.prevent="activeTab = 'config'">
+        <i class="bi bi-gear me-1"></i>Config
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" :class="activeTab === 'api' ? 'active' : ''" href="#" @click.prevent="activeTab = 'api'; loadMetrics()">
+        <i class="bi bi-key me-1"></i>API &amp; Metrics
+      </a>
+    </li>
+  </ul>
+
+  <!-- Config tab -->
+  <div x-show="activeTab === 'config'">
   <div class="row g-4">
 
     <!-- Plugin Rotation Order -->
@@ -168,6 +184,44 @@
           </div>
           <button class="btn btn-success btn-sm mt-3" @click="saveSysConfig()">
             <i class="bi bi-save me-1"></i>Save Flight Tracker Config
+          </button>
+        </div>
+      </div>
+
+      <!-- Specific Flight Tracker Config -->
+      <div class="card mb-4" x-show="'specific_flight_tracker' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-pin-map me-2"></i>Specific Flight Tracker</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.specific_flight_tracker.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <p class="text-muted small mb-0 ms-4">Tracks named callsigns globally using AirLabs. Shows a progress bar and stats in the normal rotation.</p>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Tracked Callsigns <span class="text-muted small">(comma-separated, e.g. UAL2345, SWA123)</span></label>
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     :value="(pluginConfigs.specific_flight_tracker.tracked_callsigns || []).join(', ')"
+                     @change="pluginConfigs.specific_flight_tracker.tracked_callsigns = $event.target.value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Display Duration (s)</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.specific_flight_tracker.display_duration" min="5">
+            </div>
+            <div class="col-12" x-show="(pluginConfigs.specific_flight_tracker.tracked_callsigns || []).length > 0">
+              <h6 class="text-muted mb-1">Currently Tracked</h6>
+              <div class="d-flex flex-wrap gap-2">
+                <template x-for="cs in (pluginConfigs.specific_flight_tracker.tracked_callsigns || [])" :key="cs">
+                  <span class="badge bg-secondary font-monospace" x-text="cs"></span>
+                </template>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('specific_flight_tracker')">
+            <i class="bi bi-save me-1"></i>Save
           </button>
         </div>
       </div>
@@ -344,26 +398,6 @@
         </div>
       </div>
 
-      <!-- Secrets -->
-      <div class="card">
-        <div class="card-header"><i class="bi bi-key me-2"></i>API Keys &amp; Secrets</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <template x-for="[k, v] in Object.entries(secrets)" :key="k">
-              <div class="col-12">
-                <label class="form-label text-muted small" x-text="k"></label>
-                <input type="password" class="form-control bg-dark text-light border-secondary"
-                       :value="v"
-                       @change="secrets[k] = $event.target.value"
-                       autocomplete="off">
-              </div>
-            </template>
-          </div>
-          <button class="btn btn-success btn-sm mt-3" @click="saveSecrets()">
-            <i class="bi bi-save me-1"></i>Save Secrets
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -387,6 +421,143 @@
     </div>
   </div>
 
+  </div> <!-- end config tab -->
+
+  <!-- API & Metrics tab -->
+  <div x-show="activeTab === 'api'">
+    <div class="row g-4">
+
+      <!-- AirLabs -->
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header"><i class="bi bi-cloud me-2"></i>AirLabs</div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Free tier: 1,000 calls/month per key. Keys are tried in order; exhausted keys are skipped automatically.</p>
+            <template x-if="metrics.airlabs && metrics.airlabs.keys.length === 0">
+              <p class="text-muted small">No AirLabs keys configured.</p>
+            </template>
+            <template x-for="(k, i) in (metrics.airlabs ? metrics.airlabs.keys : [])" :key="i">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="small" x-text="'Key ' + (k.index + 1)"></span>
+                  <span class="small" :class="k.exhausted ? 'text-danger fw-bold' : 'text-muted'">
+                    <span x-text="k.calls"></span> / <span x-text="metrics.airlabs.limit"></span> calls
+                    <span x-show="k.exhausted" class="badge bg-danger ms-1">EXHAUSTED</span>
+                  </span>
+                </div>
+                <div class="progress" style="height:8px">
+                  <div class="progress-bar"
+                       :class="k.exhausted ? 'bg-danger' : k.calls / metrics.airlabs.limit > 0.8 ? 'bg-warning' : 'bg-success'"
+                       :style="'width:' + Math.min(100, k.calls / metrics.airlabs.limit * 100) + '%'">
+                  </div>
+                </div>
+              </div>
+            </template>
+            <hr class="border-secondary">
+            <h6 class="text-muted mb-2">API Keys</h6>
+            <template x-for="(k, i) in (secrets.airlabs_api_keys || [])" :key="i">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <input type="password" class="form-control bg-dark text-light border-secondary form-control-sm"
+                       :value="k"
+                       @change="secrets.airlabs_api_keys[i] = $event.target.value"
+                       autocomplete="off" :placeholder="'Key ' + (i+1)">
+                <button class="btn btn-outline-danger btn-sm" @click="secrets.airlabs_api_keys.splice(i, 1)">
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+            </template>
+            <button class="btn btn-outline-secondary btn-sm mt-1"
+                    @click="secrets.airlabs_api_keys = [...(secrets.airlabs_api_keys || []), '']">
+              <i class="bi bi-plus me-1"></i>Add Key
+            </button>
+            <button class="btn btn-success btn-sm mt-1 ms-2" @click="saveSecrets()">
+              <i class="bi bi-save me-1"></i>Save
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FlightAware -->
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header"><i class="bi bi-airplane me-2"></i>FlightAware AeroAPI</div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">$0.005/call. Budget tracked per month; exhausted keys are skipped automatically.</p>
+            <div class="mb-2">
+              <label class="form-label small">Monthly Budget ($)</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary form-control-sm"
+                     x-model="secrets.flightaware_monthly_budget" min="0" step="0.50" style="max-width:120px">
+            </div>
+            <template x-if="metrics.flightaware && metrics.flightaware.keys.length === 0">
+              <p class="text-muted small">No FlightAware keys configured.</p>
+            </template>
+            <template x-for="(k, i) in (metrics.flightaware ? metrics.flightaware.keys : [])" :key="i">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="small" x-text="'Key ' + (k.index + 1)"></span>
+                  <span class="small" :class="k.exhausted ? 'text-danger fw-bold' : 'text-muted'">
+                    $<span x-text="k.cost.toFixed(3)"></span> / $<span x-text="metrics.flightaware.budget.toFixed(2)"></span>
+                    <span x-show="k.exhausted" class="badge bg-danger ms-1">EXHAUSTED</span>
+                  </span>
+                </div>
+                <div class="progress" style="height:8px">
+                  <div class="progress-bar"
+                       :class="k.exhausted ? 'bg-danger' : k.cost / metrics.flightaware.budget > 0.8 ? 'bg-warning' : 'bg-success'"
+                       :style="'width:' + Math.min(100, k.cost / metrics.flightaware.budget * 100) + '%'">
+                  </div>
+                </div>
+              </div>
+            </template>
+            <hr class="border-secondary">
+            <h6 class="text-muted mb-2">API Keys</h6>
+            <template x-for="(k, i) in (secrets.flightaware_api_keys || [])" :key="i">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <input type="password" class="form-control bg-dark text-light border-secondary form-control-sm"
+                       :value="k"
+                       @change="secrets.flightaware_api_keys[i] = $event.target.value"
+                       autocomplete="off" :placeholder="'Key ' + (i+1)">
+                <button class="btn btn-outline-danger btn-sm" @click="secrets.flightaware_api_keys.splice(i, 1)">
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+            </template>
+            <button class="btn btn-outline-secondary btn-sm mt-1"
+                    @click="secrets.flightaware_api_keys = [...(secrets.flightaware_api_keys || []), '']">
+              <i class="bi bi-plus me-1"></i>Add Key
+            </button>
+            <button class="btn btn-success btn-sm mt-1 ms-2" @click="saveSecrets()">
+              <i class="bi bi-save me-1"></i>Save
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Other secrets -->
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header"><i class="bi bi-key me-2"></i>Other Secrets</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <template x-for="[k, v] in Object.entries(secrets).filter(([k]) => !k.startsWith('airlabs') && !k.startsWith('flightaware'))" :key="k">
+                <div class="col-md-6">
+                  <label class="form-label text-muted small" x-text="k"></label>
+                  <input type="password" class="form-control bg-dark text-light border-secondary"
+                         :value="v"
+                         @change="secrets[k] = $event.target.value"
+                         autocomplete="off">
+                </div>
+              </template>
+            </div>
+            <button class="btn btn-success btn-sm mt-3" @click="saveSecrets()">
+              <i class="bi bi-save me-1"></i>Save Secrets
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div> <!-- end api tab -->
+
 </div>
 {% endblock %}
 
@@ -400,6 +571,8 @@ function configPage() {
     secrets: {},
     backups: [],
     saved: false,
+    activeTab: 'config',
+    metrics: { airlabs: null, flightaware: null },
     teamBrowserOpen: false,
     teamsLoading: false,
     teamsData: {},
@@ -407,6 +580,10 @@ function configPage() {
 
     async init() {
       await this.loadAll();
+    },
+
+    async loadMetrics() {
+      this.metrics = await fetch('/api/metrics').then(r => r.json());
     },
 
     async loadAll() {
@@ -423,6 +600,9 @@ function configPage() {
       for (const p of plugins) cfgs[p.id] = p.config || {};
       this.pluginConfigs = cfgs;
       this.sysCfg = sys;
+      // Ensure array fields exist for key management UI
+      if (!Array.isArray(sec.airlabs_api_keys)) sec.airlabs_api_keys = [];
+      if (!Array.isArray(sec.flightaware_api_keys)) sec.flightaware_api_keys = [];
       this.secrets = sec;
       this.backups = backs;
     },

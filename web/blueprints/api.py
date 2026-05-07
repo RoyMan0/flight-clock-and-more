@@ -251,6 +251,26 @@ def save_secrets():
 
 
 # ------------------------------------------------------------------
+# API usage metrics
+# ------------------------------------------------------------------
+
+@api_bp.get("/metrics")
+def get_metrics():
+    from utilities.overhead import get_al_metrics, get_fa_metrics, _get_keys
+    cfg = _cfg()
+    if cfg is None:
+        return jsonify({}), 503
+    secrets = cfg.get_all_secrets()
+    budget = float(secrets.get("flightaware_monthly_budget", 4.50))
+    al_keys = _get_keys(secrets, "airlabs_api_keys", "airlabs_api_key")
+    fa_keys = _get_keys(secrets, "flightaware_api_keys", "flightaware_api_key")
+    return jsonify({
+        "airlabs":     get_al_metrics(al_keys),
+        "flightaware": get_fa_metrics(fa_keys, budget),
+    })
+
+
+# ------------------------------------------------------------------
 # Backup / restore
 # ------------------------------------------------------------------
 

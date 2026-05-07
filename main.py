@@ -49,7 +49,11 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = create_app = None
+    try:
+        from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
+    except Exception as e:
+        log.warning(f"Specific flight tracker plugin failed to import: {e}")
     try:
         from plugins.stock_ticker.manager import StockTickerPlugin
     except Exception as e:
@@ -122,6 +126,14 @@ def main():
             ))
         except Exception as e:
             log.warning(f"Sports plugin failed to load: {e}")
+
+    if SpecificFlightTrackerPlugin:
+        try:
+            pm.register("specific_flight_tracker", SpecificFlightTrackerPlugin(
+                display, cfg.get_plugin_config("specific_flight_tracker"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"Specific flight tracker plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)

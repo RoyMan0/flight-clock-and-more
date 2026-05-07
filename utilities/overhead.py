@@ -15,6 +15,7 @@ import os
 import json
 import math
 import time
+import hashlib
 import subprocess
 import logging
 from threading import Thread, Lock
@@ -214,8 +215,27 @@ def _clean(val) -> str:
 
 
 # ------------------------------------------------------------------
-# FlightAware budget tracking
+# Key helpers
 # ------------------------------------------------------------------
+
+def _key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()[:8]
+
+
+def _get_keys(secrets: dict, array_key: str, single_key: str) -> list[str]:
+    """Return list of API keys, supporting both array and legacy single-key formats."""
+    keys = secrets.get(array_key)
+    if isinstance(keys, list):
+        return [k for k in keys if k]
+    single = secrets.get(single_key, "")
+    return [single] if single else []
+
+
+# ------------------------------------------------------------------
+# FlightAware budget tracking (per-key)
+# ------------------------------------------------------------------
+
+FA_COST_PER_CALL = 0.005
 
 def _fa_load_usage() -> dict:
     try:
@@ -225,23 +245,56 @@ def _fa_load_usage() -> dict:
             raise ValueError("month changed")
         return d
     except Exception:
-        return {"month": datetime.now().strftime("%Y-%m"), "calls": 0, "cost": 0.0}
+        return {"month": datetime.now().strftime("%Y-%m"), "keys": {}}
 
 
-def _fa_record_call(cost_per_call: float = 0.005):
+def _fa_record_call(key: str, cost_per_call: float = FA_COST_PER_CALL):
     usage = _fa_load_usage()
-    usage["calls"] += 1
-    usage["cost"]  = round(usage["cost"] + cost_per_call, 4)
+    h = _key_hash(key)
+    entry = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0})
+    entry["calls"] += 1
+    entry["cost"] = round(entry["cost"] + cost_per_call, 4)
     with open(FA_USAGE_FILE, "w") as f:
         json.dump(usage, f)
 
 
+def _fa_get_active_key(keys: list[str], budget: float) -> Optional[str]:
+    """Return the first FlightAware key still under budget, or None."""
+    if not keys:
+        return None
+    usage = _fa_load_usage()
+    for key in keys:
+        cost = usage["keys"].get(_key_hash(key), {}).get("cost", 0.0)
+        if cost < budget:
+            return key
+    return None
+
+
 def _fa_budget_ok(limit: float) -> bool:
-    return _fa_load_usage().get("cost", 0.0) < limit
+    usage = _fa_load_usage()
+    total_cost = sum(e.get("cost", 0.0) for e in usage["keys"].values())
+    return total_cost < limit
+
+
+def get_fa_metrics(keys: list[str], budget: float) -> dict:
+    """Return FlightAware usage metrics for the metrics endpoint."""
+    usage = _fa_load_usage()
+    key_metrics = []
+    for i, key in enumerate(keys):
+        entry = usage["keys"].get(_key_hash(key), {"calls": 0, "cost": 0.0})
+        cost = entry.get("cost", 0.0)
+        key_metrics.append({
+            "index": i,
+            "calls": entry.get("calls", 0),
+            "cost": round(cost, 4),
+            "remaining_budget": round(max(0.0, budget - cost), 4),
+            "exhausted": cost >= budget,
+        })
+    return {"budget": budget, "keys": key_metrics}
 
 
 # ------------------------------------------------------------------
-# AirLabs call tracking
+# AirLabs call tracking (per-key)
 # ------------------------------------------------------------------
 
 def _al_load_usage() -> dict:
@@ -250,26 +303,59 @@ def _al_load_usage() -> dict:
             d = json.load(f)
         if d.get("month") != datetime.now().strftime("%Y-%m"):
             raise ValueError("month changed")
+        # Migrate legacy single-counter format
+        if "calls" in d and "keys" not in d:
+            d = {"month": d["month"], "keys": {"legacy": {"calls": d["calls"]}}}
         return d
     except Exception:
-        return {"month": datetime.now().strftime("%Y-%m"), "calls": 0}
+        return {"month": datetime.now().strftime("%Y-%m"), "keys": {}}
 
 
-def _al_record_call():
+def _al_record_call(key: str):
     usage = _al_load_usage()
-    usage["calls"] += 1
+    h = _key_hash(key)
+    entry = usage["keys"].setdefault(h, {"calls": 0})
+    entry["calls"] += 1
     os.makedirs(os.path.dirname(AL_USAGE_FILE), exist_ok=True)
     with open(AL_USAGE_FILE, "w") as f:
         json.dump(usage, f)
-    calls = usage["calls"]
+    calls = entry["calls"]
     if calls >= AIRLABS_MONTHLY_LIMIT:
-        log.warning(f"[overhead] AirLabs monthly limit reached ({calls} calls)")
+        log.warning(f"[overhead] AirLabs key exhausted ({calls} calls this month)")
     elif calls > AIRLABS_MONTHLY_LIMIT * 0.8:
-        log.warning(f"[overhead] AirLabs: {calls}/{AIRLABS_MONTHLY_LIMIT} calls used this month")
+        log.warning(f"[overhead] AirLabs: {calls}/{AIRLABS_MONTHLY_LIMIT} calls on active key")
 
 
-def _al_available() -> bool:
-    return _al_load_usage().get("calls", 0) < AIRLABS_MONTHLY_LIMIT
+def _al_get_active_key(keys: list[str]) -> Optional[str]:
+    """Return the first AirLabs key under the monthly limit, or None."""
+    if not keys:
+        return None
+    usage = _al_load_usage()
+    for key in keys:
+        calls = usage["keys"].get(_key_hash(key), {}).get("calls", 0)
+        if calls < AIRLABS_MONTHLY_LIMIT:
+            return key
+    log.warning("[overhead] All AirLabs keys exhausted for this month")
+    return None
+
+
+def _al_available(keys: list[str]) -> bool:
+    return _al_get_active_key(keys) is not None
+
+
+def get_al_metrics(keys: list[str]) -> dict:
+    """Return AirLabs usage metrics for the metrics endpoint."""
+    usage = _al_load_usage()
+    key_metrics = []
+    for i, key in enumerate(keys):
+        calls = usage["keys"].get(_key_hash(key), {}).get("calls", 0)
+        key_metrics.append({
+            "index": i,
+            "calls": calls,
+            "remaining": max(0, AIRLABS_MONTHLY_LIMIT - calls),
+            "exhausted": calls >= AIRLABS_MONTHLY_LIMIT,
+        })
+    return {"limit": AIRLABS_MONTHLY_LIMIT, "keys": key_metrics}
 
 
 # ------------------------------------------------------------------
@@ -813,14 +899,15 @@ class Overhead:
             return cached["data"]
 
         result: dict = {}
-        airlabs_key = self._secrets.get("airlabs_api_key", "")
-        fa_key      = self._secrets.get("flightaware_api_key", "")
-        fa_budget   = float(self._secrets.get("flightaware_monthly_budget", 4.50))
+        al_keys   = _get_keys(self._secrets, "airlabs_api_keys", "airlabs_api_key")
+        fa_keys   = _get_keys(self._secrets, "flightaware_api_keys", "flightaware_api_key")
+        fa_budget = float(self._secrets.get("flightaware_monthly_budget", 4.50))
 
         # ── AirLabs (primary) ─────────────────────────────────────────
         # Try flight_icao=callsign first (no IATA mapping needed), then
         # fall back to flight_iata=owner_iata+digits if that returns nothing.
-        if airlabs_key and _al_available():
+        airlabs_key = _al_get_active_key(al_keys)
+        if airlabs_key:
             for params in self._airlabs_params(callsign, owner_iata):
                 try:
                     resp = requests.get(AIRLABS_URL, params={**params, "api_key": airlabs_key}, timeout=8)
@@ -865,7 +952,7 @@ class Overhead:
                     )
                     log.debug(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
                               f"{result['al_origin']}→{result['al_destination']}")
-                    _al_record_call()
+                    _al_record_call(airlabs_key)
                     break
                 except Exception as e:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
@@ -873,7 +960,8 @@ class Overhead:
         # ── FlightAware (fallback) ────────────────────────────────────
         # Also try FA when AirLabs returned partial data (origin but no destination)
         airlabs_incomplete = result and not result.get("al_destination")
-        if (not result or airlabs_incomplete) and fa_key and _fa_budget_ok(fa_budget):
+        fa_key = _fa_get_active_key(fa_keys, fa_budget)
+        if (not result or airlabs_incomplete) and fa_key:
             try:
                 resp = requests.get(
                     FLIGHTAWARE_URL.format(ident=callsign),
@@ -902,7 +990,7 @@ class Overhead:
                             "al_owner_iata":  "",
                             "al_owner_icao":  "",
                         }
-                        _fa_record_call()
+                        _fa_record_call(fa_key)
                         log.debug(f"[overhead] FlightAware schedule for {callsign}: "
                                   f"{result['al_origin']}→{result['al_destination']}")
             except Exception as e:

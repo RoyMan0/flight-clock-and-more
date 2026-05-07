@@ -54,6 +54,12 @@
       "resorts": [],
       "update_interval": 3600
     },
+    "specific_flight_tracker": {
+      "enabled": false,
+      "display_duration": 30,
+      "tracked_callsigns": [],
+      "update_interval": 180
+    },
     "sports": {
       "enabled": false,
       "display_duration": 20,

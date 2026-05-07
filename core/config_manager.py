@@ -83,12 +83,21 @@ class ConfigManager:
         with self._lock:
             return dict(self._config)
 
+    def get_all_secrets(self) -> dict:
+        with self._lock:
+            return dict(self._secrets)
+
     def get_all_secrets_masked(self) -> dict:
-        """Return secrets dict with non-empty values masked for web display."""
+        """Return secrets dict with string values masked; arrays returned as-is (keys are never shown)."""
         with self._lock:
             masked = {}
             for k, v in self._secrets.items():
-                masked[k] = "********" if v else ""
+                if isinstance(v, list):
+                    masked[k] = ["********" if item else "" for item in v]
+                elif isinstance(v, (int, float)):
+                    masked[k] = v
+                else:
+                    masked[k] = "********" if v else ""
             return masked
 
     # ------------------------------------------------------------------
@@ -118,9 +127,22 @@ class ConfigManager:
 
     def save_secrets(self, new_secrets: dict):
         with self._lock:
-            # Preserve existing non-empty values for masked (blank) inputs
             for k, v in new_secrets.items():
-                if v and v != "********":
+                if isinstance(v, list):
+                    # Merge array: replace masked entries with existing values
+                    existing = self._secrets.get(k, [])
+                    merged = []
+                    for i, item in enumerate(v):
+                        if item and item != "********":
+                            merged.append(item)
+                        elif i < len(existing):
+                            merged.append(existing[i])
+                        else:
+                            merged.append("")
+                    self._secrets[k] = [x for x in merged if x]
+                elif isinstance(v, (int, float)):
+                    self._secrets[k] = v
+                elif v and v != "********":
                     self._secrets[k] = v
             self._atomic_write(SECRETS_PATH, self._secrets)
 
