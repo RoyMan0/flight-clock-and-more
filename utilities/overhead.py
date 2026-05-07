@@ -606,8 +606,8 @@ def _route_makes_sense(plane_lat, plane_lon,
     if route_dist < 50:
         return True   # very short hop — skip sanity check
 
-    # Plane should be within roughly 1.5× route dist of its two endpoints combined
-    if dist_orig + dist_dest > route_dist * 1.5:
+    # Plane should be within roughly 1.3× route dist of its two endpoints combined
+    if dist_orig + dist_dest > route_dist * 1.3:
         return False
 
     # Plane shouldn't be further from origin than 2× the full route length
@@ -1085,9 +1085,17 @@ class Overhead:
                     log.warning(f"[overhead] FlightAware {resp.status_code} for {callsign}")
                 else:
                     flights = resp.json().get("flights", [])
-                    fa = next(
-                        (f for f in flights if (f.get("progress_percent") or 0) > 0),
-                        flights[0] if flights else None,
+                    from datetime import timezone as _tz
+                    today_pfx = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+                    fa = (
+                        next((f for f in flights
+                              if (f.get("progress_percent") or 0) > 0
+                              and (f.get("scheduled_out") or "").startswith(today_pfx)), None)
+                        or next((f for f in flights
+                                 if (f.get("scheduled_out") or "").startswith(today_pfx)), None)
+                        or next((f for f in flights
+                                 if (f.get("progress_percent") or 0) > 0), None)
+                        or (flights[0] if flights else None)
                     )
                     if fa:
                         orig = (fa.get("origin") or {})
