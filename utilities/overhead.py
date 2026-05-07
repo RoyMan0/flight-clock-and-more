@@ -633,12 +633,28 @@ class Overhead:
                     dest_lat    = route.get("dest_lat")
                     dest_lon    = route.get("dest_lon")
 
-                # Airport coordinate fallback — look up via adsbdb when we have
+                # Airport coordinate fallback — look up via OpenFlights when we have
                 # IATA codes but no coordinates (e.g. AirLabs won over adsbdb route)
                 if origin and not origin_lat:
                     origin_lat, origin_lon = self._get_airport_coords(origin)
                 if destination and not dest_lat:
                     dest_lat, dest_lon = self._get_airport_coords(destination)
+
+                # Sanity-check AirLabs route — flight numbers can rotate to
+                # different city pairs daily and the 24h cache can serve stale
+                # data.  If the plane is nowhere near the reported airports,
+                # discard and fall back to adsbdb (which was already checked).
+                if al_origin and al_dest and not _route_makes_sense(
+                        plane_lat, plane_lon, origin_lat, origin_lon, dest_lat, dest_lon):
+                    log.debug(f"[overhead] AirLabs route {callsign} "
+                              f"({al_origin}→{al_dest}) failed sanity check "
+                              f"— falling back to adsbdb")
+                    origin      = db_origin
+                    destination = db_dest
+                    origin_lat  = route.get("origin_lat")
+                    origin_lon  = route.get("origin_lon")
+                    dest_lat    = route.get("dest_lat")
+                    dest_lon    = route.get("dest_lon")
 
                 dist_o = haversine(plane_lat, plane_lon, origin_lat, origin_lon, units) if origin_lat else 0
                 dist_d = haversine(plane_lat, plane_lon, dest_lat, dest_lon, units) if dest_lat else 0
