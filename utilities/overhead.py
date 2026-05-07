@@ -261,7 +261,8 @@ def _fa_load_usage() -> dict:
             d = json.load(f)
         # Migrate old flat format {"calls": N, "cost": X} or old per-key with top-level month
         if "keys" not in d:
-            d = {"keys": {"legacy": {"calls": d.get("calls", 0), "cost": d.get("cost", 0.0)}}}
+            month = d.get("month", datetime.now().strftime("%Y-%m"))
+            d = {"keys": {"legacy": {"calls": d.get("calls", 0), "cost": d.get("cost", 0.0), "period": month}}}
         elif "month" in d:
             # Old format stored period at top level — push it into each entry
             month = d.pop("month")
