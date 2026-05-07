@@ -1074,6 +1074,12 @@ class Overhead:
         # Also try FA when AirLabs returned partial data (origin but no destination)
         airlabs_incomplete = result and not result.get("al_destination")
         fa_key = _fa_get_active_key(fa_keys, fa_budget, fa_reset_days)
+        if not result or airlabs_incomplete:
+            if not fa_key:
+                log.warning(
+                    f"[overhead] FA skipped for {callsign}: "
+                    f"{'no keys configured' if not fa_keys else f'all {len(fa_keys)} key(s) over budget ${fa_budget}'}"
+                )
         if (not result or airlabs_incomplete) and fa_key:
             try:
                 resp = requests.get(
