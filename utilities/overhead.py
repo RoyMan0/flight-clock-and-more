@@ -243,6 +243,9 @@ def _fa_load_usage() -> dict:
             d = json.load(f)
         if d.get("month") != datetime.now().strftime("%Y-%m"):
             raise ValueError("month changed")
+        # Migrate old flat format: {"calls": N, "cost": X} → {"keys": {"legacy": ...}}
+        if "keys" not in d:
+            d = {"month": d["month"], "keys": {"legacy": {"calls": d.get("calls", 0), "cost": d.get("cost", 0.0)}}}
         return d
     except Exception:
         return {"month": datetime.now().strftime("%Y-%m"), "keys": {}}
@@ -279,9 +282,14 @@ def _fa_budget_ok(limit: float) -> bool:
 def get_fa_metrics(keys: list[str], budget: float) -> dict:
     """Return FlightAware usage metrics for the metrics endpoint."""
     usage = _fa_load_usage()
+    key_data = usage["keys"]
+    no_real_key_data = keys and not any(_key_hash(k) in key_data for k in keys)
+    legacy = key_data.get("legacy", {"calls": 0, "cost": 0.0})
     key_metrics = []
     for i, key in enumerate(keys):
-        entry = usage["keys"].get(_key_hash(key), {"calls": 0, "cost": 0.0})
+        entry = key_data.get(_key_hash(key), {"calls": 0, "cost": 0.0})
+        if i == 0 and no_real_key_data:
+            entry = legacy
         cost = entry.get("cost", 0.0)
         key_metrics.append({
             "index": i,
@@ -346,9 +354,14 @@ def _al_available(keys: list[str]) -> bool:
 def get_al_metrics(keys: list[str]) -> dict:
     """Return AirLabs usage metrics for the metrics endpoint."""
     usage = _al_load_usage()
+    key_data = usage["keys"]
+    no_real_key_data = keys and not any(_key_hash(k) in key_data for k in keys)
+    legacy_calls = key_data.get("legacy", {}).get("calls", 0)
     key_metrics = []
     for i, key in enumerate(keys):
-        calls = usage["keys"].get(_key_hash(key), {}).get("calls", 0)
+        calls = key_data.get(_key_hash(key), {}).get("calls", 0)
+        if i == 0 and no_real_key_data:
+            calls = legacy_calls
         key_metrics.append({
             "index": i,
             "calls": calls,
