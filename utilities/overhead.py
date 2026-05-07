@@ -606,8 +606,8 @@ def _route_makes_sense(plane_lat, plane_lon,
     if route_dist < 50:
         return True   # very short hop — skip sanity check
 
-    # Plane should be within roughly 2× route dist of its two endpoints combined
-    if dist_orig + dist_dest > route_dist * 2.5:
+    # Plane should be within roughly 1.5× route dist of its two endpoints combined
+    if dist_orig + dist_dest > route_dist * 1.5:
         return False
 
     # Plane shouldn't be further from origin than 2× the full route length
