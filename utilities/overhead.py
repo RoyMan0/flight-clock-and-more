@@ -19,7 +19,7 @@ import hashlib
 import subprocess
 import logging
 from threading import Thread, Lock
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
@@ -231,6 +231,24 @@ def _get_keys(secrets: dict, array_key: str, single_key: str) -> list[str]:
     return [single] if single else []
 
 
+def _get_reset_days(secrets: dict, key: str, count: int) -> list[int]:
+    """Return per-key reset days, padding with 1 (calendar month) for missing entries."""
+    days = secrets.get(key, [])
+    if not isinstance(days, list):
+        days = []
+    return [int(days[i]) if i < len(days) and days[i] else 1 for i in range(count)]
+
+
+def _billing_period(reset_day: int) -> str:
+    """Return the billing period identifier for a key that resets on reset_day each month.
+    E.g. reset_day=4, today=May 7 → '2026-05'; today=May 2 → '2026-04'."""
+    today = datetime.now()
+    if today.day >= reset_day:
+        return today.strftime("%Y-%m")
+    prev = today.replace(day=1) - timedelta(days=1)
+    return prev.strftime("%Y-%m")
+
+
 # ------------------------------------------------------------------
 # FlightAware budget tracking (per-key)
 # ------------------------------------------------------------------
@@ -241,69 +259,94 @@ def _fa_load_usage() -> dict:
     try:
         with open(FA_USAGE_FILE, "r") as f:
             d = json.load(f)
-        if d.get("month") != datetime.now().strftime("%Y-%m"):
-            raise ValueError("month changed")
-        # Migrate old flat format: {"calls": N, "cost": X} → {"keys": {"legacy": ...}}
+        # Migrate old flat format {"calls": N, "cost": X} or old per-key with top-level month
         if "keys" not in d:
-            d = {"month": d["month"], "keys": {"legacy": {"calls": d.get("calls", 0), "cost": d.get("cost", 0.0)}}}
+            d = {"keys": {"legacy": {"calls": d.get("calls", 0), "cost": d.get("cost", 0.0)}}}
+        elif "month" in d:
+            # Old format stored period at top level — push it into each entry
+            month = d.pop("month")
+            for entry in d["keys"].values():
+                entry.setdefault("period", month)
         return d
     except Exception:
-        return {"month": datetime.now().strftime("%Y-%m"), "keys": {}}
+        return {"keys": {}}
 
 
-def _fa_record_call(key: str, cost_per_call: float = FA_COST_PER_CALL):
+def _fa_key_calls(entry: dict, period: str) -> tuple[int, float]:
+    """Return (calls, cost) for an entry, zeroing if the billing period has rolled over."""
+    if entry.get("period") != period:
+        return 0, 0.0
+    return entry.get("calls", 0), entry.get("cost", 0.0)
+
+
+def _fa_record_call(key: str, reset_day: int = 1, cost_per_call: float = FA_COST_PER_CALL):
     usage = _fa_load_usage()
     h = _key_hash(key)
-    # Absorb any legacy (pre-multi-key) count into the first key that writes
+    period = _billing_period(reset_day)
+    # Absorb legacy entry into this key
     if "legacy" in usage["keys"]:
-        legacy = usage["keys"].pop("legacy")
-        existing = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0})
-        existing["calls"] += legacy.get("calls", 0)
-        existing["cost"] = round(existing["cost"] + legacy.get("cost", 0.0), 4)
-    entry = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0})
+        leg = usage["keys"].pop("legacy")
+        leg_period = leg.get("period", period)
+        existing = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0, "period": period})
+        if leg_period == period:
+            existing["calls"] += leg.get("calls", 0)
+            existing["cost"] = round(existing["cost"] + leg.get("cost", 0.0), 4)
+    entry = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0, "period": period})
+    # Reset if billing period rolled over
+    if entry.get("period") != period:
+        entry["calls"] = 0
+        entry["cost"] = 0.0
+        entry["period"] = period
     entry["calls"] += 1
     entry["cost"] = round(entry["cost"] + cost_per_call, 4)
     with open(FA_USAGE_FILE, "w") as f:
         json.dump(usage, f)
 
 
-def _fa_get_active_key(keys: list[str], budget: float) -> Optional[str]:
+def _fa_get_active_key(keys: list[str], budget: float, reset_days: list[int] = None) -> Optional[str]:
     """Return the first FlightAware key still under budget, or None."""
     if not keys:
         return None
+    if reset_days is None:
+        reset_days = []
     usage = _fa_load_usage()
-    for key in keys:
-        cost = usage["keys"].get(_key_hash(key), {}).get("cost", 0.0)
+    key_data = usage["keys"]
+    legacy = key_data.get("legacy", {})
+    for i, key in enumerate(keys):
+        reset_day = reset_days[i] if i < len(reset_days) else 1
+        period = _billing_period(reset_day)
+        _, cost = _fa_key_calls(key_data.get(_key_hash(key), {}), period)
+        if i == 0:
+            _, leg_cost = _fa_key_calls(legacy, period)
+            cost += leg_cost
         if cost < budget:
             return key
     return None
 
 
-def _fa_budget_ok(limit: float) -> bool:
-    usage = _fa_load_usage()
-    total_cost = sum(e.get("cost", 0.0) for e in usage["keys"].values())
-    return total_cost < limit
-
-
-def get_fa_metrics(keys: list[str], budget: float) -> dict:
+def get_fa_metrics(keys: list[str], budget: float, reset_days: list[int] = None) -> dict:
     """Return FlightAware usage metrics for the metrics endpoint."""
+    if reset_days is None:
+        reset_days = []
     usage = _fa_load_usage()
     key_data = usage["keys"]
-    legacy = key_data.get("legacy", {"calls": 0, "cost": 0.0})
+    legacy = key_data.get("legacy", {})
     key_metrics = []
     for i, key in enumerate(keys):
-        entry = key_data.get(_key_hash(key), {"calls": 0, "cost": 0.0})
-        calls = entry.get("calls", 0)
-        cost = entry.get("cost", 0.0)
+        reset_day = reset_days[i] if i < len(reset_days) else 1
+        period = _billing_period(reset_day)
+        calls, cost = _fa_key_calls(key_data.get(_key_hash(key), {}), period)
         if i == 0:
-            calls += legacy.get("calls", 0)  # always add legacy to key 0 until absorbed
-            cost = round(cost + legacy.get("cost", 0.0), 4)
+            leg_calls, leg_cost = _fa_key_calls(legacy, period)
+            calls += leg_calls
+            cost = round(cost + leg_cost, 4)
         key_metrics.append({
             "index": i,
             "calls": calls,
             "cost": round(cost, 4),
             "remaining_budget": round(max(0.0, budget - cost), 4),
             "exhausted": cost >= budget,
+            "reset_day": reset_day,
         })
     return {"budget": budget, "keys": key_metrics}
 
@@ -316,67 +359,96 @@ def _al_load_usage() -> dict:
     try:
         with open(AL_USAGE_FILE, "r") as f:
             d = json.load(f)
-        if d.get("month") != datetime.now().strftime("%Y-%m"):
-            raise ValueError("month changed")
-        # Migrate legacy single-counter format
+        # Migrate old flat format {"calls": N}
         if "calls" in d and "keys" not in d:
-            d = {"month": d["month"], "keys": {"legacy": {"calls": d["calls"]}}}
+            d = {"keys": {"legacy": {"calls": d["calls"]}}}
+        elif "month" in d and "keys" in d:
+            month = d.pop("month")
+            for entry in d["keys"].values():
+                entry.setdefault("period", month)
         return d
     except Exception:
-        return {"month": datetime.now().strftime("%Y-%m"), "keys": {}}
+        return {"keys": {}}
 
 
-def _al_record_call(key: str):
+def _al_key_calls(entry: dict, period: str) -> int:
+    if entry.get("period") != period:
+        return 0
+    return entry.get("calls", 0)
+
+
+def _al_record_call(key: str, reset_day: int = 1):
     usage = _al_load_usage()
     h = _key_hash(key)
-    # Absorb any legacy (pre-multi-key) count into the first key that writes
+    period = _billing_period(reset_day)
+    # Absorb legacy entry into this key
     if "legacy" in usage["keys"]:
-        legacy = usage["keys"].pop("legacy")
-        usage["keys"].setdefault(h, {"calls": 0})["calls"] += legacy.get("calls", 0)
-    entry = usage["keys"].setdefault(h, {"calls": 0})
+        leg = usage["keys"].pop("legacy")
+        leg_period = leg.get("period", period)
+        existing = usage["keys"].setdefault(h, {"calls": 0, "period": period})
+        if leg_period == period:
+            existing["calls"] += leg.get("calls", 0)
+    entry = usage["keys"].setdefault(h, {"calls": 0, "period": period})
+    # Reset if billing period rolled over
+    if entry.get("period") != period:
+        entry["calls"] = 0
+        entry["period"] = period
     entry["calls"] += 1
     os.makedirs(os.path.dirname(AL_USAGE_FILE), exist_ok=True)
     with open(AL_USAGE_FILE, "w") as f:
         json.dump(usage, f)
     calls = entry["calls"]
     if calls >= AIRLABS_MONTHLY_LIMIT:
-        log.warning(f"[overhead] AirLabs key exhausted ({calls} calls this month)")
+        log.warning(f"[overhead] AirLabs key exhausted ({calls} calls this billing period)")
     elif calls > AIRLABS_MONTHLY_LIMIT * 0.8:
         log.warning(f"[overhead] AirLabs: {calls}/{AIRLABS_MONTHLY_LIMIT} calls on active key")
 
 
-def _al_get_active_key(keys: list[str]) -> Optional[str]:
+def _al_get_active_key(keys: list[str], reset_days: list[int] = None) -> Optional[str]:
     """Return the first AirLabs key under the monthly limit, or None."""
     if not keys:
         return None
+    if reset_days is None:
+        reset_days = []
     usage = _al_load_usage()
-    for key in keys:
-        calls = usage["keys"].get(_key_hash(key), {}).get("calls", 0)
+    key_data = usage["keys"]
+    legacy = key_data.get("legacy", {})
+    for i, key in enumerate(keys):
+        reset_day = reset_days[i] if i < len(reset_days) else 1
+        period = _billing_period(reset_day)
+        calls = _al_key_calls(key_data.get(_key_hash(key), {}), period)
+        if i == 0:
+            calls += _al_key_calls(legacy, period)
         if calls < AIRLABS_MONTHLY_LIMIT:
             return key
-    log.warning("[overhead] All AirLabs keys exhausted for this month")
+    log.warning("[overhead] All AirLabs keys exhausted for this billing period")
     return None
 
 
-def _al_available(keys: list[str]) -> bool:
-    return _al_get_active_key(keys) is not None
+def _al_available(keys: list[str], reset_days: list[int] = None) -> bool:
+    return _al_get_active_key(keys, reset_days) is not None
 
 
-def get_al_metrics(keys: list[str]) -> dict:
+def get_al_metrics(keys: list[str], reset_days: list[int] = None) -> dict:
     """Return AirLabs usage metrics for the metrics endpoint."""
+    if reset_days is None:
+        reset_days = []
     usage = _al_load_usage()
     key_data = usage["keys"]
-    legacy_calls = key_data.get("legacy", {}).get("calls", 0)
+    legacy = key_data.get("legacy", {})
     key_metrics = []
     for i, key in enumerate(keys):
-        calls = key_data.get(_key_hash(key), {}).get("calls", 0)
+        reset_day = reset_days[i] if i < len(reset_days) else 1
+        period = _billing_period(reset_day)
+        calls = _al_key_calls(key_data.get(_key_hash(key), {}), period)
         if i == 0:
-            calls += legacy_calls  # always add legacy to key 0 until absorbed
+            calls += _al_key_calls(legacy, period)
         key_metrics.append({
             "index": i,
             "calls": calls,
             "remaining": max(0, AIRLABS_MONTHLY_LIMIT - calls),
             "exhausted": calls >= AIRLABS_MONTHLY_LIMIT,
+            "reset_day": reset_day,
         })
     return {"limit": AIRLABS_MONTHLY_LIMIT, "keys": key_metrics}
 
@@ -922,14 +994,16 @@ class Overhead:
             return cached["data"]
 
         result: dict = {}
-        al_keys   = _get_keys(self._secrets, "airlabs_api_keys", "airlabs_api_key")
-        fa_keys   = _get_keys(self._secrets, "flightaware_api_keys", "flightaware_api_key")
-        fa_budget = float(self._secrets.get("flightaware_monthly_budget", 4.50))
+        al_keys      = _get_keys(self._secrets, "airlabs_api_keys", "airlabs_api_key")
+        fa_keys      = _get_keys(self._secrets, "flightaware_api_keys", "flightaware_api_key")
+        al_reset_days = _get_reset_days(self._secrets, "airlabs_reset_days", len(al_keys))
+        fa_reset_days = _get_reset_days(self._secrets, "flightaware_reset_days", len(fa_keys))
+        fa_budget    = float(self._secrets.get("flightaware_monthly_budget", 4.50))
 
         # ── AirLabs (primary) ─────────────────────────────────────────
         # Try flight_icao=callsign first (no IATA mapping needed), then
         # fall back to flight_iata=owner_iata+digits if that returns nothing.
-        airlabs_key = _al_get_active_key(al_keys)
+        airlabs_key = _al_get_active_key(al_keys, al_reset_days)
         if airlabs_key:
             for params in self._airlabs_params(callsign, owner_iata):
                 try:
@@ -975,7 +1049,8 @@ class Overhead:
                     )
                     log.debug(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
                               f"{result['al_origin']}→{result['al_destination']}")
-                    _al_record_call(airlabs_key)
+                    al_idx = al_keys.index(airlabs_key)
+                    _al_record_call(airlabs_key, al_reset_days[al_idx])
                     break
                 except Exception as e:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
@@ -983,7 +1058,7 @@ class Overhead:
         # ── FlightAware (fallback) ────────────────────────────────────
         # Also try FA when AirLabs returned partial data (origin but no destination)
         airlabs_incomplete = result and not result.get("al_destination")
-        fa_key = _fa_get_active_key(fa_keys, fa_budget)
+        fa_key = _fa_get_active_key(fa_keys, fa_budget, fa_reset_days)
         if (not result or airlabs_incomplete) and fa_key:
             try:
                 resp = requests.get(
@@ -1013,7 +1088,8 @@ class Overhead:
                             "al_owner_iata":  "",
                             "al_owner_icao":  "",
                         }
-                        _fa_record_call(fa_key)
+                        fa_idx = fa_keys.index(fa_key)
+                        _fa_record_call(fa_key, fa_reset_days[fa_idx])
                         log.debug(f"[overhead] FlightAware schedule for {callsign}: "
                                   f"{result['al_origin']}→{result['al_destination']}")
             except Exception as e:

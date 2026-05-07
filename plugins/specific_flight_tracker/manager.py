@@ -9,7 +9,7 @@ from plugins.base_plugin import BasePlugin
 from utilities.animator import Animator
 from utilities.overhead import (
     haversine, AIRPORT_DB_FILE,
-    _get_keys, _al_get_active_key, _al_record_call,
+    _get_keys, _get_reset_days, _al_get_active_key, _al_record_call,
 )
 from scenes.trackedheader import TrackedHeaderScene
 from scenes.trackedprogress import TrackedProgressScene
@@ -143,10 +143,12 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
     def _poll_callsign(self, callsign: str):
         al_keys = _get_keys(self.secrets, "airlabs_api_keys", "airlabs_api_key")
-        key = _al_get_active_key(al_keys)
+        al_reset_days = _get_reset_days(self.secrets, "airlabs_reset_days", len(al_keys))
+        key = _al_get_active_key(al_keys, al_reset_days)
         if not key:
             log.warning("[specific_flight_tracker] No AirLabs key available")
             return
+        key_reset_day = al_reset_days[al_keys.index(key)]
 
         url = AIRLABS_URL.format(callsign=callsign, key=key)
         try:
@@ -163,7 +165,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             self._handle_no_response(callsign)
             return
 
-        _al_record_call(key)
+        _al_record_call(key, key_reset_day)
         self._handle_active_response(callsign, response_data)
 
     def _handle_no_response(self, callsign: str):
