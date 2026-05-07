@@ -55,6 +55,7 @@
     },
     "snow_report": {
       "enabled": false,
+      "morning_only": false,
       "display_duration": 15,
       "seconds_per_resort": 8,
       "resorts": [],

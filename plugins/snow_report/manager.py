@@ -13,6 +13,7 @@ Display layout (64×32):
 import logging
 import time
 import threading
+from datetime import datetime
 import requests
 from typing import Optional
 
@@ -77,6 +78,11 @@ class SnowReportPlugin(BasePlugin):
         log.debug(f"[snow] Updated {len(reports)} resorts")
 
     def draw(self) -> bool:
+        if self.config.get("morning_only", False):
+            hour = datetime.now().hour
+            if not (6 <= hour < 10):
+                return False
+
         with self._lock:
             reports = list(self._reports)
 
