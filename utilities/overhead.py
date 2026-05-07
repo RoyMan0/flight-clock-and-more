@@ -656,6 +656,15 @@ class Overhead:
                     dest_lat    = route.get("dest_lat")
                     dest_lon    = route.get("dest_lon")
 
+                # Discard route if origin == destination — any source can
+                # return this for positioning/turnaround flights, and it
+                # bypasses the <50mi short-circuit in _route_makes_sense.
+                if origin and origin == destination:
+                    log.debug(f"[overhead] {callsign}: origin == destination "
+                              f"({origin}), discarding route")
+                    origin = destination = ""
+                    origin_lat = origin_lon = dest_lat = dest_lon = None
+
                 dist_o = haversine(plane_lat, plane_lon, origin_lat, origin_lon, units) if origin_lat else 0
                 dist_d = haversine(plane_lat, plane_lon, dest_lat, dest_lon, units) if dest_lat else 0
 
