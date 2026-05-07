@@ -969,7 +969,9 @@ class Overhead:
         return result
 
     def _cache_route(self, callsign: str, data: dict, now: float):
-        self._route_cache[callsign] = {"data": data, "expires": now + ROUTE_CACHE_TTL}
+        has_route = bool(data.get("origin") and data.get("destination"))
+        ttl = ROUTE_CACHE_TTL if has_route else 1800
+        self._route_cache[callsign] = {"data": data, "expires": now + ttl}
         self._save_disk_cache()
 
     # ------------------------------------------------------------------
@@ -1096,12 +1098,15 @@ class Overhead:
             except Exception as e:
                 log.debug(f"[overhead] FlightAware error ({callsign}): {e}")
 
-        arr_ts = result.get("time_scheduled_arrival") if result else None
-        if arr_ts:
+        arr_ts    = result.get("time_scheduled_arrival") if result else None
+        has_route = bool(result.get("al_origin") and result.get("al_destination")) if result else False
+        if has_route and arr_ts:
             smart_expires = max(arr_ts + 7200, now + 3 * 3600)
             smart_expires = min(smart_expires, now + 24 * 3600)
-        else:
+        elif has_route:
             smart_expires = now + SCHEDULE_CACHE_TTL
+        else:
+            smart_expires = now + 1800  # retry soon if no route found
         self._schedule_cache[callsign] = {"data": result, "expires": smart_expires}
         self._save_disk_cache()
         return result
