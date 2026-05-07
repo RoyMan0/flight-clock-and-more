@@ -254,6 +254,12 @@ def _fa_load_usage() -> dict:
 def _fa_record_call(key: str, cost_per_call: float = FA_COST_PER_CALL):
     usage = _fa_load_usage()
     h = _key_hash(key)
+    # Absorb any legacy (pre-multi-key) count into the first key that writes
+    if "legacy" in usage["keys"]:
+        legacy = usage["keys"].pop("legacy")
+        existing = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0})
+        existing["calls"] += legacy.get("calls", 0)
+        existing["cost"] = round(existing["cost"] + legacy.get("cost", 0.0), 4)
     entry = usage["keys"].setdefault(h, {"calls": 0, "cost": 0.0})
     entry["calls"] += 1
     entry["cost"] = round(entry["cost"] + cost_per_call, 4)
@@ -283,17 +289,18 @@ def get_fa_metrics(keys: list[str], budget: float) -> dict:
     """Return FlightAware usage metrics for the metrics endpoint."""
     usage = _fa_load_usage()
     key_data = usage["keys"]
-    no_real_key_data = keys and not any(_key_hash(k) in key_data for k in keys)
     legacy = key_data.get("legacy", {"calls": 0, "cost": 0.0})
     key_metrics = []
     for i, key in enumerate(keys):
         entry = key_data.get(_key_hash(key), {"calls": 0, "cost": 0.0})
-        if i == 0 and no_real_key_data:
-            entry = legacy
+        calls = entry.get("calls", 0)
         cost = entry.get("cost", 0.0)
+        if i == 0:
+            calls += legacy.get("calls", 0)  # always add legacy to key 0 until absorbed
+            cost = round(cost + legacy.get("cost", 0.0), 4)
         key_metrics.append({
             "index": i,
-            "calls": entry.get("calls", 0),
+            "calls": calls,
             "cost": round(cost, 4),
             "remaining_budget": round(max(0.0, budget - cost), 4),
             "exhausted": cost >= budget,
@@ -322,6 +329,10 @@ def _al_load_usage() -> dict:
 def _al_record_call(key: str):
     usage = _al_load_usage()
     h = _key_hash(key)
+    # Absorb any legacy (pre-multi-key) count into the first key that writes
+    if "legacy" in usage["keys"]:
+        legacy = usage["keys"].pop("legacy")
+        usage["keys"].setdefault(h, {"calls": 0})["calls"] += legacy.get("calls", 0)
     entry = usage["keys"].setdefault(h, {"calls": 0})
     entry["calls"] += 1
     os.makedirs(os.path.dirname(AL_USAGE_FILE), exist_ok=True)
@@ -355,13 +366,12 @@ def get_al_metrics(keys: list[str]) -> dict:
     """Return AirLabs usage metrics for the metrics endpoint."""
     usage = _al_load_usage()
     key_data = usage["keys"]
-    no_real_key_data = keys and not any(_key_hash(k) in key_data for k in keys)
     legacy_calls = key_data.get("legacy", {}).get("calls", 0)
     key_metrics = []
     for i, key in enumerate(keys):
         calls = key_data.get(_key_hash(key), {}).get("calls", 0)
-        if i == 0 and no_real_key_data:
-            calls = legacy_calls
+        if i == 0:
+            calls += legacy_calls  # always add legacy to key 0 until absorbed
         key_metrics.append({
             "index": i,
             "calls": calls,
