@@ -48,7 +48,7 @@ FLIGHTAWARE_URL = "https://aeroapi.flightaware.com/aeroapi/flights/{ident}"
 
 MAX_ALTITUDE       = 100000   # ft hard cap
 ROUTE_CACHE_TTL    = 24 * 3600   # seconds — persisted to disk, wall-clock expiry
-SCHEDULE_CACHE_TTL = 24 * 3600
+SCHEDULE_CACHE_TTL = 6 * 3600   # fallback when no arrival time known
 
 EARTH_RADIUS_M = 3958.8   # miles
 
@@ -672,6 +672,8 @@ class Overhead:
                     bearing_to(home_lat, home_lon, plane_lat, plane_lon)
                 )
 
+                ac_alt = ac.get("alt_baro")
+                ac_gs  = ac.get("gs")
                 entry = {
                     "callsign":              callsign,
                     "airline":               airline,
@@ -687,6 +689,10 @@ class Overhead:
                     "plane_latitude":        plane_lat,
                     "plane_longitude":       plane_lon,
                     "vertical_speed":        vert_speed,
+                    "altitude":              int(ac_alt) if isinstance(ac_alt, (int, float)) else 0,
+                    "ground_speed":          int(ac_gs)  if isinstance(ac_gs,  (int, float)) else 0,
+                    "heading":               int(ac.get("track", 0)) if isinstance(ac.get("track"), (int, float)) else 0,
+                    "registration":          _clean(ac.get("r", "")),
                     "distance":              dist,
                     "distance_origin":       dist_o,
                     "distance_destination":  dist_d,
@@ -902,7 +908,13 @@ class Overhead:
             except Exception as e:
                 log.debug(f"[overhead] FlightAware error ({callsign}): {e}")
 
-        self._schedule_cache[callsign] = {"data": result, "expires": now + SCHEDULE_CACHE_TTL}
+        arr_ts = result.get("time_scheduled_arrival") if result else None
+        if arr_ts:
+            smart_expires = max(arr_ts + 7200, now + 3 * 3600)
+            smart_expires = min(smart_expires, now + 24 * 3600)
+        else:
+            smart_expires = now + SCHEDULE_CACHE_TTL
+        self._schedule_cache[callsign] = {"data": result, "expires": smart_expires}
         self._save_disk_cache()
         return result
 

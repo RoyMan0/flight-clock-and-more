@@ -46,6 +46,7 @@ class _FlightDisplay(
         self._data_all_looped = False
 
         super().__init__()
+        self._show_additional_details = False
 
         self.delay = frames.PERIOD
 
@@ -114,6 +115,7 @@ class FlightTrackerPlugin(BasePlugin):
         self._display.matrix = self.display_manager.matrix
         self._display._data_index = 0
         self._display._data_all_looped = False
+        self._display._show_additional_details = self.config.get("show_additional_details", False)
         self._display.reset_scene()
 
     def draw(self) -> bool:

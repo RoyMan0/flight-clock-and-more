@@ -15,6 +15,7 @@ class PlaneDetailsScene(object):
         super().__init__()
         self.plane_position = screen.WIDTH
         self._data_all_looped = False
+        self._show_additional_details = False
 
     @Animator.KeyFrame.add(1)
     def plane_details(self, count):
@@ -33,10 +34,6 @@ class PlaneDetailsScene(object):
         plane_name_text = f'{plane_name} '
         distance_text = f'{distance:.2f}{distance_units} {direction}'
 
-        # Calculate the widths of each section
-        plane_name_width = len(plane_name_text) * 5
-        distance_direction_text_width = max(len(distance_text) * 5, screen.WIDTH)
-
         # Draw background
         self.draw_square(
             0,
@@ -46,27 +43,47 @@ class PlaneDetailsScene(object):
             colours.BLACK,
         )
 
-        # Draw text with different colors for plane name and distance/direction
+        # Render chained text segments; DrawText returns the pixel width drawn
+        x = self.plane_position
+
         plane_name_width = graphics.DrawText(
-            self.canvas,
-            PLANE_FONT,
-            self.plane_position,
-            PLANE_DISTANCE_FROM_TOP,
-            PLANE_COLOUR,  # Set the color for the plane name
-            plane_name_text,
+            self.canvas, PLANE_FONT, x, PLANE_DISTANCE_FROM_TOP,
+            PLANE_COLOUR, plane_name_text,
         )
+        x += plane_name_width
 
         distance_text_width = graphics.DrawText(
-            self.canvas,
-            PLANE_FONT,
-            self.plane_position + plane_name_width,
-            PLANE_DISTANCE_FROM_TOP,
-            PLANE_DISTANCE_COLOUR,  # Set the color for distance/direction
-            distance_text,
+            self.canvas, PLANE_FONT, x, PLANE_DISTANCE_FROM_TOP,
+            PLANE_DISTANCE_COLOUR, distance_text,
         )
+        x += distance_text_width
 
-        # Calculate the total width of the text string
         total_text_width = plane_name_width + distance_text_width
+
+        if self._show_additional_details:
+            reg = plane_data.get("registration", "")
+            altitude = plane_data.get("altitude", 0)
+            speed = plane_data.get("ground_speed", 0)
+
+            segments = []
+            if reg:
+                segments.append((f'  {reg}', colours.LIGHT_PURPLE))
+            if altitude:
+                segments.append(('  ', colours.GREY))
+                segments.append((str(altitude), colours.LIGHT_ORANGE))
+                segments.append(('ft', colours.GREY))
+            if speed:
+                segments.append(('  ', colours.GREY))
+                segments.append((str(speed), colours.LIGHT_ORANGE))
+                segments.append(('kt', colours.GREY))
+
+            for text, color in segments:
+                w = graphics.DrawText(
+                    self.canvas, PLANE_FONT, x, PLANE_DISTANCE_FROM_TOP,
+                    color, text,
+                )
+                x += w
+                total_text_width += w
 
         # Handle scrolling
         self.plane_position -= 1
@@ -76,7 +93,7 @@ class PlaneDetailsScene(object):
             self.plane_position = screen.WIDTH
             if len(self._data) > 1:
                 self._data_index = (self._data_index + 1) % len(self._data)
-                self._data_all_looped = (not self._data_index) or self._data_all_looped 
+                self._data_all_looped = (not self._data_index) or self._data_all_looped
                 self.reset_scene()
 
     @Animator.KeyFrame.add(0)

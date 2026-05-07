@@ -82,17 +82,6 @@
                 <label class="form-check-label">Auto Dim at Night</label>
               </div>
             </div>
-            <div class="col-12 border-top border-secondary pt-3 mt-1" x-show="'flight_tracker' in pluginConfigs">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox"
-                       :checked="pluginConfigs.flight_tracker?.enabled !== false"
-                       @change="pluginConfigs.flight_tracker.enabled = $event.target.checked">
-                <label class="form-check-label fw-semibold">
-                  <i class="bi bi-airplane me-1"></i>Flight Tracker
-                </label>
-              </div>
-              <p class="text-muted small mb-0 ms-4">When enabled, overhead flights interrupt the display rotation automatically.</p>
-            </div>
             <div class="col-md-3">
               <label class="form-label">Night Start</label>
               <input type="time" class="form-control bg-dark text-light border-secondary"
@@ -104,11 +93,6 @@
                      x-model="sysCfg.display.night_end">
             </div>
             <div class="col-md-3">
-              <label class="form-label">Home Airport</label>
-              <input type="text" class="form-control bg-dark text-light border-secondary"
-                     x-model="sysCfg.location.journey_code" maxlength="3" style="text-transform:uppercase">
-            </div>
-            <div class="col-md-3">
               <label class="form-label">Forecast Days</label>
               <input type="number" class="form-control bg-dark text-light border-secondary"
                      x-model="pluginConfigs.clock_weather.forecast_days" min="1" max="5">
@@ -116,6 +100,74 @@
           </div>
           <button class="btn btn-success btn-sm mt-3" @click="saveSysConfig()">
             <i class="bi bi-save me-1"></i>Save System Config
+          </button>
+        </div>
+      </div>
+
+      <!-- Overhead Flight Tracker Config -->
+      <div class="card mb-4" x-show="'flight_tracker' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-airplane me-2"></i>Overhead Flight Tracker</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.flight_tracker.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <p class="text-muted small mb-0 ms-4">When enabled, overhead flights interrupt the display rotation automatically.</p>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.flight_tracker.show_additional_details">
+                <label class="form-check-label">Show additional details (registration, altitude, speed)</label>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Min Altitude (ft)</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.flight_tracker.min_altitude" min="0" step="500">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Search Radius (nm)</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.location.search_radius_nm" min="1" max="250">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Home Airport (IATA)</label>
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.location.journey_code" maxlength="3" style="text-transform:uppercase">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Home Latitude</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.location.location_home[0]" step="0.0001">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Home Longitude</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.location.location_home[1]" step="0.0001">
+            </div>
+            <div class="col-12 border-top border-secondary pt-3 mt-1">
+              <h6 class="text-muted mb-2">Flight Logging</h6>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Alert Email</label>
+              <input type="email" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.flights.email">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Max Closest Logged</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.flights.max_closest" min="0">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Max Farthest Logged</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.flights.max_farthest" min="0">
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="saveSysConfig()">
+            <i class="bi bi-save me-1"></i>Save Flight Tracker Config
           </button>
         </div>
       </div>
@@ -344,7 +396,7 @@ function configPage() {
   return {
     pluginOrder: [],
     pluginConfigs: {},
-    sysCfg: { display: {}, location: {} },
+    sysCfg: { display: {}, location: {}, flights: {} },
     secrets: {},
     backups: [],
     saved: false,

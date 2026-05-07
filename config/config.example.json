@@ -10,20 +10,21 @@
   },
   "location": {
     "zone_home": {
-      "tl_y": 39.796827,
-      "tl_x": -105.298648,
-      "br_y": 39.666880,
-      "br_x": -105.110076
+      "tl_y": 0.0,
+      "tl_x": 0.0,
+      "br_y": 0.0,
+      "br_x": 0.0
     },
-    "location_home": [39.725715, -105.203208],
-    "temperature_location": "39.725715,-105.203208",
+    "location_home": [0.0, 0.0],
+    "temperature_location": "0.0,0.0",
     "clock_format": "12hr",
     "temperature_units": "imperial",
     "distance_units": "imperial",
-    "journey_code": "DEN",
-    "journey_blank_filler": " ? "
+    "journey_code": "",
+    "journey_blank_filler": " ? ",
+    "search_radius_nm": 30
   },
-  "plugin_order": ["clock_weather", "stock_ticker", "snow_report", "sports"],
+  "plugin_order": ["clock_weather"],
   "plugins": {
     "clock_weather": {
       "enabled": true,
@@ -31,13 +32,14 @@
       "forecast_days": 3
     },
     "flight_tracker": {
-      "enabled": true,
+      "enabled": false,
       "min_altitude": 8000,
       "max_altitude": 100000,
-      "max_flight_lookup": 5
+      "max_flight_lookup": 5,
+      "show_additional_details": false
     },
     "stock_ticker": {
-      "enabled": true,
+      "enabled": false,
       "display_duration": 25,
       "etf_symbols": [],
       "stock_symbols": [],
@@ -46,33 +48,28 @@
       "update_interval": 60
     },
     "snow_report": {
-      "enabled": true,
+      "enabled": false,
       "display_duration": 15,
       "seconds_per_resort": 8,
-      "resorts": [
-        {"name": "Vail", "id": 490},
-        {"name": "Breckenridge", "id": 54},
-        {"name": "Keystone", "id": 214},
-        {"name": "Arapahoe Basin", "id": 10},
-        {"name": "Copper", "id": 91}
-      ],
+      "resorts": [],
       "update_interval": 3600
     },
     "sports": {
-      "enabled": true,
+      "enabled": false,
       "display_duration": 20,
       "seconds_per_game": 7,
       "live_priority": false,
       "show_upcoming": false,
+      "show_only_today_completed": false,
       "favorite_teams": [],
       "show_all_leagues": [],
       "leagues": {
-        "nfl": {"enabled": true, "name": "NFL"},
-        "nba": {"enabled": true, "name": "NBA"},
-        "mlb": {"enabled": true, "name": "MLB"},
-        "nhl": {"enabled": true, "name": "NHL"},
+        "nfl": {"enabled": false, "name": "NFL"},
+        "nba": {"enabled": false, "name": "NBA"},
+        "mlb": {"enabled": false, "name": "MLB"},
+        "nhl": {"enabled": false, "name": "NHL"},
         "soccer": {
-          "enabled": true,
+          "enabled": false,
           "sub_leagues": [
             {"id": "eng.1", "name": "EPL"},
             {"id": "usa.1", "name": "MLS"},
@@ -92,6 +89,6 @@
   "flights": {
     "max_closest": 5,
     "max_farthest": 5,
-    "email": "rdhobbs@gmail.com"
+    "email": ""
   }
 }
