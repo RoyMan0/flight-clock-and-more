@@ -88,12 +88,7 @@ def main():
     # ------------------------------------------------------------------
     pm = PluginManager(display, cfg)
 
-    secrets = {k: cfg.get_secret(k) for k in [
-        "tomorrow_api_key", "schwab_app_key", "schwab_app_secret",
-        "schwab_token_path", "schwab_account_hashes", "schwab_callback_url",
-        "email_sender", "email_password",
-        "airlabs_api_key", "flightaware_api_key", "flightaware_monthly_budget",
-    ]}
+    secrets = cfg.get_all_secrets()
 
     pm.register("clock_weather", ClockWeatherPlugin(
         display, cfg.get_plugin_config("clock_weather"), secrets
