@@ -814,6 +814,12 @@ class Overhead:
                     origin_lon  = route.get("origin_lon")
                     dest_lat    = route.get("dest_lat")
                     dest_lon    = route.get("dest_lon")
+                    if not origin or not destination:
+                        log.warning(
+                            f"[overhead] {callsign}: no route "
+                            f"(AirLabs={al_origin or '?'}→{al_dest or '?'} "
+                            f"adsbdb={db_origin or '?'}→{db_dest or '?'})"
+                        )
 
                 # Airport coordinate fallback — look up via OpenFlights when we have
                 # IATA codes but no coordinates (e.g. AirLabs won over adsbdb route)
@@ -994,7 +1000,13 @@ class Overhead:
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
-            return cached["data"]
+            d = cached["data"]
+            if not (d.get("al_origin") and d.get("al_destination")):
+                log.warning(
+                    f"[overhead] Schedule cache hit for {callsign}: no route "
+                    f"(expires in {int(cached['expires'] - now)}s)"
+                )
+            return d
 
         result: dict = {}
         al_keys      = _get_keys(self._secrets, "airlabs_api_keys", "airlabs_api_key")
