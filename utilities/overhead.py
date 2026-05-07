@@ -1050,8 +1050,8 @@ class Overhead:
                         f"{(real_dep - sched_dep) // 60:+.0f} min"
                         if real_dep and sched_dep else "N/A"
                     )
-                    log.info(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
-                             f"{result['al_origin']}→{result['al_destination']}")
+                    log.warning(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
+                               f"{result['al_origin'] or '?'}→{result['al_destination'] or '?'}")
                     al_idx = al_keys.index(airlabs_key)
                     _al_record_call(airlabs_key, al_reset_days[al_idx])
                     break
@@ -1080,6 +1080,11 @@ class Overhead:
                     if fa:
                         orig = (fa.get("origin") or {})
                         dest = (fa.get("destination") or {})
+                        log.warning(
+                            f"[overhead] FA airports for {callsign}: "
+                            f"orig={orig.get('code_iata')} / {orig.get('code_icao')} / {orig.get('code')} "
+                            f"dest={dest.get('code_iata')} / {dest.get('code_icao')} / {dest.get('code')}"
+                        )
                         def _fa_iata(a: dict) -> str:
                             iata = _clean(a.get("code_iata", ""))
                             if iata:
