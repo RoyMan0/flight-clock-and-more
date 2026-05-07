@@ -1050,8 +1050,8 @@ class Overhead:
                         f"{(real_dep - sched_dep) // 60:+.0f} min"
                         if real_dep and sched_dep else "N/A"
                     )
-                    log.debug(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
-                              f"{result['al_origin']}→{result['al_destination']}")
+                    log.info(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
+                             f"{result['al_origin']}→{result['al_destination']}")
                     al_idx = al_keys.index(airlabs_key)
                     _al_record_call(airlabs_key, al_reset_days[al_idx])
                     break
@@ -1069,15 +1069,25 @@ class Overhead:
                     headers={"x-apikey": fa_key},
                     timeout=8,
                 )
-                if resp.status_code == 200:
+                if resp.status_code != 200:
+                    log.warning(f"[overhead] FlightAware {resp.status_code} for {callsign}")
+                else:
                     flights = resp.json().get("flights", [])
                     fa = next(
-                        (f for f in flights if f.get("progress_percent", 0) > 0),
+                        (f for f in flights if (f.get("progress_percent") or 0) > 0),
                         flights[0] if flights else None,
                     )
                     if fa:
                         orig = (fa.get("origin") or {})
                         dest = (fa.get("destination") or {})
+                        def _fa_iata(a: dict) -> str:
+                            iata = _clean(a.get("code_iata", ""))
+                            if iata:
+                                return iata
+                            icao = _clean(a.get("code_icao", "") or a.get("code", ""))
+                            if icao and len(icao) == 4 and icao[0] == "K":
+                                return icao[1:]
+                            return ""
                         result = {
                             "time_scheduled_departure": iso_to_unix(fa.get("scheduled_out")),
                             "time_real_departure":      iso_to_unix(fa.get("actual_out")),
@@ -1085,18 +1095,20 @@ class Overhead:
                             "time_estimated_arrival":   iso_to_unix(
                                 fa.get("estimated_in") or fa.get("actual_in")
                             ),
-                            "al_origin":      _clean(orig.get("code_iata", "")),
-                            "al_destination": _clean(dest.get("code_iata", "")),
+                            "al_origin":      _fa_iata(orig),
+                            "al_destination": _fa_iata(dest),
                             "al_airline":     "",
                             "al_owner_iata":  "",
                             "al_owner_icao":  "",
                         }
                         fa_idx = fa_keys.index(fa_key)
                         _fa_record_call(fa_key, fa_reset_days[fa_idx])
-                        log.debug(f"[overhead] FlightAware schedule for {callsign}: "
-                                  f"{result['al_origin']}→{result['al_destination']}")
+                        log.info(f"[overhead] FlightAware schedule for {callsign}: "
+                                 f"{result['al_origin']}→{result['al_destination']}")
+                    else:
+                        log.info(f"[overhead] FlightAware returned no flights for {callsign}")
             except Exception as e:
-                log.debug(f"[overhead] FlightAware error ({callsign}): {e}")
+                log.warning(f"[overhead] FlightAware error ({callsign}): {e}")
 
         arr_ts    = result.get("time_scheduled_arrival") if result else None
         has_route = bool(result.get("al_origin") and result.get("al_destination")) if result else False
