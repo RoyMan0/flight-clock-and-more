@@ -256,6 +256,14 @@ class SportsPlugin(BasePlugin):
         if not self.config.get("show_upcoming", False):
             games = [g for g in games if g["state"] != "pre"]
 
+        # Filter completed games not from today if enabled
+        if self.config.get("show_only_today_completed", False):
+            today_et = _eastern_now().strftime("%Y-%m-%d")
+            games = [
+                g for g in games
+                if g["state"] != "post" or g.get("game_date") == today_et
+            ]
+
         # Favorite teams filter
         favorites = {t.upper() for t in self.config.get("favorite_teams", [])}
         show_all  = {s.upper() for s in self.config.get("show_all_leagues", [])}
@@ -358,6 +366,15 @@ def _parse_event(event: dict, league: str, league_id: str = "") -> Optional[dict
         period        = status.get("period", 0)
         status_detail = status.get("type", {}).get("shortDetail", "")
 
+        # Game date in Eastern time (YYYY-MM-DD) for today-only filtering
+        raw_date = event.get("date", "")
+        try:
+            utc_dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+            offset = -4 if 3 <= utc_dt.month <= 11 else -5
+            game_date = (utc_dt + timedelta(hours=offset)).strftime("%Y-%m-%d")
+        except Exception:
+            game_date = ""
+
         # Situation block — used by baseball (balls/strikes/outs) and
         # football (down/distance/possession).  Safe to capture for all sports.
         raw_sit = comp.get("situation", {}) or {}
@@ -406,6 +423,7 @@ def _parse_event(event: dict, league: str, league_id: str = "") -> Optional[dict
             "situation":     situation,
             "away":          teams[0],
             "home":          teams[1],
+            "game_date":     game_date,
         }
     except Exception:
         return None
