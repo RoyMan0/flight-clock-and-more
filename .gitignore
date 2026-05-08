@@ -19,3 +19,4 @@ workdammit.log
 
 # Downloaded team logos (cached at runtime)
 assets/sports/logos/*/
+config/secrets.json
