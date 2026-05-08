@@ -1025,6 +1025,7 @@ class Overhead:
                     resp = requests.get(AIRLABS_URL, params={**params, "api_key": airlabs_key}, timeout=8)
                     if resp.status_code != 200:
                         continue
+                    _al_record_call(airlabs_key, al_reset_days[al_keys.index(airlabs_key)])
                     r = resp.json().get("response") or {}
                     if not r:
                         continue
@@ -1064,8 +1065,6 @@ class Overhead:
                     )
                     log.warning(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
                                f"{result['al_origin'] or '?'}→{result['al_destination'] or '?'}")
-                    al_idx = al_keys.index(airlabs_key)
-                    _al_record_call(airlabs_key, al_reset_days[al_idx])
                     break
                 except Exception as e:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
