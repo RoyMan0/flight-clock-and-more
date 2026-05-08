@@ -62,6 +62,12 @@ class SnowReportPlugin(BasePlugin):
     # BasePlugin
     # ------------------------------------------------------------------
 
+    def has_content(self) -> bool:
+        if self.config.get("morning_only", False):
+            hour = datetime.now().hour
+            return 6 <= hour < 10
+        return True
+
     def reset(self):
         self._current_idx = 0
         self._idx_start = time.monotonic()

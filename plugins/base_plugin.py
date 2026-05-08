@@ -71,6 +71,13 @@ class BasePlugin(ABC):
     # Cycling control
     # ------------------------------------------------------------------
 
+    def has_content(self) -> bool:
+        """
+        True if this plugin has anything to show right now.
+        Return False to skip this plugin in the rotation (no screen switch).
+        """
+        return True
+
     def is_cycle_complete(self) -> bool:
         """
         True when this plugin has shown all its content for this rotation pass.

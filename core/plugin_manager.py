@@ -118,7 +118,12 @@ class PluginManager:
 
         # --- Return from flight tracker when sky is clear ---
         if self._active_id == "flight_tracker":
-            self._switch_to(self._rotation[self._rotation_index])
+            candidate_id = self._rotation[self._rotation_index]
+            candidate = self._plugins.get(candidate_id)
+            if candidate is not None and not candidate.has_content():
+                self._advance_rotation()
+            else:
+                self._switch_to(candidate_id)
 
         # --- Check if it's time to advance rotation ---
         active = self._active_plugin()
@@ -165,8 +170,14 @@ class PluginManager:
     def _advance_rotation(self):
         if not self._rotation:
             return
-        self._rotation_index = (self._rotation_index + 1) % len(self._rotation)
-        self._switch_to(self._rotation[self._rotation_index])
+        for _ in range(len(self._rotation)):
+            self._rotation_index = (self._rotation_index + 1) % len(self._rotation)
+            candidate_id = self._rotation[self._rotation_index]
+            candidate = self._plugins.get(candidate_id)
+            if candidate is None or candidate.has_content():
+                self._switch_to(candidate_id)
+                return
+        # All plugins skipped — stay on current without switching
 
     # ------------------------------------------------------------------
     # Brightness schedule
