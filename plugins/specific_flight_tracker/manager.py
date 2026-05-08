@@ -102,6 +102,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         self._lock = Lock()
         self._flights: dict[str, dict] = {}
         self._airport_db: dict = _load_airport_coords()
+        self._poll_thread: Thread | None = None
 
         tracked = self.config.get("tracked_callsigns", [])
         for cs in tracked:
@@ -114,8 +115,15 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             }
 
         if self.enabled and tracked:
-            t = Thread(target=self._poll_loop, daemon=True, name="specific-flight-poller")
-            t.start()
+            self._start_poll_thread()
+
+    def _start_poll_thread(self):
+        if self._poll_thread is None or not self._poll_thread.is_alive():
+            self._poll_thread = Thread(
+                target=self._poll_loop, daemon=True, name="specific-flight-poller"
+            )
+            self._poll_thread.start()
+            log.info("[specific_flight_tracker] Poll thread started")
 
     def _ensure_display(self):
         if self._display is None:
@@ -291,6 +299,13 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         self._display.tick()
         return len(self._display._data) > 0
 
+    def has_content(self) -> bool:
+        with self._lock:
+            return any(
+                info["state"] == STATE_ACTIVE
+                for info in self._flights.values()
+            )
+
     def has_live_priority(self) -> bool:
         return False
 
@@ -322,3 +337,5 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             for cs in list(self._flights.keys()):
                 if cs not in new_callsigns:
                     del self._flights[cs]
+        if self.enabled and new_callsigns:
+            self._start_poll_thread()
