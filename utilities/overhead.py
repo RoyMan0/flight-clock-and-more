@@ -1092,10 +1092,19 @@ class Overhead:
                     flights = resp.json().get("flights", [])
                     from datetime import timezone as _tz
                     today_pfx = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+                    twelve_hrs_ago = now - 43200
+                    def _fa_dep_ts(f):
+                        return iso_to_unix(f.get("actual_out") or f.get("scheduled_out"))
                     fa = (
+                        # En Route and departed within last 12 hours — best match
                         next((f for f in flights
-                              if (f.get("progress_percent") or 0) > 0
-                              and (f.get("scheduled_out") or "").startswith(today_pfx)), None)
+                              if f.get("status") == "En Route"
+                              and (_fa_dep_ts(f) or 0) > twelve_hrs_ago), None)
+                        or next((f for f in flights
+                                 if f.get("status") == "En Route"), None)
+                        or next((f for f in flights
+                                 if (f.get("progress_percent") or 0) > 0
+                                 and (f.get("scheduled_out") or "").startswith(today_pfx)), None)
                         or next((f for f in flights
                                  if (f.get("scheduled_out") or "").startswith(today_pfx)), None)
                         or next((f for f in flights
