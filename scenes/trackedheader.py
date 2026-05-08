@@ -6,7 +6,7 @@ CALLSIGN_ROW = 6
 ROUTE_ROW = 14
 HEADER_FONT = fonts.small
 CALLSIGN_COLOUR = colours.WHITE
-ROUTE_COLOUR = colours.LIGHT_PINK
+ARROW_COLOUR = colours.GREY
 
 
 class TrackedHeaderScene(object):
@@ -37,17 +37,25 @@ class TrackedHeaderScene(object):
         flight = self._data[self._data_index]
         origin = flight.get("origin", "???")
         destination = flight.get("destination", "???")
-        route_text = f"{origin} > {destination}"
+        origin_color = flight.get("origin_color", colours.LIGHT_GREY)
+        destination_color = flight.get("destination_color", colours.LIGHT_GREY)
+
+        segments = [
+            (origin, origin_color),
+            (" > ", ARROW_COLOUR),
+            (destination, destination_color),
+        ]
 
         self.draw_square(0, CALLSIGN_ROW + 1, screen.WIDTH, ROUTE_ROW, colours.BLACK)
 
-        text_width = graphics.DrawText(
-            self.canvas, HEADER_FONT, self.route_position, ROUTE_ROW,
-            ROUTE_COLOUR, route_text,
-        )
+        x = self.route_position
+        total_width = 0
+        for text, colour in segments:
+            w = graphics.DrawText(self.canvas, HEADER_FONT, x + total_width, ROUTE_ROW, colour, text)
+            total_width += w
 
         self.route_position -= 1
-        if self.route_position + text_width < 0:
+        if self.route_position + total_width < 0:
             self.route_position = screen.WIDTH
 
     @Animator.KeyFrame.add(0)

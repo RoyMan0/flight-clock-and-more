@@ -191,6 +191,28 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                     info["data"] = None
                     log.info(f"[specific_flight_tracker] {callsign} -> IDLE (no data)")
 
+    @staticmethod
+    def _delay_color_origin(delay_min):
+        from setup import colours
+        if delay_min is None:         return colours.LIGHT_GREY
+        if delay_min <= 20:           return colours.LIGHT_MID_GREEN
+        if delay_min <= 40:           return colours.LIGHT_YELLOW
+        if delay_min <= 60:           return colours.LIGHT_MID_ORANGE
+        if delay_min <= 240:          return colours.LIGHT_RED
+        if delay_min <= 480:          return colours.LIGHT_PURPLE
+        return colours.LIGHT_DARK_BLUE
+
+    @staticmethod
+    def _delay_color_dest(delay_min):
+        from setup import colours
+        if delay_min is None:         return colours.LIGHT_GREY
+        if delay_min <= 0:            return colours.LIGHT_MID_GREEN
+        if delay_min <= 30:           return colours.LIGHT_YELLOW
+        if delay_min <= 60:           return colours.LIGHT_MID_ORANGE
+        if delay_min <= 240:          return colours.LIGHT_RED
+        if delay_min <= 480:          return colours.LIGHT_PURPLE
+        return colours.LIGHT_DARK_BLUE
+
     def _handle_active_response(self, callsign: str, response_data: dict):
         now = time.time()
         lat = response_data.get("lat")
@@ -205,15 +227,17 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         plane_type = response_data.get("aircraft_icao", "") or response_data.get("aircraft_iata", "")
         altitude = response_data.get("alt", 0) or 0
         ground_speed = response_data.get("speed", 0) or 0
-        arr_time_utc = response_data.get("eta", None)
 
-        arr_ts = None
-        if arr_time_utc:
-            try:
-                from utilities.overhead import iso_to_unix
-                arr_ts = iso_to_unix(arr_time_utc)
-            except Exception:
-                pass
+        from utilities.overhead import iso_to_unix
+        sched_dep = iso_to_unix(response_data.get("dep_time"))
+        actual_dep = iso_to_unix(response_data.get("dep_actual"))
+        sched_arr = iso_to_unix(response_data.get("arr_time"))
+        est_arr = iso_to_unix(response_data.get("arr_estimated") or response_data.get("eta"))
+
+        arr_ts = est_arr or iso_to_unix(response_data.get("eta"))
+
+        dep_delay_min = (actual_dep - sched_dep) / 60 if actual_dep and sched_dep else None
+        arr_delay_min = (est_arr - sched_arr) / 60 if est_arr and sched_arr else None
 
         dep_coords = self._airport_db.get(dep_iata)
         arr_coords = self._airport_db.get(arr_iata)
@@ -246,6 +270,8 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             "callsign": callsign,
             "origin": dep_iata,
             "destination": arr_iata,
+            "origin_color": self._delay_color_origin(dep_delay_min),
+            "destination_color": self._delay_color_dest(arr_delay_min),
             "plane_type": plane_type,
             "progress": progress,
             "dist_remaining": dist_remaining,
