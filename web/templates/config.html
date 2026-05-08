@@ -231,6 +231,12 @@
         <div class="card-header"><i class="bi bi-graph-up-arrow me-2"></i>Stock Ticker</div>
         <div class="card-body">
           <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.stock_ticker.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+            </div>
             <div class="col-md-6">
               <label class="form-label d-flex justify-content-between">
                 <span>ETF Row Speed</span>
@@ -279,6 +285,10 @@
         <div class="card-header"><i class="bi bi-snow me-2"></i>Snow Report</div>
         <div class="card-body">
           <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" x-model="pluginConfigs.snow_report.enabled">
+            <label class="form-check-label fw-semibold">Enabled</label>
+          </div>
+          <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="snowMorningOnly"
                    x-model="pluginConfigs.snow_report.morning_only">
             <label class="form-check-label" for="snowMorningOnly">
@@ -310,6 +320,10 @@
       <div class="card mb-4" x-show="'sports' in pluginConfigs">
         <div class="card-header"><i class="bi bi-trophy me-2"></i>Sports</div>
         <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.enabled">
+            <label class="form-check-label fw-semibold">Enabled</label>
+          </div>
           <div class="row g-2">
             <template x-for="[lid, lcfg] in Object.entries(pluginConfigs.sports?.leagues || {})" :key="lid">
               <div class="col-md-4">
