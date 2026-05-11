@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}{{ date }} — Flight Stats{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/flights#stats" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Stats
+  </a>
+  <h5 class="mb-0" id="page-heading" style="color:#7df9aa">{{ date }}</h5>
+</div>
+
+<div id="day-loading" class="text-muted py-4">Loading…</div>
+<div id="day-content" style="display:none">
+
+  <!-- Summary tiles -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card h-100 p-3">
+        <div class="stat-label">Total Flights</div>
+        <div class="stat-value" id="d-total">—</div>
+        <div class="text-muted small">unique callsigns</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 p-3">
+        <div class="stat-label">Peak Hour</div>
+        <div class="stat-value" id="d-peak-hour">—</div>
+        <div class="text-muted small" id="d-peak-hour-sub"></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 p-3">
+        <div class="stat-label">First Seen</div>
+        <div class="stat-value" id="d-first-time">—</div>
+        <div class="text-muted small" id="d-first-cs"></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 p-3">
+        <div class="stat-label">Last Seen</div>
+        <div class="stat-value" id="d-last-time">—</div>
+        <div class="text-muted small" id="d-last-cs"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flights by hour -->
+  <div class="card mb-4">
+    <div class="card-header"><i class="bi bi-bar-chart me-1"></i>Flights by Hour</div>
+    <div class="card-body"><canvas id="chart-hourly" height="80"></canvas></div>
+  </div>
+
+  <!-- Airline + Local/Flyover -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><i class="bi bi-pie-chart me-1"></i>Airline Breakdown</div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <canvas id="chart-airline" style="max-height:260px"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><i class="bi bi-pie-chart me-1"></i>Local vs Flyover</div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <canvas id="chart-local" style="max-height:260px"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- All flights table -->
+  <div class="card">
+    <div class="card-header"><i class="bi bi-list-ul me-1"></i>All Flights — <span id="d-total-label"></span></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm mb-0">
+          <thead><tr><th>#</th><th>Callsign</th><th>Time</th><th>Origin</th><th>Destination</th></tr></thead>
+          <tbody id="flights-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const DATE = "{{ date }}";
+const CHART_COLORS = [
+  '#7df9aa','#4db8ff','#ff6b6b','#ffd93d','#c77dff','#ff9f43',
+  '#00d2d3','#ff6348','#a29bfe','#fd79a8','#55efc4','#fdcb6e',
+];
+const GRID = 'rgba(255,255,255,0.08)';
+const LABEL_COLOR = '#aaa';
+
+function fmtHour(h) {
+  if (h === 0) return '12am';
+  if (h < 12) return h + 'am';
+  if (h === 12) return '12pm';
+  return (h - 12) + 'pm';
+}
+
+// Update heading with day-of-week
+const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+try {
+  const d = new Date(DATE + 'T00:00:00');
+  document.getElementById('page-heading').textContent = `${DATE} / ${dow[d.getDay()].toUpperCase()}`;
+} catch(e) {}
+
+fetch(`/api/flights/history/${DATE}`)
+  .then(r => r.json())
+  .then(d => {
+    if (!d || !d.date) {
+      document.getElementById('day-loading').textContent = 'No data for this date.';
+      return;
+    }
+    document.getElementById('day-loading').style.display = 'none';
+    document.getElementById('day-content').style.display = '';
+
+    // Tiles
+    document.getElementById('d-total').textContent     = d.count ?? '—';
+    document.getElementById('d-total-label').textContent = `${d.count} total`;
+    document.getElementById('d-peak-hour').textContent = d.peak_hour != null ? fmtHour(d.peak_hour) : '—';
+    document.getElementById('d-peak-hour-sub').textContent = `${d.peak_hour_count} flights`;
+    document.getElementById('d-first-time').textContent = d.first_seen || '—';
+    document.getElementById('d-first-cs').textContent   = d.first_seen_callsign || '';
+    document.getElementById('d-last-time').textContent  = d.last_seen  || '—';
+    document.getElementById('d-last-cs').textContent    = d.last_seen_callsign  || '';
+
+    // Hourly bar
+    const hourly = d.hourly || Array(24).fill(0);
+    new Chart(document.getElementById('chart-hourly'), {
+      type: 'bar',
+      data: {
+        labels: Array.from({length:24}, (_,i) => fmtHour(i)),
+        datasets: [{
+          label: 'Flights',
+          data: hourly,
+          backgroundColor: '#7df9aa99',
+          borderColor: '#7df9aa',
+          borderWidth: 1,
+          borderRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: LABEL_COLOR }, grid: { color: GRID } },
+          y: { ticks: { color: LABEL_COLOR }, grid: { color: GRID }, beginAtZero: true },
+        }
+      }
+    });
+
+    // Airline donut
+    const al = d.airline_breakdown || {};
+    new Chart(document.getElementById('chart-airline'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(al),
+        datasets: [{ data: Object.values(al), backgroundColor: CHART_COLORS, borderWidth: 1, borderColor: '#16181c' }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'right', labels: { color: LABEL_COLOR, boxWidth: 14, padding: 10 } } }
+      }
+    });
+
+    // Local vs flyover donut
+    const lvf = d.local_vs_flyover || {};
+    new Chart(document.getElementById('chart-local'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Local', 'Flyover', 'Unknown'],
+        datasets: [{ data: [lvf.local||0, lvf.flyover||0, lvf.unknown||0], backgroundColor: ['#7df9aa','#4db8ff','#555'], borderWidth: 1, borderColor: '#16181c' }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'right', labels: { color: LABEL_COLOR, boxWidth: 14, padding: 10 } } }
+      }
+    });
+
+    // Flights table
+    const tbody = document.getElementById('flights-body');
+    const flights = d.flights || [];
+    if (flights.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted">No flights recorded.</td></tr>';
+    } else {
+      tbody.innerHTML = flights.map((f, i) => `
+        <tr>
+          <td class="text-muted">${i + 1}</td>
+          <td><strong>${f.callsign}</strong></td>
+          <td>${f.time || '—'}</td>
+          <td>${f.origin || '—'}</td>
+          <td>${f.destination || '—'}</td>
+        </tr>`).join('');
+    }
+  })
+  .catch(() => {
+    document.getElementById('day-loading').textContent = 'Failed to load day data.';
+  });
+</script>
+{% endblock %}

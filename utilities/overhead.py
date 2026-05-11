@@ -69,6 +69,9 @@ FA_USAGE_FILE     = os.path.join(BASE_DIR, "flightaware_usage.json")
 AL_USAGE_FILE     = os.path.join(BASE_DIR, "data", "airlabs_usage.json")
 AIRPORT_DB_FILE   = os.path.join(BASE_DIR, "data", "airports_cache.json")
 API_CACHE_FILE    = os.path.join(BASE_DIR, "data", "api_cache.json")
+HISTORY_FILE      = os.path.join(BASE_DIR, "data", "flight_history.json")
+
+HISTORY_DAYS = 90
 
 AIRLABS_MONTHLY_LIMIT = 1000
 
@@ -155,6 +158,15 @@ def safe_load_json(path: str):
             return data if isinstance(data, list) else []
     except (FileNotFoundError, json.JSONDecodeError):
         return []
+
+
+def safe_load_json_dict(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 
 def safe_write_json(path: str, data):
@@ -580,6 +592,66 @@ def log_farthest_flight(entry: dict, max_farthest: int):
         log.warning(f"[overhead] log_farthest_flight error: {e}")
 
 
+def log_flight_count(entry: dict, home_airport: str):
+    """Append this flight to the daily history log. Deduplicates by callsign per day."""
+    try:
+        callsign = entry.get("callsign", "").strip()
+        if not callsign:
+            return
+
+        os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+        history = safe_load_json_dict(HISTORY_FILE)
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        day = history.setdefault(today, {
+            "date":                today,
+            "count":               0,
+            "first_seen":          None,
+            "first_seen_callsign": None,
+            "last_seen":           None,
+            "last_seen_callsign":  None,
+            "flights":             [],
+        })
+
+        # Deduplicate — only log each callsign once per day
+        if any(f["callsign"] == callsign for f in day["flights"]):
+            return
+
+        now_str = datetime.now().strftime("%H:%M:%S")
+        hour    = datetime.now().hour
+        origin  = entry.get("origin", "")
+        dest    = entry.get("destination", "")
+
+        day["flights"].append({
+            "callsign":    callsign,
+            "time":        now_str,
+            "hour":        hour,
+            "origin":      origin,
+            "destination": dest,
+            "airline_icao": entry.get("owner_icao", ""),
+        })
+        day["count"] = len(day["flights"])
+
+        if day["first_seen"] is None:
+            day["first_seen"]          = now_str
+            day["first_seen_callsign"] = callsign
+        day["last_seen"]          = now_str
+        day["last_seen_callsign"] = callsign
+
+        # Prune entries older than HISTORY_DAYS
+        cutoff = (datetime.now() - timedelta(days=HISTORY_DAYS)).strftime("%Y-%m-%d")
+        history = {k: v for k, v in history.items() if k >= cutoff}
+
+        # Atomic write
+        tmp = HISTORY_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(history, f)
+        os.replace(tmp, HISTORY_FILE)
+
+    except Exception as e:
+        log.warning(f"[overhead] log_flight_count error: {e}")
+
+
 # ------------------------------------------------------------------
 # Geographic sanity check
 # ------------------------------------------------------------------
@@ -716,6 +788,7 @@ class Overhead:
         max_lookup   = ft_cfg.get("max_flight_lookup", 5)
         max_closest  = flights_cfg.get("max_closest",  5)
         max_farthest = flights_cfg.get("max_farthest", 5)
+        journey_code = loc.get("journey_code", "")
 
         # Derive search radius from zone_home bounding box if not configured
         radius_nm = loc.get("search_radius_nm")
@@ -894,6 +967,7 @@ class Overhead:
                 data.append(entry)
                 log_flight_data(dict(entry), max_closest)
                 log_farthest_flight(dict(entry), max_farthest)
+                log_flight_count(dict(entry), journey_code)
 
         except Exception as e:
             log.error(f"[overhead] Fetch error: {e}", exc_info=True)

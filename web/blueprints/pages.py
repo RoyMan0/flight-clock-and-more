@@ -21,3 +21,8 @@ def flights_page():
 @pages_bp.get("/display")
 def display_page():
     return render_template("display.html")
+
+
+@pages_bp.get("/flights/stats/<date>")
+def flights_stats_day(date):
+    return render_template("flights_stats_day.html", date=date)

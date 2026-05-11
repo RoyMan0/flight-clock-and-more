@@ -7,20 +7,121 @@
     <ul class="nav nav-tabs mb-3" id="flightTabs">
       <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#closest">Closest Flights</a></li>
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#farthest">Farthest Routes</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#stats" id="stats-tab">Flight Statistics</a></li>
     </ul>
     <div class="tab-content">
+
+      <!-- Closest Flights -->
       <div class="tab-pane fade show active" id="closest">
         <div class="d-flex gap-2 mb-3">
           <a href="/closest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
         </div>
         <div id="closest-table"></div>
       </div>
+
+      <!-- Farthest Routes -->
       <div class="tab-pane fade" id="farthest">
         <div class="d-flex gap-2 mb-3">
           <a href="/farthest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
         </div>
         <div id="farthest-table"></div>
       </div>
+
+      <!-- Flight Statistics -->
+      <div class="tab-pane fade" id="stats">
+        <div id="stats-loading" class="text-muted py-4">Loading statistics…</div>
+        <div id="stats-content" style="display:none">
+
+          <!-- Summary tiles -->
+          <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+              <div class="card h-100 p-3">
+                <div class="stat-label">Daily Average</div>
+                <div class="stat-value" id="s-daily-avg">—</div>
+                <div class="text-muted small" id="s-days-tracked"></div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 p-3">
+                <div class="stat-label">Busiest Day</div>
+                <div class="stat-value" id="s-busiest-count">—</div>
+                <div class="text-muted small" id="s-busiest-date"></div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 p-3">
+                <div class="stat-label">Peak Hour</div>
+                <div class="stat-value" id="s-peak-hour">—</div>
+                <div class="text-muted small" id="s-peak-hour-avg"></div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 p-3">
+                <div class="stat-label">Peak Day</div>
+                <div class="stat-value" id="s-peak-dow">—</div>
+                <div class="text-muted small" id="s-peak-dow-avg"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hourly bar chart (full width) -->
+          <div class="card mb-4">
+            <div class="card-header"><i class="bi bi-bar-chart me-1"></i>Average Flights by Hour of Day</div>
+            <div class="card-body"><canvas id="chart-hourly" height="80"></canvas></div>
+          </div>
+
+          <!-- Day-of-week + Airline row -->
+          <div class="row g-3 mb-4">
+            <div class="col-12 col-lg-6">
+              <div class="card h-100">
+                <div class="card-header"><i class="bi bi-bar-chart me-1"></i>Average Flights by Day of Week</div>
+                <div class="card-body"><canvas id="chart-dow" height="160"></canvas></div>
+              </div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <div class="card h-100">
+                <div class="card-header"><i class="bi bi-pie-chart me-1"></i>Airline Breakdown (Top 12)</div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                  <canvas id="chart-airline" style="max-height:260px"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Local vs Flyover -->
+          <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6">
+              <div class="card">
+                <div class="card-header"><i class="bi bi-pie-chart me-1"></i>Local vs Flyover</div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                  <canvas id="chart-local" style="max-height:260px"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily log table -->
+          <div class="card">
+            <div class="card-header"><i class="bi bi-calendar3 me-1"></i>Daily Flight Log — click a date for details</div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                  <thead><tr>
+                    <th>Date</th>
+                    <th>Flights</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                    <th></th>
+                  </tr></thead>
+                  <tbody id="daily-log-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /stats-content -->
+      </div><!-- /stats tab-pane -->
+
     </div>
   </div>
 </div>
@@ -28,6 +129,8 @@
 
 {% block scripts %}
 <script>
+// ── Closest / Farthest tables ──────────────────────────────────────────────
+
 function renderTable(data, containerId) {
   const el = document.getElementById(containerId);
   if (!data || (Array.isArray(data) && data.length === 0) || (typeof data === 'object' && Object.keys(data).length === 0)) {
@@ -54,5 +157,147 @@ function renderTable(data, containerId) {
 
 fetch('/api/flights/closest').then(r=>r.json()).then(d => renderTable(d, 'closest-table'));
 fetch('/api/flights/farthest').then(r=>r.json()).then(d => renderTable(d, 'farthest-table'));
+
+// ── Statistics tab ─────────────────────────────────────────────────────────
+
+const CHART_COLORS = [
+  '#7df9aa','#4db8ff','#ff6b6b','#ffd93d','#c77dff','#ff9f43',
+  '#00d2d3','#ff6348','#a29bfe','#fd79a8','#55efc4','#fdcb6e',
+];
+const GRID = 'rgba(255,255,255,0.08)';
+const LABEL_COLOR = '#aaa';
+const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function fmtHour(h) {
+  if (h === 0) return '12am';
+  if (h < 12) return h + 'am';
+  if (h === 12) return '12pm';
+  return (h - 12) + 'pm';
+}
+
+let statsLoaded = false;
+
+document.getElementById('stats-tab').addEventListener('shown.bs.tab', loadStats);
+
+// Also load if user navigates directly to #stats
+if (window.location.hash === '#stats') {
+  document.querySelector('[href="#stats"]').click();
+}
+
+function loadStats() {
+  if (statsLoaded) return;
+  fetch('/api/flights/history/summary')
+    .then(r => r.json())
+    .then(d => {
+      statsLoaded = true;
+      document.getElementById('stats-loading').style.display = 'none';
+      document.getElementById('stats-content').style.display = '';
+      renderSummary(d);
+      renderHourlyChart(d.hourly_avg);
+      renderDowChart(d.dow_avg);
+      renderAirlineChart(d.airline_breakdown);
+      renderLocalChart(d.local_vs_flyover);
+      renderDailyLog(d.daily_log);
+    })
+    .catch(() => {
+      document.getElementById('stats-loading').textContent = 'Failed to load statistics.';
+    });
+}
+
+function renderSummary(d) {
+  document.getElementById('s-daily-avg').textContent   = d.daily_average ?? '—';
+  document.getElementById('s-days-tracked').textContent = `flights/day over ${d.days_tracked} days`;
+  document.getElementById('s-busiest-count').textContent = d.busiest_day_count ?? '—';
+  document.getElementById('s-busiest-date').textContent  = d.busiest_day_date ?? '';
+  document.getElementById('s-peak-hour').textContent    = d.peak_hour != null ? fmtHour(d.peak_hour) : '—';
+  document.getElementById('s-peak-hour-avg').textContent = `${d.peak_hour_avg} avg flights`;
+  document.getElementById('s-peak-dow').textContent     = d.peak_dow ?? '—';
+  document.getElementById('s-peak-dow-avg').textContent  = `${d.peak_dow_avg} avg flights`;
+}
+
+function barChartDefaults(labels, data, label) {
+  return {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data,
+        backgroundColor: '#7df9aa99',
+        borderColor: '#7df9aa',
+        borderWidth: 1,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: LABEL_COLOR }, grid: { color: GRID } },
+        y: { ticks: { color: LABEL_COLOR }, grid: { color: GRID }, beginAtZero: true },
+      }
+    }
+  };
+}
+
+function renderHourlyChart(hourlyAvg) {
+  const labels = Array.from({length: 24}, (_, i) => fmtHour(i));
+  new Chart(document.getElementById('chart-hourly'), barChartDefaults(labels, hourlyAvg, 'Avg flights'));
+}
+
+function renderDowChart(dowAvg) {
+  new Chart(document.getElementById('chart-dow'), barChartDefaults(DOW_LABELS, dowAvg, 'Avg flights'));
+}
+
+function renderAirlineChart(breakdown) {
+  const labels = Object.keys(breakdown);
+  const data   = Object.values(breakdown);
+  new Chart(document.getElementById('chart-airline'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: CHART_COLORS, borderWidth: 1, borderColor: '#16181c' }] },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'right', labels: { color: LABEL_COLOR, boxWidth: 14, padding: 10 } },
+      }
+    }
+  });
+}
+
+function renderLocalChart(lvf) {
+  const labels = ['Local', 'Flyover', 'Unknown'];
+  const data   = [lvf.local, lvf.flyover, lvf.unknown];
+  new Chart(document.getElementById('chart-local'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: ['#7df9aa','#4db8ff','#555'], borderWidth: 1, borderColor: '#16181c' }] },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'right', labels: { color: LABEL_COLOR, boxWidth: 14, padding: 10 } },
+      }
+    }
+  });
+}
+
+function renderDailyLog(log) {
+  const tbody = document.getElementById('daily-log-body');
+  if (!log || log.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted">No flight history yet.</td></tr>';
+    return;
+  }
+  const maxCount = Math.max(...log.map(r => r.count || 0));
+  tbody.innerHTML = log.map(row => {
+    const pct = maxCount ? Math.round((row.count / maxCount) * 100) : 0;
+    const first = row.first_seen ? `${row.first_seen} <span class="text-muted">${row.first_seen_callsign || ''}</span>` : '—';
+    const last  = row.last_seen  ? `${row.last_seen}  <span class="text-muted">${row.last_seen_callsign  || ''}</span>` : '—';
+    return `<tr style="cursor:pointer" onclick="window.location='/flights/stats/${row.date}'">
+      <td>${row.date}</td>
+      <td>${row.count}</td>
+      <td>${first}</td>
+      <td>${last}</td>
+      <td style="width:80px"><div style="height:6px;background:#7df9aa;width:${pct}%;border-radius:3px;margin-top:6px"></div></td>
+    </tr>`;
+  }).join('');
+}
 </script>
 {% endblock %}

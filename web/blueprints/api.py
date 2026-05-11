@@ -16,6 +16,7 @@ api_bp = Blueprint("api", __name__)
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CLOSEST_FILE  = os.path.join(BASE_DIR, "close.txt")
 FARTHEST_FILE = os.path.join(BASE_DIR, "farthest.txt")
+HISTORY_FILE  = os.path.join(BASE_DIR, "data", "flight_history.json")
 
 
 def _cfg():
@@ -399,6 +400,170 @@ def current_flights():
     if ft is None or not hasattr(ft, "get_current_flights"):
         return jsonify([])
     return jsonify(ft.get_current_flights())
+
+
+@api_bp.get("/flights/history")
+def flight_history():
+    return jsonify(_load_json(HISTORY_FILE, {}))
+
+
+@api_bp.get("/flights/history/summary")
+def flight_history_summary():
+    history = _load_json(HISTORY_FILE, {})
+    if not isinstance(history, dict):
+        history = {}
+
+    cfg = _cfg()
+    home_airport = ""
+    if cfg:
+        home_airport = (cfg.get("location") or {}).get("journey_code", "")
+
+    days = sorted(history.keys())
+    num_days = len(days)
+    if num_days == 0:
+        return jsonify({
+            "daily_average": 0, "busiest_day_date": None, "busiest_day_count": 0,
+            "peak_hour": None, "peak_hour_avg": 0, "peak_dow": None, "peak_dow_avg": 0,
+            "days_tracked": 0, "hourly_avg": [0]*24, "dow_avg": [0]*7,
+            "airline_breakdown": {}, "local_vs_flyover": {"local": 0, "flyover": 0, "unknown": 0},
+            "daily_log": [],
+        })
+
+    # Accumulators
+    hourly_totals = [0] * 24
+    dow_totals    = [0] * 7   # 0=Mon … 6=Sun in isoweekday; we convert to Sun=0
+    dow_counts    = [0] * 7
+    airline_counts = {}
+    local = flyover = unknown = 0
+    busiest_date = None
+    busiest_count = 0
+    total_flights = 0
+    daily_log = []
+
+    for date_str in days:
+        day = history[date_str]
+        if not isinstance(day, dict):
+            continue
+        count = day.get("count", 0)
+        total_flights += count
+        if count > busiest_count:
+            busiest_count = count
+            busiest_date  = date_str
+
+        # day-of-week: Python weekday() Mon=0..Sun=6; convert to Sun=0..Sat=6
+        try:
+            from datetime import date as _date
+            d = _date.fromisoformat(date_str)
+            dow = (d.weekday() + 1) % 7   # Mon=1..Sat=6, Sun=0
+            dow_totals[dow] += count
+            dow_counts[dow] += 1
+        except ValueError:
+            pass
+
+        for flight in day.get("flights", []):
+            hour = flight.get("hour")
+            if isinstance(hour, int) and 0 <= hour <= 23:
+                hourly_totals[hour] += 1
+
+            airline = (flight.get("airline_icao") or "").strip()
+            if airline:
+                airline_counts[airline] = airline_counts.get(airline, 0) + 1
+
+            orig = (flight.get("origin") or "").strip()
+            dest = (flight.get("destination") or "").strip()
+            if not orig and not dest:
+                unknown += 1
+            elif home_airport and (orig == home_airport or dest == home_airport):
+                local += 1
+            else:
+                flyover += 1
+
+        daily_log.append({
+            "date":                date_str,
+            "count":               count,
+            "first_seen":          day.get("first_seen"),
+            "first_seen_callsign": day.get("first_seen_callsign"),
+            "last_seen":           day.get("last_seen"),
+            "last_seen_callsign":  day.get("last_seen_callsign"),
+        })
+
+    daily_log.sort(key=lambda x: x["date"], reverse=True)
+
+    daily_avg = round(total_flights / num_days, 1) if num_days else 0
+
+    hourly_avg = [round(t / num_days, 1) for t in hourly_totals]
+    peak_hour  = hourly_avg.index(max(hourly_avg))
+
+    dow_avg = [round(dow_totals[i] / dow_counts[i], 1) if dow_counts[i] else 0 for i in range(7)]
+    DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    peak_dow_idx = dow_avg.index(max(dow_avg))
+
+    top_airlines = dict(sorted(airline_counts.items(), key=lambda x: x[1], reverse=True)[:12])
+
+    return jsonify({
+        "daily_average":    daily_avg,
+        "busiest_day_date": busiest_date,
+        "busiest_day_count": busiest_count,
+        "peak_hour":        peak_hour,
+        "peak_hour_avg":    hourly_avg[peak_hour],
+        "peak_dow":         DOW_NAMES[peak_dow_idx],
+        "peak_dow_avg":     dow_avg[peak_dow_idx],
+        "days_tracked":     num_days,
+        "hourly_avg":       hourly_avg,
+        "dow_avg":          dow_avg,
+        "airline_breakdown": top_airlines,
+        "local_vs_flyover": {"local": local, "flyover": flyover, "unknown": unknown},
+        "daily_log":        daily_log,
+    })
+
+
+@api_bp.get("/flights/history/<date>")
+def flight_history_day(date):
+    history = _load_json(HISTORY_FILE, {})
+    if not isinstance(history, dict):
+        return jsonify({})
+    day = history.get(date, {})
+    if not day:
+        return jsonify({})
+
+    # Compute per-day stats for the detail page
+    hourly = [0] * 24
+    airline_counts = {}
+    cfg = _cfg()
+    home_airport = (cfg.get("location") or {}).get("journey_code", "") if cfg else ""
+    local = flyover = unknown = 0
+    peak_hour_count = 0
+
+    for flight in day.get("flights", []):
+        hour = flight.get("hour")
+        if isinstance(hour, int) and 0 <= hour <= 23:
+            hourly[hour] += 1
+            if hourly[hour] > peak_hour_count:
+                peak_hour_count = hourly[hour]
+
+        airline = (flight.get("airline_icao") or "").strip()
+        if airline:
+            airline_counts[airline] = airline_counts.get(airline, 0) + 1
+
+        orig = (flight.get("origin") or "").strip()
+        dest = (flight.get("destination") or "").strip()
+        if not orig and not dest:
+            unknown += 1
+        elif home_airport and (orig == home_airport or dest == home_airport):
+            local += 1
+        else:
+            flyover += 1
+
+    peak_hour = hourly.index(max(hourly)) if any(hourly) else 0
+
+    return jsonify({
+        **day,
+        "hourly":           hourly,
+        "peak_hour":        peak_hour,
+        "peak_hour_count":  peak_hour_count,
+        "airline_breakdown": dict(sorted(airline_counts.items(), key=lambda x: x[1], reverse=True)[:12]),
+        "local_vs_flyover": {"local": local, "flyover": flyover, "unknown": unknown},
+    })
 
 
 # ------------------------------------------------------------------
