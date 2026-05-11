@@ -12,6 +12,7 @@ from utilities.overhead import (
     haversine, AIRPORT_DB_FILE, iso_to_unix,
     _get_keys, _get_reset_days, _al_get_active_key, _al_record_call,
 )
+from scenes.trackedtopbar import TrackedTopBarScene
 from scenes.trackedheader import TrackedHeaderScene
 from scenes.trackedprogress import TrackedProgressScene
 from scenes.trackedstats import TrackedStatsScene
@@ -50,6 +51,7 @@ def _format_time_remaining(minutes: float) -> str:
 
 
 class _TrackedDisplay(
+    TrackedTopBarScene,
     TrackedHeaderScene,
     TrackedProgressScene,
     TrackedStatsScene,

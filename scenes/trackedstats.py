@@ -2,7 +2,7 @@ from rgbmatrix import graphics
 from utilities.animator import Animator
 from setup import colours, fonts, screen
 
-STATS_ROW = 31
+STATS_ROW = 31   # baseline; rows 26-31 = 6px extrasmall font, rows 25-31 cleared each frame
 STATS_FONT = fonts.extrasmall
 TIME_COLOUR = colours.LIGHT_YELLOW
 DIST_COLOUR = colours.LIGHT_PINK
