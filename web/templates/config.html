@@ -39,7 +39,7 @@
                          :checked="pluginConfigs[pid]?.enabled !== false"
                          @change="togglePlugin(pid, $event.target.checked)">
                 </div>
-                <span class="flex-grow-1 text-capitalize fw-semibold" x-text="pid.replace('_',' ')"></span>
+                <span class="flex-grow-1 text-capitalize fw-semibold" x-text="pid.replaceAll('_',' ')"></span>
                 <div class="d-flex align-items-center gap-1" style="width:120px">
                   <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
                          style="width:65px"
