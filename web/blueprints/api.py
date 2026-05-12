@@ -468,6 +468,8 @@ def flight_history_summary():
             airline = (flight.get("airline_icao") or "").strip()
             if airline:
                 airline_counts[airline] = airline_counts.get(airline, 0) + 1
+            else:
+                airline_counts["Unknown"] = airline_counts.get("Unknown", 0) + 1
 
             orig = (flight.get("origin") or "").strip()
             dest = (flight.get("destination") or "").strip()
@@ -544,6 +546,8 @@ def flight_history_day(date):
         airline = (flight.get("airline_icao") or "").strip()
         if airline:
             airline_counts[airline] = airline_counts.get(airline, 0) + 1
+        else:
+            airline_counts["Unknown"] = airline_counts.get("Unknown", 0) + 1
 
         orig = (flight.get("origin") or "").strip()
         dest = (flight.get("destination") or "").strip()

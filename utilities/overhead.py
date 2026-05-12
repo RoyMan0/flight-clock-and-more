@@ -1071,6 +1071,8 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def _get_schedule(self, callsign: str, owner_iata: str) -> dict:
+        if not owner_iata:
+            return {}
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
