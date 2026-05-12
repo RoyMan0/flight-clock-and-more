@@ -310,7 +310,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
     def _delay_color_dest(delay_min):
         from setup import colours
         if delay_min is None:         return colours.LIGHT_GREY
-        if delay_min <= 0:            return colours.LIGHT_MID_GREEN
+        if delay_min <= 15:           return colours.LIGHT_MID_GREEN
         if delay_min <= 30:           return colours.LIGHT_YELLOW
         if delay_min <= 60:           return colours.LIGHT_MID_ORANGE
         if delay_min <= 240:          return colours.LIGHT_RED

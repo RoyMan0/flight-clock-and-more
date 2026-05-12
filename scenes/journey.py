@@ -91,15 +91,15 @@ class JourneyScene(object):
 
         if arrival_delay_minutes is None:
             destination_color = colours.LIGHT_GREY
-        elif arrival_delay_minutes <= 0:
+        elif arrival_delay_minutes <= 15:
             destination_color = colours.LIGHT_MID_GREEN
-        elif 0 < arrival_delay_minutes <= 30:
+        elif arrival_delay_minutes <= 30:
             destination_color = colours.LIGHT_YELLOW
-        elif 30 < arrival_delay_minutes <= 60:
+        elif arrival_delay_minutes <= 60:
             destination_color = colours.LIGHT_MID_ORANGE
-        elif 60 < arrival_delay_minutes <= 240:
+        elif arrival_delay_minutes <= 240:
             destination_color = colours.LIGHT_RED
-        elif 240 < arrival_delay_minutes <= 480:
+        elif arrival_delay_minutes <= 480:
             destination_color = colours.LIGHT_PURPLE
         else:
             destination_color = colours.LIGHT_DARK_BLUE
