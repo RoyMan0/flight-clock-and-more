@@ -92,7 +92,9 @@ class ConfigManager:
         with self._lock:
             masked = {}
             for k, v in self._secrets.items():
-                if isinstance(v, list):
+                if isinstance(v, list) and v and isinstance(v[0], (int, float)):
+                    masked[k] = v  # numeric arrays (e.g. reset_days) are not sensitive
+                elif isinstance(v, list):
                     masked[k] = ["********" if item else "" for item in v]
                 elif isinstance(v, (int, float)):
                     masked[k] = v
