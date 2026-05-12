@@ -1072,6 +1072,7 @@ class Overhead:
 
     def _get_schedule(self, callsign: str, owner_iata: str) -> dict:
         if not owner_iata:
+            log.debug(f"[overhead] Skipping schedule lookup for {callsign}: no owner_iata")
             return {}
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
