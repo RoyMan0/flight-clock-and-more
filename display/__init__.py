@@ -29,6 +29,9 @@ def flight_updated(flights_a, flights_b):
     return updatable_a == updatable_b
 
 
+SCROLL_REGIONS = ("flight_details", "plane_details")
+
+
 try:
     # Attempt to load config data
     from config import (
@@ -111,6 +114,7 @@ class Display(
         # Data to render
         self._data_index = 0
         self._data = []
+        self._scroll_complete = {r: False for r in SCROLL_REGIONS}
 
         # Start Looking for planes
         self.overhead = Overhead()
@@ -152,6 +156,7 @@ class Display(
             if data_is_different:
                 self._data_index = 0
                 self._data_all_looped = False
+                self.reset_scroll_completion()
                 self._data = new_data
 
             log.info(f"[display] data check: was_showing={was_showing_flights}, there_is_data={there_is_data}, new_data_len={len(new_data)}, different={data_is_different}")
@@ -169,6 +174,23 @@ class Display(
 
             if reset_required:
                 self.reset_scene()
+
+    def mark_scroll_complete(self, region):
+        if region in self._scroll_complete:
+            self._scroll_complete[region] = True
+
+    def reset_scroll_completion(self):
+        self._scroll_complete = {r: False for r in SCROLL_REGIONS}
+
+    @Animator.KeyFrame.add(1)
+    def advance_completed_scroll(self, count):
+        if len(self._data) <= 1:
+            return
+        if all(self._scroll_complete.values()):
+            self._data_index = (self._data_index + 1) % len(self._data)
+            self._data_all_looped = self._data_index == 0 or self._data_all_looped
+            self.reset_scroll_completion()
+            self.reset_scene()
 
     @Animator.KeyFrame.add(1)
     def sync(self, count):
@@ -190,7 +212,7 @@ class Display(
         #
         # Last, if our internal store of the data
         # is empty, try and grab data
-        if not (self.overhead.processing and self.overhead.new_data) and (
+        if not self.overhead.processing and (
             self._data_all_looped or len(self._data) <= 1
         ):
             self.overhead.grab_data()

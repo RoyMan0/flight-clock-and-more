@@ -3,12 +3,40 @@ import time
 import logging
 import socket
 import json
+import os
 from typing import Optional
 
 from requests import Session
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 from urllib3.util.retry import Retry
+
+_CACHE_DIR = ".cache"
+_TEMP_CACHE_FILE = os.path.join(_CACHE_DIR, "temperature.json")
+_FORECAST_CACHE_FILE = os.path.join(_CACHE_DIR, "forecast.json")
+_FILE_CACHE_TTL = 7200  # 2-hour file cache TTL (fallback on reboot/API failure)
+
+
+def _write_file_cache(path: str, data) -> None:
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    except OSError as e:
+        logging.warning(f"Could not write cache file {path}: {e}")
+
+
+def _read_file_cache(path: str):
+    try:
+        if time.time() - os.path.getmtime(path) > _FILE_CACHE_TTL:
+            return None
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
 
 # After a 429 response, block all API calls for this many minutes
 _RATE_LIMIT_BACKOFF_MINUTES = 10
@@ -233,8 +261,13 @@ def get_temperature_cached() -> tuple:
         if result[0] is not None:
             _temp_data = result
             _temp_next_fetch = now + timedelta(seconds=_TEMP_TTL)
+            _write_file_cache(_TEMP_CACHE_FILE, list(result))
         else:
             _temp_next_fetch = now + timedelta(seconds=60)
+            if _temp_data is None:
+                cached = _read_file_cache(_TEMP_CACHE_FILE)
+                if cached:
+                    _temp_data = tuple(cached)
     return _temp_data if _temp_data is not None else (None, None)
 
 
@@ -247,6 +280,11 @@ def get_forecast_cached() -> list:
         if result:
             _forecast_data = result
             _forecast_next_fetch = now + timedelta(seconds=_FORECAST_TTL)
+            _write_file_cache(_FORECAST_CACHE_FILE, result)
         else:
             _forecast_next_fetch = now + timedelta(seconds=300)
+            if _forecast_data is None:
+                cached = _read_file_cache(_FORECAST_CACHE_FILE)
+                if cached:
+                    _forecast_data = cached
     return _forecast_data or []
