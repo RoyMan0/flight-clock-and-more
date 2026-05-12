@@ -800,16 +800,26 @@ class Overhead:
 
         data = []
         try:
-            # ── Step 1: Positions (adsb.lol) ─────────────────────────────
-            url  = ADSB_LOL_URL.format(lat=home_lat, lon=home_lon, dist=int(radius_nm))
-            resp = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
-            if resp.status_code != 200:
-                log.warning(f"[overhead] adsb.lol {resp.status_code}")
-                self._finish(data)
-                return
+            # ── Step 1: Positions (adsb.lol → OpenSky fallback) ──────────
+            from utilities.opensky import get_aircraft_in_area as _opensky_area
+            aircraft_list = None
+            try:
+                url  = ADSB_LOL_URL.format(lat=home_lat, lon=home_lon, dist=int(radius_nm))
+                resp = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
+                if resp.status_code == 200:
+                    aircraft_list = resp.json().get("ac", [])
+                    log.debug(f"[overhead] adsb.lol: {len(aircraft_list)} aircraft in radius")
+                else:
+                    log.warning(f"[overhead] adsb.lol {resp.status_code} — trying OpenSky")
+            except Exception as e:
+                log.warning(f"[overhead] adsb.lol error ({e}) — trying OpenSky")
 
-            aircraft_list = resp.json().get("ac", [])
-            log.debug(f"[overhead] adsb.lol: {len(aircraft_list)} aircraft in radius")
+            if aircraft_list is None:
+                aircraft_list = _opensky_area(home_lat, home_lon, radius_nm)
+                if not aircraft_list:
+                    self._finish(data)
+                    return
+                log.info(f"[overhead] OpenSky fallback: {len(aircraft_list)} aircraft")
 
             # Filter by altitude, sort by distance, slice to max_lookup
             candidates = []
@@ -1092,11 +1102,19 @@ class Overhead:
         fa_reset_days = _get_reset_days(self._secrets, "flightaware_reset_days", len(fa_keys))
         fa_budget    = float(self._secrets.get("flightaware_monthly_budget", 4.50))
 
+        # ── FlightStats (free, no quota) ──────────────────────────────
+        from utilities.flightstats import get_flight_info as _fs_get
+        fs = _fs_get(callsign, owner_iata)
+        if fs and fs.get("al_origin") and fs.get("al_destination"):
+            log.info(f"[overhead] FlightStats {callsign}: "
+                     f"{fs['al_origin']}→{fs['al_destination']}")
+            result = fs
+
         # ── AirLabs (primary) ─────────────────────────────────────────
         # Try flight_icao=callsign first (no IATA mapping needed), then
         # fall back to flight_iata=owner_iata+digits if that returns nothing.
         airlabs_key = _al_get_active_key(al_keys, al_reset_days)
-        if airlabs_key:
+        if not result and airlabs_key:
             for params in self._airlabs_params(callsign, owner_iata):
                 try:
                     resp = requests.get(AIRLABS_URL, params={**params, "api_key": airlabs_key}, timeout=8)

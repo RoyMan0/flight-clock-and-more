@@ -1,4 +1,5 @@
 import logging
+import math
 import requests
 
 log = logging.getLogger(__name__)
@@ -45,3 +46,45 @@ def get_flight_position(callsign: str) -> dict | None:
         }
 
     return None
+
+
+def get_aircraft_in_area(lat: float, lon: float, radius_nm: float) -> list[dict]:
+    """Return nearby aircraft as a list of dicts matching adsb.lol 'ac' format."""
+    deg     = radius_nm / 60.0
+    lon_deg = radius_nm / (60.0 * math.cos(math.radians(lat)))
+    params  = {
+        "lamin": lat - deg,   "lomin": lon - lon_deg,
+        "lamax": lat + deg,   "lomax": lon + lon_deg,
+    }
+    try:
+        resp = requests.get(OPENSKY_URL, params=params, timeout=15)
+        if resp.status_code != 200:
+            log.debug(f"[opensky] area query HTTP {resp.status_code}")
+            return []
+        ac = []
+        for s in (resp.json().get("states") or []):
+            if not s:
+                continue
+            if s[_IDX_ON_GROUND] or s[_IDX_LAT] is None or s[_IDX_LON] is None:
+                continue
+            callsign = (s[1] or "").strip()
+            if not callsign:
+                continue
+            baro_m = s[_IDX_BARO_ALT] or 0
+            vel_ms = s[_IDX_VELOCITY] or 0
+            vrate  = s[_IDX_VERT_RATE] or 0
+            ac.append({
+                "flight":    callsign,
+                "alt_baro":  round(baro_m * 3.28084),    # m → ft
+                "lat":       s[_IDX_LAT],
+                "lon":       s[_IDX_LON],
+                "gs":        round(vel_ms * 1.94384),     # m/s → knots
+                "track":     s[_IDX_HEADING] or 0,
+                "baro_rate": round(vrate * 196.85),       # m/s → ft/min
+                "t":         "",
+                "r":         s[0] or "",
+            })
+        return ac
+    except Exception as e:
+        log.debug(f"[opensky] area query failed: {e}")
+        return []
