@@ -44,11 +44,29 @@ class _FlightDisplay(
         self._data = []
         self._data_index = 0
         self._data_all_looped = False
+        self._scroll_complete = {"flight_details": False, "plane_details": False}
 
         super().__init__()
         self._show_additional_details = False
 
         self.delay = frames.PERIOD
+
+    def mark_scroll_complete(self, region):
+        if region in self._scroll_complete:
+            self._scroll_complete[region] = True
+
+    def reset_scroll_completion(self):
+        self._scroll_complete = {"flight_details": False, "plane_details": False}
+
+    @Animator.KeyFrame.add(1)
+    def advance_completed_scroll(self, count):
+        if len(self._data) <= 1:
+            return
+        if all(self._scroll_complete.values()):
+            self._data_index = (self._data_index + 1) % len(self._data)
+            self._data_all_looped = self._data_index == 0 or self._data_all_looped
+            self.reset_scroll_completion()
+            self.reset_scene()
 
     def draw_square(self, x0, y0, x1, y1, colour):
         try:
@@ -102,7 +120,7 @@ class FlightTrackerPlugin(BasePlugin):
         """Periodic data refresh — called from plugin_manager background thread."""
         if not self.enabled:
             return
-        if not (self.overhead.processing and self.overhead.new_data) and (
+        if not self.overhead.processing and (
             self._display is None
             or self._display._data_all_looped
             or len(self._display._data) <= 1
@@ -131,6 +149,7 @@ class FlightTrackerPlugin(BasePlugin):
             if _callsigns(self._display._data) != _callsigns(new_data):
                 self._display._data_index = 0
                 self._display._data_all_looped = False
+                self._display.reset_scroll_completion()
                 self._display._data = new_data
                 self._display.reset_scene()
             if was_empty and len(new_data) > 0:
