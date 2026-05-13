@@ -591,6 +591,37 @@ def flight_history_day(date):
 
 
 # ------------------------------------------------------------------
+# System control
+# ------------------------------------------------------------------
+
+@api_bp.post("/system/restart-app")
+def restart_app():
+    threading.Thread(
+        target=lambda: (time.sleep(0.5), subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"])),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True})
+
+
+@api_bp.post("/system/reboot")
+def reboot_system():
+    threading.Thread(
+        target=lambda: (time.sleep(0.5), subprocess.run(["sudo", "reboot"])),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True})
+
+
+@api_bp.post("/system/shutdown")
+def shutdown_system():
+    threading.Thread(
+        target=lambda: (time.sleep(0.5), subprocess.run(["sudo", "shutdown", "-h", "now"])),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True})
+
+
+# ------------------------------------------------------------------
 # System helpers
 # ------------------------------------------------------------------
 
