@@ -344,6 +344,10 @@ class SportsPlugin(BasePlugin):
     def is_cycle_complete(self) -> bool:
         return self._cycle_done
 
+    def has_content(self) -> bool:
+        with self._lock:
+            return bool(self._games)
+
     def has_live_priority(self) -> bool:
         return self.config.get("live_priority", False)
 

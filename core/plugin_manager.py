@@ -142,10 +142,14 @@ class PluginManager:
                 return
 
         # --- Draw current plugin ---
+        drew = True
         try:
-            active.draw()
+            drew = active.draw()
         except Exception as e:
             log.error(f"[plugins] Draw error ({self._active_id}): {e}")
+
+        if not drew:
+            self._advance_rotation()
 
         self.display.swap()
 
