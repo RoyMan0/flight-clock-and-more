@@ -455,11 +455,24 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 merged = pos
             self._handle_active_response(callsign, merged)
         else:
-            # IDLE — try to get a real-time position, seeding adsb.lol with AirLabs
-            # lat/lng if available (AirLabs alt is often stale, so always prefer
-            # a fresh adsb.lol/OpenSky fix over route["alt"]).
-            seed_lat = last_lat or (route["lat"] if route else None)
-            seed_lng = last_lng or (route["lng"] if route else None)
+            # IDLE — try to get a real-time position.
+            # Seed priority: last known pos > AirLabs route pos > departure airport > arrival airport.
+            # Using airport coords lets adsb.lol find the aircraft even when we've never
+            # had a position fix (e.g. FlightStats-only route with no lat/lng).
+            seed_lat = last_lat
+            seed_lng = last_lng
+            if seed_lat is None and route:
+                if route.get("lat") is not None:
+                    seed_lat, seed_lng = route["lat"], route["lng"]
+                else:
+                    dep_coords = self._airport_db.get(route.get("dep_iata", ""))
+                    arr_coords = self._airport_db.get(route.get("arr_iata", ""))
+                    if dep_coords:
+                        seed_lat, seed_lng = dep_coords
+                        log.debug(f"[specific_flight_tracker] {callsign}: seeding adsb.lol with dep airport {route.get('dep_iata')}")
+                    elif arr_coords:
+                        seed_lat, seed_lng = arr_coords
+                        log.debug(f"[specific_flight_tracker] {callsign}: seeding adsb.lol with arr airport {route.get('arr_iata')}")
             pos = self._get_position(callsign, seed_lat, seed_lng)
 
             if pos is None and route and route.get("lat") is not None:
