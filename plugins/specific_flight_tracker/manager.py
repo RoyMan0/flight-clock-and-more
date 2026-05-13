@@ -190,9 +190,10 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                     cs_upper = callsign.upper()
                     for ac in resp.json().get("ac", []):
                         if (ac.get("flight") or "").strip().upper() == cs_upper:
-                            baro_rate = int(ac.get("baro_rate", 0) or 0)
-                            alt_baro  = int(ac.get("alt_baro", 0) or 0)
-                            log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate}")
+                            baro_rate  = int(ac.get("baro_rate", 0) or 0)
+                            alt_baro   = int(ac.get("alt_baro", 0) or 0)
+                            plane_type = (ac.get("t") or "").strip().upper()
+                            log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate} type={plane_type}")
                             return {
                                 "lat":            ac["lat"],
                                 "lng":            ac.get("lon", ac.get("lng", 0)),
@@ -200,6 +201,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                                 "ground_speed":   int(ac.get("gs", 0) or 0),
                                 "heading":        ac.get("track", 0) or 0,
                                 "vertical_speed": baro_rate,  # ft/min
+                                "plane_type":     plane_type,
                             }
             except Exception as e:
                 log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
@@ -335,15 +337,18 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         # Tier 0: adsbdb — airline IATA lookup (enables FlightStats)
         airline_iata = self._fetch_adsbdb_iata(callsign)
 
-        # Tier 1: FlightStats — schedule timing (free, no key)
+        # Tier 1: FlightStats — schedule timing (free, no quota)
         fs_result = None
         if airline_iata:
             fs_result = get_flight_info(callsign, airline_iata)
             if fs_result:
-                log.debug(f"[specific_flight_tracker] FlightStats hit for {callsign}")
+                log.info(f"[specific_flight_tracker] FlightStats hit for {callsign}: "
+                         f"{fs_result.get('al_origin')}→{fs_result.get('al_destination')}")
 
-        # Tier 2: AirLabs — live position + schedule (primary source)
-        al_data = self._fetch_airlabs(callsign)
+        # Tier 2: AirLabs — only when FlightStats failed or missing arrival time
+        al_data = None
+        if not fs_result or not fs_result.get("time_estimated_arrival"):
+            al_data = self._fetch_airlabs(callsign)
 
         # Build route dict, merging all available data (AirLabs wins for live fields)
         route = None
@@ -439,7 +444,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 merged = {**pos, **{k: route[k] for k in (
                     "dep_iata", "arr_iata", "plane_type",
                     "sched_dep", "actual_dep", "sched_arr", "est_arr",
-                )}}
+                ) if route.get(k)}}
             else:
                 merged = pos
             self._handle_active_response(callsign, merged)
@@ -471,7 +476,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                     merged = {**pos, **{k: route[k] for k in (
                         "dep_iata", "arr_iata", "plane_type",
                         "sched_dep", "actual_dep", "sched_arr", "est_arr",
-                    ) if route.get(k) is not None}}
+                    ) if route.get(k)}}
                 else:
                     merged = pos
                 self._handle_active_response(callsign, merged)
