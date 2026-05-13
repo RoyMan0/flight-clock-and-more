@@ -601,12 +601,16 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         self._display._data_index = 0
         self._display._data_all_looped = False
         self._display._stats_all_looped = False
+        self._display._show_additional_details = self.config.get("show_additional_details", True)
+        self._display._show_nearby_locations = self.config.get("show_nearby_locations", True)
         self._display.reset_scene()
 
     def draw(self) -> bool:
         self._ensure_display()
         self._display.canvas = self.display_manager.canvas
         self._display.matrix = self.display_manager.matrix
+        self._display._show_additional_details = self.config.get("show_additional_details", True)
+        self._display._show_nearby_locations = self.config.get("show_nearby_locations", True)
 
         fresh = self._build_display_data()
         if fresh != self._display._data:

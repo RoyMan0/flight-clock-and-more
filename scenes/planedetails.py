@@ -75,8 +75,11 @@ class PlaneDetailsScene(object):
                 segments.append((f'  {reg}', colours.LIGHT_PURPLE))
             if altitude:
                 segments.append(('  ', colours.GREY))
-                segments.append((str(altitude), colours.LIGHT_ORANGE))
-                segments.append(('ft', colours.GREY))
+                if altitude >= 18000:
+                    segments.append((f'FL{altitude // 100}', colours.LIGHT_ORANGE))
+                else:
+                    segments.append((str(altitude), colours.LIGHT_ORANGE))
+                    segments.append(('ft', colours.GREY))
             if speed:
                 segments.append(('  ', colours.GREY))
                 segments.append((str(speed), colours.LIGHT_ORANGE))

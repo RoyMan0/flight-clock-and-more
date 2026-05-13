@@ -211,6 +211,18 @@
               <input type="number" class="form-control bg-dark text-light border-secondary"
                      x-model="pluginConfigs.specific_flight_tracker.display_duration" min="5">
             </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.specific_flight_tracker.show_additional_details">
+                <label class="form-check-label">Show additional flight details (altitude, speed, aircraft type)</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.specific_flight_tracker.show_nearby_locations">
+                <label class="form-check-label">Show nearby cities and points of interest</label>
+              </div>
+            </div>
             <div class="col-12" x-show="(pluginConfigs.specific_flight_tracker.tracked_callsigns || []).length > 0">
               <h6 class="text-muted mb-1">Currently Tracked</h6>
               <div class="d-flex flex-wrap gap-2">

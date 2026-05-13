@@ -32,6 +32,8 @@ class TrackedStatsScene(object):
         self.stats_position = screen.WIDTH
         self._stats_all_looped = False
         self._loc_cache = {"lat": None, "lng": None, "city": None, "poi": None}
+        self._show_additional_details = True
+        self._show_nearby_locations = True
 
     @Animator.KeyFrame.add(1)
     def tracked_stats(self, count):
@@ -48,8 +50,11 @@ class TrackedStatsScene(object):
         lat            = flight.get("lat")
         lng            = flight.get("lng")
 
-        # City / POI lookup with positional caching
-        if lat is not None and lng is not None:
+        show_details = getattr(self, "_show_additional_details", True)
+        show_nearby  = getattr(self, "_show_nearby_locations", True)
+
+        # City / POI lookup with positional caching (only when needed)
+        if show_nearby and lat is not None and lng is not None:
             c = self._loc_cache
             if (c["lat"] is None
                     or abs(lat - c["lat"]) > LOC_CACHE_DEG
@@ -63,27 +68,29 @@ class TrackedStatsScene(object):
         else:
             city_result = poi_result = None
 
-        alt_str = _fmt_altitude(altitude)
-
         segments = [
             (time_remaining,       TIME_COLOUR),
             ("  ",                 SUFFIX_COLOUR),
             (f"{int(dist_remaining)}", DIST_COLOUR),
             ("mi",                 SUFFIX_COLOUR),
-            ("  ",                 SUFFIX_COLOUR),
-            (plane_type,           TYPE_COLOUR),
-            ("  ",                 SUFFIX_COLOUR),
-            (alt_str,              NUMBER_COLOUR),
         ]
-        if vs > VS_THRESHOLD_FPM:
-            segments.append(("^", UP_COLOUR))
-        elif vs < -VS_THRESHOLD_FPM:
-            segments.append(("v", DOWN_COLOUR))
-        segments += [
-            ("  ",                 SUFFIX_COLOUR),
-            (f"{int(ground_speed)}", NUMBER_COLOUR),
-            ("kt",                 SUFFIX_COLOUR),
-        ]
+        if show_details:
+            alt_str = _fmt_altitude(altitude)
+            segments += [
+                ("  ",             SUFFIX_COLOUR),
+                (plane_type,       TYPE_COLOUR),
+                ("  ",             SUFFIX_COLOUR),
+                (alt_str,          NUMBER_COLOUR),
+            ]
+            if vs > VS_THRESHOLD_FPM:
+                segments.append(("^", UP_COLOUR))
+            elif vs < -VS_THRESHOLD_FPM:
+                segments.append(("v", DOWN_COLOUR))
+            segments += [
+                ("  ",             SUFFIX_COLOUR),
+                (f"{int(ground_speed)}", NUMBER_COLOUR),
+                ("kt",             SUFFIX_COLOUR),
+            ]
         if city_result:
             segments += [
                 ("  ",             SUFFIX_COLOUR),
