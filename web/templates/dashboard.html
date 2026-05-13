@@ -91,7 +91,7 @@
 
   <!-- Overhead Flights -->
   <div class="row g-4 mb-4">
-    <div class="col-md-6">
+    <div class="col-12">
       <div class="card">
         <div class="card-header"><i class="bi bi-airplane-fill text-warning me-2"></i>Overhead Now</div>
         <div class="card-body p-0">
@@ -123,31 +123,6 @@
       </div>
     </div>
 
-    <!-- Recent Closest Flights -->
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <i class="bi bi-geo-alt-fill text-info me-2"></i>Closest Flights Log
-          <a href="/closest" class="btn btn-sm btn-outline-info float-end">Map</a>
-        </div>
-        <div class="card-body p-0">
-          <template x-if="closestFlights.length === 0">
-            <div class="text-center text-muted py-4">No data yet</div>
-          </template>
-          <ul class="list-group list-group-flush">
-            <template x-for="(f, k) in closestFlights.slice(0,5)" :key="k">
-              <li class="list-group-item bg-transparent border-secondary">
-                <div class="d-flex justify-content-between">
-                  <span class="fw-bold text-info" x-text="f.callsign || k"></span>
-                  <span class="badge bg-dark border border-secondary" x-text="`${f.distance?.toFixed(2)} mi`"></span>
-                </div>
-                <div class="small text-muted" x-text="`${f.origin || '?'} → ${f.destination || '?'}  •  ${f.airline || ''}`"></div>
-              </li>
-            </template>
-          </ul>
-        </div>
-      </div>
-    </div>
   </div>
 
 </div>
@@ -163,7 +138,6 @@ function dashboard() {
     hasLive: false,
     sys: {},
     currentFlights: [],
-    closestFlights: [],
     sysActionPending: false,
     sysActionMsg: '',
     _es: null,
@@ -171,7 +145,6 @@ function dashboard() {
     init() {
       this.startSSE();
       this.loadCurrentFlights();
-      this.loadClosestFlights();
       setInterval(() => { this.loadCurrentFlights(); }, 5000);
     },
 
@@ -217,17 +190,6 @@ function dashboard() {
         .then(d => { this.currentFlights = d || []; });
     },
 
-    loadClosestFlights() {
-      fetch('/api/flights/closest')
-        .then(r => r.json())
-        .then(d => {
-          if (typeof d === 'object' && !Array.isArray(d)) {
-            this.closestFlights = Object.values(d);
-          } else {
-            this.closestFlights = d || [];
-          }
-        });
-    },
   };
 }
 </script>
