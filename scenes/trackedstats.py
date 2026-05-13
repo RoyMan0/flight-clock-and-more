@@ -13,6 +13,7 @@ NUMBER_COLOUR = colours.LIGHT_ORANGE
 SUFFIX_COLOUR = colours.GREY
 CITY_COLOUR   = colours.WHITE
 POI_COLOUR    = colours.LIGHT_TEAL
+REG_COLOUR    = colours.LIGHT_PURPLE
 UP_COLOUR     = colours.LIGHT_MID_GREEN
 DOWN_COLOUR   = colours.LIGHT_LIGHT_RED
 
@@ -44,6 +45,7 @@ class TrackedStatsScene(object):
         time_remaining = flight.get("time_remaining", "0:00")
         dist_remaining = flight.get("dist_remaining", 0)
         plane_type     = flight.get("plane_type", "")
+        registration   = flight.get("registration", "")
         altitude       = flight.get("altitude", 0)
         ground_speed   = flight.get("ground_speed", 0)
         vs             = flight.get("vertical_speed", 0)
@@ -79,6 +81,13 @@ class TrackedStatsScene(object):
             segments += [
                 ("  ",             SUFFIX_COLOUR),
                 (plane_type,       TYPE_COLOUR),
+            ]
+            if registration:
+                segments += [
+                    ("  ",         SUFFIX_COLOUR),
+                    (registration, REG_COLOUR),
+                ]
+            segments += [
                 ("  ",             SUFFIX_COLOUR),
                 (alt_str,          NUMBER_COLOUR),
             ]

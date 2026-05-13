@@ -190,10 +190,11 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                     cs_upper = callsign.upper()
                     for ac in resp.json().get("ac", []):
                         if (ac.get("flight") or "").strip().upper() == cs_upper:
-                            baro_rate  = int(ac.get("baro_rate", 0) or 0)
-                            alt_baro   = int(ac.get("alt_baro", 0) or 0)
-                            plane_type = (ac.get("t") or "").strip().upper()
-                            log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate} type={plane_type}")
+                            baro_rate    = int(ac.get("baro_rate", 0) or 0)
+                            alt_baro     = int(ac.get("alt_baro", 0) or 0)
+                            plane_type   = (ac.get("t") or "").strip().upper()
+                            registration = (ac.get("r") or "").strip().upper()
+                            log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate} type={plane_type} reg={registration}")
                             return {
                                 "lat":            ac["lat"],
                                 "lng":            ac.get("lon", ac.get("lng", 0)),
@@ -202,6 +203,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                                 "heading":        ac.get("track", 0) or 0,
                                 "vertical_speed": baro_rate,  # ft/min
                                 "plane_type":     plane_type,
+                                "registration":   registration,
                             }
             except Exception as e:
                 log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
@@ -533,9 +535,10 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         dep_iata     = data.get("dep_iata", "")
         arr_iata     = data.get("arr_iata", "")
         plane_type   = data.get("plane_type", "") or data.get("aircraft_icao", "") or data.get("aircraft_iata", "")
-        altitude     = data.get("altitude", 0) or data.get("alt", 0) or 0
-        ground_speed = data.get("ground_speed", 0) or data.get("speed", 0) or 0
+        altitude      = data.get("altitude", 0) or data.get("alt", 0) or 0
+        ground_speed  = data.get("ground_speed", 0) or data.get("speed", 0) or 0
         vertical_speed = data.get("vertical_speed", 0) or 0  # ft/min (converted in _get_position)
+        registration  = data.get("registration", "") or ""
 
         # Estimate VS from altitude change if the API didn't report it
         with self._lock:
@@ -590,6 +593,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             "origin_color":      self._delay_color_origin(dep_delay_min),
             "destination_color": self._delay_color_dest(arr_delay_min),
             "plane_type":        plane_type,
+            "registration":      registration,
             "progress":          progress,
             "dist_remaining":    dist_remaining,
             "time_remaining":    _format_time_remaining(time_remaining_min),
