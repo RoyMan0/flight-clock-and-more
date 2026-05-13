@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from threading import Thread, Lock
 
@@ -7,10 +8,14 @@ import requests
 
 from plugins.base_plugin import BasePlugin
 from utilities.animator import Animator
+from utilities.flightstats import get_flight_info
 from utilities.opensky import get_flight_position
 from utilities.overhead import (
     haversine, AIRPORT_DB_FILE, iso_to_unix,
-    _get_keys, _get_reset_days, _al_get_active_key, _al_record_call,
+    _get_keys, _get_reset_days,
+    _al_get_active_key, _al_record_call,
+    _fa_get_active_key, _fa_record_call,
+    FLIGHTAWARE_URL,
 )
 from scenes.trackedtopbar import TrackedTopBarScene
 from scenes.trackedheader import TrackedHeaderScene
@@ -26,11 +31,16 @@ STATE_IDLE     = "IDLE"
 STATE_ACTIVE   = "ACTIVE"
 STATE_COMPLETE = "COMPLETE"
 
-IDLE_POLL_INTERVAL   = 15 * 60   # seconds between AirLabs polls when not yet airborne
-ACTIVE_POLL_INTERVAL =  3 * 60   # seconds between OpenSky position polls when airborne
-ROUTE_CACHE_TTL      =      3600  # fallback cache duration when no arrival time known
+IDLE_POLL_INTERVAL   = 15 * 60   # seconds between route polls when not yet airborne
+ACTIVE_POLL_INTERVAL =  3 * 60   # seconds between position polls when airborne
+ROUTE_CACHE_TTL      =      3600  # fallback TTL when no arrival time known
 
-AIRLABS_URL = "https://airlabs.co/api/v9/flight?flight_icao={callsign}&api_key={key}"
+AIRLABS_URL  = "https://airlabs.co/api/v9/flight?flight_icao={callsign}&api_key={key}"
+ADSBDB_URL   = "https://api.adsbdb.com/v0/callsign/{callsign}"
+ADSB_LOL_URL = "https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{dist}"
+
+_HEADERS = {"User-Agent": "LEDMatrix/1.0"}
+_NUM_RE  = re.compile(r"\d+")
 
 
 def _load_airport_coords():
@@ -99,14 +109,19 @@ class _TrackedDisplay(
 
 def _new_flight_entry():
     return {
-        "state":           STATE_IDLE,
-        "data":            None,
-        "last_polled":     0.0,
-        "arr_time_ts":     None,
-        "total_distance":  None,
-        # Route cache fields (populated once from AirLabs, reused by OpenSky position polls)
-        "route_data":      None,   # dict: dep_iata, arr_iata, plane_type, 4 timestamps
-        "route_expires":   0.0,    # wall-clock time when route_data should be re-fetched
+        "state":          STATE_IDLE,
+        "data":           None,
+        "last_polled":    0.0,
+        "arr_time_ts":    None,
+        "total_distance": None,
+        # Route cache (populated by _poll_route, reused between position polls)
+        "route_data":     None,
+        "route_expires":  0.0,
+        # Last known position — used to seed adsb.lol area queries
+        "last_lat":       None,
+        "last_lng":       None,
+        # Airline IATA code discovered via adsbdb (persists so we can call FlightStats)
+        "airline_iata":   None,
     }
 
 
@@ -160,67 +175,231 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
             time.sleep(30)
 
-    # ── Route caching (AirLabs) ───────────────────────────────────────────────
+    # ── Position: adsb.lol → OpenSky fallback ────────────────────────────────
+
+    def _get_position(self, callsign: str, last_lat, last_lng) -> dict | None:
+        """Try adsb.lol (area query around last position) then fall back to OpenSky."""
+        if last_lat is not None and last_lng is not None:
+            try:
+                url = ADSB_LOL_URL.format(lat=last_lat, lon=last_lng, dist=60)
+                resp = requests.get(url, timeout=8, headers=_HEADERS)
+                if resp.status_code == 200:
+                    cs_upper = callsign.upper()
+                    for ac in resp.json().get("ac", []):
+                        if (ac.get("flight") or "").strip().upper() == cs_upper:
+                            log.debug(f"[specific_flight_tracker] adsb.lol hit for {callsign}")
+                            return {
+                                "lat":            ac["lat"],
+                                "lng":            ac.get("lon", ac.get("lng", 0)),
+                                "altitude":       int(ac.get("alt_baro", 0) or 0),
+                                "ground_speed":   int(ac.get("gs", 0) or 0),
+                                "heading":        ac.get("track", 0) or 0,
+                                "vertical_speed": int(ac.get("baro_rate", 0) or 0),  # ft/min
+                            }
+            except Exception as e:
+                log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
+
+        # Fall back to OpenSky (returns vertical_speed in m/s → convert to ft/min)
+        pos = get_flight_position(callsign)
+        if pos is None:
+            return None
+        vs_ms = pos.get("vertical_speed", 0) or 0
+        pos["vertical_speed"] = int(vs_ms * 196.85)
+        log.debug(f"[specific_flight_tracker] OpenSky hit for {callsign}")
+        return pos
+
+    # ── Route/schedule: adsbdb → FlightStats → AirLabs → FlightAware ────────
 
     def _route_expired(self, callsign: str) -> bool:
         with self._lock:
             info = self._flights[callsign]
             return info["route_data"] is None or time.time() >= info["route_expires"]
 
-    def _poll_route(self, callsign: str):
-        """Fetch route/schedule from AirLabs and cache it. No-ops if cache still valid."""
-        if not self._route_expired(callsign):
-            return
+    def _fetch_adsbdb_iata(self, callsign: str) -> str | None:
+        """Query adsbdb for airline IATA code (needed for FlightStats). Caches result."""
+        with self._lock:
+            cached = self._flights[callsign].get("airline_iata")
+        if cached:
+            return cached
+        try:
+            resp = requests.get(
+                ADSBDB_URL.format(callsign=callsign), timeout=8, headers=_HEADERS
+            )
+            if resp.status_code == 200:
+                fr = ((resp.json().get("response") or {}).get("flightroute") or {})
+                iata = (fr.get("airline") or {}).get("iata", "") or ""
+                if iata:
+                    with self._lock:
+                        self._flights[callsign]["airline_iata"] = iata
+                    log.debug(f"[specific_flight_tracker] adsbdb airline IATA={iata} for {callsign}")
+                    return iata
+        except Exception as e:
+            log.debug(f"[specific_flight_tracker] adsbdb failed for {callsign}: {e}")
+        return None
 
+    def _fetch_airlabs(self, callsign: str) -> dict | None:
+        """Fetch live route + position data from AirLabs. Returns raw response dict or None."""
         al_keys = _get_keys(self.secrets, "airlabs_api_keys", "airlabs_api_key")
         al_reset_days = _get_reset_days(self.secrets, "airlabs_reset_days", len(al_keys))
         key = _al_get_active_key(al_keys, al_reset_days)
         if not key:
-            log.warning("[specific_flight_tracker] No AirLabs key available for route fetch")
-            return
-
-        url = AIRLABS_URL.format(callsign=callsign, key=key)
+            log.warning("[specific_flight_tracker] No AirLabs key available")
+            return None
         try:
-            resp = requests.get(url, timeout=15)
+            resp = requests.get(
+                AIRLABS_URL.format(callsign=callsign, key=key), timeout=15
+            )
             resp.raise_for_status()
-            body = resp.json()
+            data = resp.json().get("response")
+            if data:
+                key_reset_day = al_reset_days[al_keys.index(key)]
+                _al_record_call(key, key_reset_day)
+                return data
         except Exception as e:
-            log.warning(f"[specific_flight_tracker] Route fetch failed for {callsign}: {e}")
-            return
+            log.warning(f"[specific_flight_tracker] AirLabs failed for {callsign}: {e}")
+        return None
 
-        data = body.get("response")
-        if not data:
-            return
+    def _fetch_flightaware(self, callsign: str) -> dict | None:
+        """Fetch schedule from FlightAware as last-resort fallback. Returns partial route dict or None."""
+        fa_keys = _get_keys(self.secrets, "flightaware_api_keys", "flightaware_api_key")
+        fa_reset_days = _get_reset_days(self.secrets, "flightaware_reset_days", len(fa_keys))
+        fa_budget = float(self.secrets.get("flightaware_monthly_budget", 4.50))
+        fa_key = _fa_get_active_key(fa_keys, fa_budget, fa_reset_days)
+        if not fa_key:
+            return None
+        try:
+            resp = requests.get(
+                FLIGHTAWARE_URL.format(ident=callsign),
+                headers={**_HEADERS, "x-apikey": fa_key},
+                timeout=12,
+            )
+            resp.raise_for_status()
+            flights = resp.json().get("flights") or []
+        except Exception as e:
+            log.debug(f"[specific_flight_tracker] FlightAware failed for {callsign}: {e}")
+            return None
 
-        key_reset_day = al_reset_days[al_keys.index(key)]
-        _al_record_call(key, key_reset_day)
+        twelve_hrs_ago = time.time() - 43200
 
-        now = time.time()
-        sched_dep  = iso_to_unix(data.get("dep_time"))
-        actual_dep = iso_to_unix(data.get("dep_actual"))
-        sched_arr  = iso_to_unix(data.get("arr_time"))
-        est_arr    = iso_to_unix(data.get("arr_estimated") or data.get("eta"))
+        def _fa_dep_ts(f):
+            return iso_to_unix(f.get("actual_out") or f.get("scheduled_out"))
 
-        route = {
-            "dep_iata":   data.get("dep_iata", ""),
-            "arr_iata":   data.get("arr_iata", ""),
-            "plane_type": data.get("aircraft_icao", "") or data.get("aircraft_iata", ""),
-            "sched_dep":  sched_dep,
-            "actual_dep": actual_dep,
-            "sched_arr":  sched_arr,
-            "est_arr":    est_arr,
-            # Also carry raw position so IDLE→ACTIVE detection still works
-            "lat":        data.get("lat"),
-            "lng":        data.get("lng"),
-            "alt":        data.get("alt", 0) or 0,
-            "speed":      data.get("speed", 0) or 0,
+        flight = (
+            next((f for f in flights if f.get("status") == "En Route"
+                  and (_fa_dep_ts(f) or 0) > twelve_hrs_ago), None)
+            or next((f for f in flights if f.get("status") == "En Route"), None)
+            or next((f for f in flights
+                     if (f.get("progress_percent") or 0) > 0), None)
+            or (flights[0] if flights else None)
+        )
+        if not flight:
+            return None
+
+        def _fa_iata(a: dict) -> str:
+            iata = (a.get("code_iata") or "").strip()
+            if iata:
+                return iata
+            icao = (a.get("code_icao") or a.get("code") or "").strip()
+            if icao and len(icao) == 4 and icao[0] == "K":
+                return icao[1:]
+            return ""
+
+        orig = flight.get("origin") or {}
+        dest = flight.get("destination") or {}
+
+        fa_idx = fa_keys.index(fa_key)
+        _fa_record_call(fa_key, fa_reset_days[fa_idx] if fa_reset_days else 1)
+
+        return {
+            "dep_iata":   _fa_iata(orig),
+            "arr_iata":   _fa_iata(dest),
+            "plane_type": "",
+            "sched_dep":  iso_to_unix(flight.get("scheduled_out")),
+            "actual_dep": iso_to_unix(flight.get("actual_out")),
+            "sched_arr":  iso_to_unix(flight.get("scheduled_in")),
+            "est_arr":    iso_to_unix(flight.get("estimated_in") or flight.get("actual_in")),
+            "lat": None, "lng": None, "alt": 0, "speed": 0,
         }
 
-        # Cache until arrival + 2 h, or ROUTE_CACHE_TTL if no arrival time
-        if est_arr:
-            expires = max(est_arr + 7200, now + ROUTE_CACHE_TTL)
-        else:
-            expires = now + ROUTE_CACHE_TTL
+    def _poll_route(self, callsign: str):
+        """Tiered route/schedule fetch: adsbdb → FlightStats → AirLabs → FlightAware."""
+        if not self._route_expired(callsign):
+            return
+
+        # Tier 0: adsbdb — airline IATA lookup (enables FlightStats)
+        airline_iata = self._fetch_adsbdb_iata(callsign)
+
+        # Tier 1: FlightStats — schedule timing (free, no key)
+        fs_result = None
+        if airline_iata:
+            fs_result = get_flight_info(callsign, airline_iata)
+            if fs_result:
+                log.debug(f"[specific_flight_tracker] FlightStats hit for {callsign}")
+
+        # Tier 2: AirLabs — live position + schedule (primary source)
+        al_data = self._fetch_airlabs(callsign)
+
+        # Build route dict, merging all available data (AirLabs wins for live fields)
+        route = None
+        if al_data:
+            now = time.time()
+            sched_dep  = iso_to_unix(al_data.get("dep_time"))
+            actual_dep = iso_to_unix(al_data.get("dep_actual"))
+            sched_arr  = iso_to_unix(al_data.get("arr_time"))
+            est_arr    = iso_to_unix(al_data.get("arr_estimated") or al_data.get("eta"))
+
+            # Fill timing gaps from FlightStats if AirLabs is missing them
+            if fs_result:
+                sched_dep  = sched_dep  or fs_result.get("time_scheduled_departure")
+                actual_dep = actual_dep or fs_result.get("time_real_departure")
+                sched_arr  = sched_arr  or fs_result.get("time_scheduled_arrival")
+                est_arr    = est_arr    or fs_result.get("time_estimated_arrival")
+
+            route = {
+                "dep_iata":   al_data.get("dep_iata", ""),
+                "arr_iata":   al_data.get("arr_iata", ""),
+                "plane_type": al_data.get("aircraft_icao", "") or al_data.get("aircraft_iata", ""),
+                "sched_dep":  sched_dep,
+                "actual_dep": actual_dep,
+                "sched_arr":  sched_arr,
+                "est_arr":    est_arr,
+                "lat":        al_data.get("lat"),
+                "lng":        al_data.get("lng"),
+                "alt":        al_data.get("alt", 0) or 0,
+                "speed":      al_data.get("speed", 0) or 0,
+            }
+        elif fs_result:
+            # AirLabs failed but FlightStats has route info
+            route = {
+                "dep_iata":   fs_result.get("al_origin", ""),
+                "arr_iata":   fs_result.get("al_destination", ""),
+                "plane_type": "",
+                "sched_dep":  fs_result.get("time_scheduled_departure"),
+                "actual_dep": fs_result.get("time_real_departure"),
+                "sched_arr":  fs_result.get("time_scheduled_arrival"),
+                "est_arr":    fs_result.get("time_estimated_arrival"),
+                "lat": None, "lng": None, "alt": 0, "speed": 0,
+            }
+
+        # Tier 3: FlightAware — last resort when AirLabs failed or est_arr still missing
+        if route is None or not route.get("est_arr"):
+            fa_route = self._fetch_flightaware(callsign)
+            if fa_route:
+                if route is None:
+                    route = fa_route
+                    log.debug(f"[specific_flight_tracker] FlightAware provided route for {callsign}")
+                else:
+                    for field in ("sched_dep", "actual_dep", "sched_arr", "est_arr"):
+                        if not route.get(field) and fa_route.get(field):
+                            route[field] = fa_route[field]
+
+        if not route:
+            log.debug(f"[specific_flight_tracker] No route data for {callsign} from any source")
+            return
+
+        now = time.time()
+        est_arr = route.get("est_arr")
+        expires = max(est_arr + 7200, now + ROUTE_CACHE_TTL) if est_arr else now + ROUTE_CACHE_TTL
 
         with self._lock:
             info = self._flights[callsign]
@@ -237,16 +416,16 @@ class SpecificFlightTrackerPlugin(BasePlugin):
     # ── Polling orchestration ─────────────────────────────────────────────────
 
     def _poll_callsign(self, callsign: str):
-        # Always refresh route cache if stale (cheap when cache is warm)
         self._poll_route(callsign)
 
         with self._lock:
-            state = self._flights[callsign]["state"]
-            route = self._flights[callsign]["route_data"]
+            state    = self._flights[callsign]["state"]
+            route    = self._flights[callsign]["route_data"]
+            last_lat = self._flights[callsign].get("last_lat")
+            last_lng = self._flights[callsign].get("last_lng")
 
         if state == STATE_ACTIVE:
-            # Use OpenSky (free) for live position; route data already cached
-            pos = get_flight_position(callsign)
+            pos = self._get_position(callsign, last_lat, last_lng)
             if pos is None:
                 self._handle_no_response(callsign)
                 return
@@ -259,22 +438,22 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 merged = pos
             self._handle_active_response(callsign, merged)
         else:
-            # IDLE — use AirLabs response to detect departure (includes position if airborne)
+            # IDLE — use AirLabs position if present to detect departure
             if route and (route.get("lat") is not None) and (route.get("lng") is not None):
                 merged = {
-                    "lat":      route["lat"],
-                    "lng":      route["lng"],
-                    "altitude": route["alt"],
+                    "lat":          route["lat"],
+                    "lng":          route["lng"],
+                    "altitude":     route["alt"],
                     "ground_speed": route["speed"],
-                    "heading":  0,
+                    "heading":      0,
                     "vertical_speed": 0,
-                    "dep_iata":   route["dep_iata"],
-                    "arr_iata":   route["arr_iata"],
-                    "plane_type": route["plane_type"],
-                    "sched_dep":  route["sched_dep"],
-                    "actual_dep": route["actual_dep"],
-                    "sched_arr":  route["sched_arr"],
-                    "est_arr":    route["est_arr"],
+                    "dep_iata":     route["dep_iata"],
+                    "arr_iata":     route["arr_iata"],
+                    "plane_type":   route["plane_type"],
+                    "sched_dep":    route["sched_dep"],
+                    "actual_dep":   route["actual_dep"],
+                    "sched_arr":    route["sched_arr"],
+                    "est_arr":      route["est_arr"],
                 }
                 self._handle_active_response(callsign, merged)
             else:
@@ -298,27 +477,27 @@ class SpecificFlightTrackerPlugin(BasePlugin):
     @staticmethod
     def _delay_color_origin(delay_min):
         from setup import colours
-        if delay_min is None:         return colours.LIGHT_GREY
-        if delay_min <= 20:           return colours.LIGHT_MID_GREEN
-        if delay_min <= 40:           return colours.LIGHT_YELLOW
-        if delay_min <= 60:           return colours.LIGHT_MID_ORANGE
-        if delay_min <= 240:          return colours.LIGHT_RED
-        if delay_min <= 480:          return colours.LIGHT_PURPLE
+        if delay_min is None:    return colours.LIGHT_GREY
+        if delay_min <= 20:      return colours.LIGHT_MID_GREEN
+        if delay_min <= 40:      return colours.LIGHT_YELLOW
+        if delay_min <= 60:      return colours.LIGHT_MID_ORANGE
+        if delay_min <= 240:     return colours.LIGHT_RED
+        if delay_min <= 480:     return colours.LIGHT_PURPLE
         return colours.LIGHT_DARK_BLUE
 
     @staticmethod
     def _delay_color_dest(delay_min):
         from setup import colours
-        if delay_min is None:         return colours.LIGHT_GREY
-        if delay_min <= 15:           return colours.LIGHT_MID_GREEN
-        if delay_min <= 30:           return colours.LIGHT_YELLOW
-        if delay_min <= 60:           return colours.LIGHT_MID_ORANGE
-        if delay_min <= 240:          return colours.LIGHT_RED
-        if delay_min <= 480:          return colours.LIGHT_PURPLE
+        if delay_min is None:    return colours.LIGHT_GREY
+        if delay_min <= 15:      return colours.LIGHT_MID_GREEN
+        if delay_min <= 30:      return colours.LIGHT_YELLOW
+        if delay_min <= 60:      return colours.LIGHT_MID_ORANGE
+        if delay_min <= 240:     return colours.LIGHT_RED
+        if delay_min <= 480:     return colours.LIGHT_PURPLE
         return colours.LIGHT_DARK_BLUE
 
     def _handle_active_response(self, callsign: str, data: dict):
-        """Build display entry from a merged position+route dict and update flight state."""
+        """Build display entry from merged position+route dict and update flight state."""
         now = time.time()
         lat = data.get("lat")
         lng = data.get("lng")
@@ -327,11 +506,12 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             self._handle_no_response(callsign)
             return
 
-        dep_iata    = data.get("dep_iata", "")
-        arr_iata    = data.get("arr_iata", "")
-        plane_type  = data.get("plane_type", "") or data.get("aircraft_icao", "") or data.get("aircraft_iata", "")
-        altitude    = data.get("altitude", 0) or data.get("alt", 0) or 0
+        dep_iata     = data.get("dep_iata", "")
+        arr_iata     = data.get("arr_iata", "")
+        plane_type   = data.get("plane_type", "") or data.get("aircraft_icao", "") or data.get("aircraft_iata", "")
+        altitude     = data.get("altitude", 0) or data.get("alt", 0) or 0
         ground_speed = data.get("ground_speed", 0) or data.get("speed", 0) or 0
+        vertical_speed = data.get("vertical_speed", 0) or 0  # ft/min (converted in _get_position)
 
         sched_dep  = data.get("sched_dep")  or iso_to_unix(data.get("dep_time"))
         actual_dep = data.get("actual_dep") or iso_to_unix(data.get("dep_actual"))
@@ -371,17 +551,20 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             time_remaining_min = (dist_remaining / ground_speed) * 60
 
         display_entry = {
-            "callsign":           callsign,
-            "origin":             dep_iata,
-            "destination":        arr_iata,
-            "origin_color":       self._delay_color_origin(dep_delay_min),
-            "destination_color":  self._delay_color_dest(arr_delay_min),
-            "plane_type":         plane_type,
-            "progress":           progress,
-            "dist_remaining":     dist_remaining,
-            "time_remaining":     _format_time_remaining(time_remaining_min),
-            "altitude":           int(altitude),
-            "ground_speed":       int(ground_speed),
+            "callsign":          callsign,
+            "origin":            dep_iata,
+            "destination":       arr_iata,
+            "origin_color":      self._delay_color_origin(dep_delay_min),
+            "destination_color": self._delay_color_dest(arr_delay_min),
+            "plane_type":        plane_type,
+            "progress":          progress,
+            "dist_remaining":    dist_remaining,
+            "time_remaining":    _format_time_remaining(time_remaining_min),
+            "altitude":          int(altitude),
+            "ground_speed":      int(ground_speed),
+            "vertical_speed":    int(vertical_speed),
+            "lat":               lat,
+            "lng":               lng,
         }
 
         with self._lock:
@@ -389,6 +572,8 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             info["state"]       = STATE_ACTIVE
             info["data"]        = display_entry
             info["last_polled"] = now
+            info["last_lat"]    = lat
+            info["last_lng"]    = lng
             if arr_ts:
                 info["arr_time_ts"] = arr_ts
 
