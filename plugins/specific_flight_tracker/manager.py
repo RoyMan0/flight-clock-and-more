@@ -160,6 +160,9 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
     def _poll_loop(self):
         while True:
+            if not self.enabled:
+                time.sleep(30)
+                continue
             now = time.time()
             for callsign in list(self._flights.keys()):
                 with self._lock:
