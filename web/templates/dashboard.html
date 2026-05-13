@@ -36,7 +36,7 @@
               <span class="plugin-pill badge border px-3 py-2 fs-6"
                     :class="pid === activePlugin ? 'active' : 'bg-dark border-secondary text-secondary'"
                     @click="forcePlugin(pid)"
-                    x-text="pid.replace('_', ' ')">
+                    x-text="pluginLabel(pid)">
               </span>
             </template>
           </div>
@@ -161,6 +161,10 @@ function dashboard() {
       this._es.onerror = () => {
         setTimeout(() => this.startSSE(), 3000);
       };
+    },
+
+    pluginLabel(pid) {
+      return pid.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     },
 
     forcePlugin(pid) {
