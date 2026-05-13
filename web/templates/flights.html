@@ -5,30 +5,14 @@
 <div class="row g-4">
   <div class="col-12">
     <ul class="nav nav-tabs mb-3" id="flightTabs">
-      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#closest">Closest Flights</a></li>
+      <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#stats" id="stats-tab">Flight Statistics</a></li>
+      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#closest">Closest Flights</a></li>
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#farthest">Farthest Routes</a></li>
-      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#stats" id="stats-tab">Flight Statistics</a></li>
     </ul>
     <div class="tab-content">
 
-      <!-- Closest Flights -->
-      <div class="tab-pane fade show active" id="closest">
-        <div class="d-flex gap-2 mb-3">
-          <a href="/closest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
-        </div>
-        <div id="closest-table"></div>
-      </div>
-
-      <!-- Farthest Routes -->
-      <div class="tab-pane fade" id="farthest">
-        <div class="d-flex gap-2 mb-3">
-          <a href="/farthest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
-        </div>
-        <div id="farthest-table"></div>
-      </div>
-
       <!-- Flight Statistics -->
-      <div class="tab-pane fade" id="stats">
+      <div class="tab-pane fade show active" id="stats">
         <div id="stats-loading" class="text-muted py-4">Loading statistics…</div>
         <div id="stats-content" style="display:none">
 
@@ -130,6 +114,22 @@
         </div><!-- /stats-content -->
       </div><!-- /stats tab-pane -->
 
+      <!-- Closest Flights -->
+      <div class="tab-pane fade" id="closest">
+        <div class="d-flex gap-2 mb-3">
+          <a href="/closest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
+        </div>
+        <div id="closest-table"></div>
+      </div>
+
+      <!-- Farthest Routes -->
+      <div class="tab-pane fade" id="farthest">
+        <div class="d-flex gap-2 mb-3">
+          <a href="/farthest" class="btn btn-outline-info btn-sm"><i class="bi bi-map me-1"></i>View Map</a>
+        </div>
+        <div id="farthest-table"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -187,9 +187,12 @@ let statsLoaded = false;
 
 document.getElementById('stats-tab').addEventListener('shown.bs.tab', loadStats);
 
-// Also load if user navigates directly to #stats
-if (window.location.hash === '#stats') {
-  document.querySelector('[href="#stats"]').click();
+// Stats is the default tab — load immediately on page load
+// Also handles direct navigation to #closest or #farthest which would hide stats
+if (!window.location.hash || window.location.hash === '#stats') {
+  loadStats();
+} else {
+  document.querySelector(`[href="${window.location.hash}"]`)?.click();
 }
 
 function loadStats() {
