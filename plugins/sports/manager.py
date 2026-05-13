@@ -18,6 +18,8 @@ import time
 import threading
 import requests
 from datetime import datetime, timedelta, timezone
+
+from utilities.overhead import play_espn_sound
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -228,6 +230,7 @@ class SportsPlugin(BasePlugin):
         self._lock = threading.Lock()
         self._cycle_done = False
         self._has_live = False
+        self._prev_scores: dict = {}  # game_id → (away_score, home_score)
 
     def reset(self):
         self._current_idx = 0
@@ -289,6 +292,26 @@ class SportsPlugin(BasePlugin):
             for side in ("away", "home"):
                 t = game[side]
                 _get_logo(t.get("logo_url", ""), game["league"], t["name"])
+
+        # Detect game starts and score changes; play sound once regardless of how many triggered
+        sound_needed = False
+        for game in live:
+            gid = game["game_id"]
+            score = (game["away"]["score"], game["home"]["score"])
+            if gid not in self._prev_scores:
+                log.info(f"[sports] Game started: {game['away']['name']} vs {game['home']['name']}")
+                sound_needed = True
+            elif self._prev_scores[gid] != score:
+                log.info(f"[sports] Score update: {game['away']['name']} {score[0]} - {game['home']['name']} {score[1]}")
+                sound_needed = True
+            self._prev_scores[gid] = score
+
+        # Drop finished games so they don't block detection if replayed
+        live_ids = {g["game_id"] for g in live}
+        self._prev_scores = {k: v for k, v in self._prev_scores.items() if k in live_ids}
+
+        if sound_needed:
+            play_espn_sound()
 
         with self._lock:
             self._games  = games
@@ -355,6 +378,7 @@ def _fetch_league(url: str, league_name: str, dates: str, league_id: str = "") -
 
 def _parse_event(event: dict, league: str, league_id: str = "") -> Optional[dict]:
     try:
+        game_id = str(event.get("id", ""))
         comp = (event.get("competitions") or [{}])[0]
         competitors = comp.get("competitors", [])
         if len(competitors) < 2:
@@ -414,6 +438,7 @@ def _parse_event(event: dict, league: str, league_id: str = "") -> Optional[dict
             teams = [teams[1], teams[0]]
 
         return {
+            "game_id":       game_id,
             "league":        league,
             "league_id":     league_id,
             "state":         state,

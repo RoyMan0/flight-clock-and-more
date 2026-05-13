@@ -470,10 +470,10 @@ def get_al_metrics(keys: list[str], reset_days: list[int] = None) -> dict:
 # Audio alert
 # ------------------------------------------------------------------
 
-def play_plane_sound():
+def _play_mp3(filename: str):
     def _play():
         try:
-            mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), "airbus.mp3")
+            mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), filename)
             log.info(f"[overhead] Playing sound: {mp3}")
             uid = os.getuid()
             env = os.environ.copy()
@@ -488,6 +488,14 @@ def play_plane_sound():
         except Exception as e:
             log.error(f"[overhead] Audio failed: {e}")
     Thread(target=_play, daemon=True).start()
+
+
+def play_plane_sound():
+    _play_mp3("airbus.mp3")
+
+
+def play_espn_sound():
+    _play_mp3("espn.mp3")
 
 
 # ------------------------------------------------------------------
