@@ -231,6 +231,7 @@ class SportsPlugin(BasePlugin):
         self._cycle_done = False
         self._has_live = False
         self._prev_scores: dict = {}  # game_id → (away_score, home_score)
+        self._sound_pending = False
 
     def reset(self):
         self._current_idx = 0
@@ -310,18 +311,20 @@ class SportsPlugin(BasePlugin):
         live_ids = {g["game_id"] for g in live}
         self._prev_scores = {k: v for k, v in self._prev_scores.items() if k in live_ids}
 
-        if sound_needed:
-            play_espn_sound()
-
         with self._lock:
             self._games  = games
             self._has_live = bool(live)
+            if sound_needed:
+                self._sound_pending = True
 
         log.debug(f"[sports] Updated: {len(games)} games ({len(live)} live)")
 
     def draw(self) -> bool:
         with self._lock:
             games = list(self._games)
+            if self._sound_pending:
+                self._sound_pending = False
+                play_espn_sound()
 
         if not games:
             return False
