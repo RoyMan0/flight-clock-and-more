@@ -31,7 +31,7 @@ STATE_IDLE     = "IDLE"
 STATE_ACTIVE   = "ACTIVE"
 STATE_COMPLETE = "COMPLETE"
 
-IDLE_POLL_INTERVAL   = 15 * 60   # seconds between route polls when not yet airborne
+IDLE_POLL_INTERVAL   =  5 * 60   # seconds between polls when not yet airborne
 ACTIVE_POLL_INTERVAL =  3 * 60   # seconds between position polls when airborne
 ROUTE_CACHE_TTL      =      3600  # fallback TTL when no arrival time known
 
@@ -255,6 +255,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 key_reset_day = al_reset_days[al_keys.index(key)]
                 _al_record_call(key, key_reset_day)
                 return data
+            log.info(f"[specific_flight_tracker] AirLabs: no data for {callsign}")
         except Exception as e:
             log.warning(f"[specific_flight_tracker] AirLabs failed for {callsign}: {e}")
         return None
@@ -394,7 +395,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                             route[field] = fa_route[field]
 
         if not route:
-            log.debug(f"[specific_flight_tracker] No route data for {callsign} from any source")
+            log.info(f"[specific_flight_tracker] No route data for {callsign} from any source")
             return
 
         now = time.time()
@@ -438,7 +439,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 merged = pos
             self._handle_active_response(callsign, merged)
         else:
-            # IDLE — use AirLabs position if present to detect departure
+            # IDLE — try AirLabs position first, then fall back to adsb.lol/OpenSky
             if route and (route.get("lat") is not None) and (route.get("lng") is not None):
                 merged = {
                     "lat":          route["lat"],
@@ -457,7 +458,20 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 }
                 self._handle_active_response(callsign, merged)
             else:
-                self._handle_no_response(callsign)
+                # AirLabs has no position — try adsb.lol/OpenSky directly
+                pos = self._get_position(callsign, last_lat, last_lng)
+                if pos is not None:
+                    log.info(f"[specific_flight_tracker] {callsign} found via position API while IDLE")
+                    if route:
+                        merged = {**pos, **{k: route[k] for k in (
+                            "dep_iata", "arr_iata", "plane_type",
+                            "sched_dep", "actual_dep", "sched_arr", "est_arr",
+                        ) if route.get(k) is not None}}
+                    else:
+                        merged = pos
+                    self._handle_active_response(callsign, merged)
+                else:
+                    self._handle_no_response(callsign)
 
     def _handle_no_response(self, callsign: str):
         now = time.time()
