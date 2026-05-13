@@ -35,9 +35,9 @@ IDLE_POLL_INTERVAL   =  5 * 60   # seconds between polls when not yet airborne
 ACTIVE_POLL_INTERVAL =       60   # seconds between position polls when airborne
 ROUTE_CACHE_TTL      =      3600  # fallback TTL when no arrival time known
 
-AIRLABS_URL  = "https://airlabs.co/api/v9/flight?flight_icao={callsign}&api_key={key}"
-ADSBDB_URL   = "https://api.adsbdb.com/v0/callsign/{callsign}"
-ADSB_LOL_URL = "https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{dist}"
+AIRLABS_URL          = "https://airlabs.co/api/v9/flight?flight_icao={callsign}&api_key={key}"
+ADSBDB_URL           = "https://api.adsbdb.com/v0/callsign/{callsign}"
+ADSB_LOL_CALLSIGN_URL = "https://api.adsb.lol/v2/callsign/{callsign}"
 
 _HEADERS = {"User-Agent": "LEDMatrix/1.0"}
 _NUM_RE  = re.compile(r"\d+")
@@ -117,9 +117,6 @@ def _new_flight_entry():
         # Route cache (populated by _poll_route, reused between position polls)
         "route_data":     None,
         "route_expires":  0.0,
-        # Last known position — used to seed adsb.lol area queries
-        "last_lat":       None,
-        "last_lng":       None,
         # Airline IATA code discovered via adsbdb (persists so we can call FlightStats)
         "airline_iata":   None,
         # Aircraft type and registration — cached once found, survive across polls
@@ -181,35 +178,41 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
             time.sleep(30)
 
-    # ── Position: adsb.lol → OpenSky fallback ────────────────────────────────
+    # ── Position: adsb.lol callsign → adsb.lol area → OpenSky ───────────────
 
-    def _get_position(self, callsign: str, last_lat, last_lng) -> dict | None:
-        """Try adsb.lol (area query around last position) then fall back to OpenSky."""
-        if last_lat is not None and last_lng is not None:
-            try:
-                url = ADSB_LOL_URL.format(lat=last_lat, lon=last_lng, dist=60)
-                resp = requests.get(url, timeout=8, headers=_HEADERS)
-                if resp.status_code == 200:
-                    cs_upper = callsign.upper()
-                    for ac in resp.json().get("ac", []):
-                        if (ac.get("flight") or "").strip().upper() == cs_upper:
-                            baro_rate    = int(ac.get("baro_rate", 0) or 0)
-                            alt_baro     = int(ac.get("alt_baro", 0) or 0)
-                            plane_type   = (ac.get("t") or "").strip().upper()
-                            registration = (ac.get("r") or "").strip().upper()
-                            log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate} type={plane_type} reg={registration}")
-                            return {
-                                "lat":            ac["lat"],
-                                "lng":            ac.get("lon", ac.get("lng", 0)),
-                                "altitude":       alt_baro,
-                                "ground_speed":   int(ac.get("gs", 0) or 0),
-                                "heading":        ac.get("track", 0) or 0,
-                                "vertical_speed": baro_rate,  # ft/min
-                                "plane_type":     plane_type,
-                                "registration":   registration,
-                            }
-            except Exception as e:
-                log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
+    @staticmethod
+    def _parse_adsb_lol_ac(callsign: str, ac: dict) -> dict:
+        baro_rate    = int(ac.get("baro_rate", 0) or 0)
+        alt_baro     = int(ac.get("alt_baro", 0) or 0)
+        plane_type   = (ac.get("t") or "").strip().upper()
+        registration = (ac.get("r") or "").strip().upper()
+        log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate} type={plane_type} reg={registration}")
+        return {
+            "lat":            ac["lat"],
+            "lng":            ac.get("lon", ac.get("lng", 0)),
+            "altitude":       alt_baro,
+            "ground_speed":   int(ac.get("gs", 0) or 0),
+            "heading":        ac.get("track", 0) or 0,
+            "vertical_speed": baro_rate,
+            "plane_type":     plane_type,
+            "registration":   registration,
+        }
+
+    def _get_position(self, callsign: str) -> dict | None:
+        """Fetch real-time position: adsb.lol callsign → OpenSky fallback."""
+        cs_upper = callsign.upper()
+
+        try:
+            resp = requests.get(
+                ADSB_LOL_CALLSIGN_URL.format(callsign=callsign),
+                timeout=8, headers=_HEADERS,
+            )
+            if resp.status_code == 200:
+                for ac in resp.json().get("ac", []):
+                    if (ac.get("flight") or "").strip().upper() == cs_upper:
+                        return self._parse_adsb_lol_ac(callsign, ac)
+        except Exception as e:
+            log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
 
         # Fall back to OpenSky (returns vertical_speed in m/s → convert to ft/min)
         pos = get_flight_position(callsign)
@@ -350,9 +353,12 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 log.info(f"[specific_flight_tracker] FlightStats hit for {callsign}: "
                          f"{fs_result.get('al_origin')}→{fs_result.get('al_destination')}")
 
-        # Tier 2: AirLabs — only when FlightStats failed or missing arrival time
+        # Tier 2: AirLabs — skip only when FlightStats succeeded AND we already
+        # have aircraft type cached (first fetch always calls AirLabs to populate type/reg)
+        with self._lock:
+            cached_type = self._flights[callsign].get("plane_type", "")
         al_data = None
-        if not fs_result or not fs_result.get("time_estimated_arrival"):
+        if not fs_result or not fs_result.get("time_estimated_arrival") or not cached_type:
             al_data = self._fetch_airlabs(callsign)
 
         # Build route dict, merging all available data (AirLabs wins for live fields)
@@ -436,71 +442,26 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         self._poll_route(callsign)
 
         with self._lock:
-            state    = self._flights[callsign]["state"]
-            route    = self._flights[callsign]["route_data"]
-            last_lat = self._flights[callsign].get("last_lat")
-            last_lng = self._flights[callsign].get("last_lng")
+            state = self._flights[callsign]["state"]
+            route = self._flights[callsign]["route_data"]
 
-        if state == STATE_ACTIVE:
-            pos = self._get_position(callsign, last_lat, last_lng)
-            if pos is None:
-                self._handle_no_response(callsign)
-                return
-            if route:
-                merged = {**pos, **{k: route[k] for k in (
-                    "dep_iata", "arr_iata", "plane_type", "registration",
-                    "sched_dep", "actual_dep", "sched_arr", "est_arr",
-                ) if route.get(k)}}
-            else:
-                merged = pos
-            self._handle_active_response(callsign, merged)
+        pos = self._get_position(callsign)
+
+        if pos is None:
+            self._handle_no_response(callsign)
+            return
+
+        if state == STATE_IDLE:
+            log.info(f"[specific_flight_tracker] {callsign} found via position API while IDLE")
+
+        if route:
+            merged = {**pos, **{k: route[k] for k in (
+                "dep_iata", "arr_iata", "plane_type", "registration",
+                "sched_dep", "actual_dep", "sched_arr", "est_arr",
+            ) if route.get(k)}}
         else:
-            # IDLE — try to get a real-time position.
-            # Seed priority: last known pos > AirLabs route pos > departure airport > arrival airport.
-            # Using airport coords lets adsb.lol find the aircraft even when we've never
-            # had a position fix (e.g. FlightStats-only route with no lat/lng).
-            seed_lat = last_lat
-            seed_lng = last_lng
-            if seed_lat is None and route:
-                if route.get("lat") is not None:
-                    seed_lat, seed_lng = route["lat"], route["lng"]
-                else:
-                    dep_coords = self._airport_db.get(route.get("dep_iata", ""))
-                    arr_coords = self._airport_db.get(route.get("arr_iata", ""))
-                    if dep_coords:
-                        seed_lat, seed_lng = dep_coords
-                        log.debug(f"[specific_flight_tracker] {callsign}: seeding adsb.lol with dep airport {route.get('dep_iata')}")
-                    elif arr_coords:
-                        seed_lat, seed_lng = arr_coords
-                        log.debug(f"[specific_flight_tracker] {callsign}: seeding adsb.lol with arr airport {route.get('arr_iata')}")
-            pos = self._get_position(callsign, seed_lat, seed_lng)
-
-            if pos is None and route and route.get("lat") is not None:
-                # adsb.lol/OpenSky not tracking yet; fall back to AirLabs position
-                # (altitude will be stale but at least we can go ACTIVE)
-                log.info(f"[specific_flight_tracker] {callsign}: using AirLabs position fallback (no real-time fix)")
-                pos = {
-                    "lat":            route["lat"],
-                    "lng":            route["lng"],
-                    "altitude":       route.get("alt", 0),
-                    "ground_speed":   route.get("speed", 0),
-                    "heading":        0,
-                    "vertical_speed": 0,
-                }
-
-            if pos is not None:
-                if last_lat is None:
-                    log.info(f"[specific_flight_tracker] {callsign} found via position API while IDLE")
-                if route:
-                    merged = {**pos, **{k: route[k] for k in (
-                        "dep_iata", "arr_iata", "plane_type",
-                        "sched_dep", "actual_dep", "sched_arr", "est_arr",
-                    ) if route.get(k)}}
-                else:
-                    merged = pos
-                self._handle_active_response(callsign, merged)
-            else:
-                self._handle_no_response(callsign)
+            merged = pos
+        self._handle_active_response(callsign, merged)
 
     def _handle_no_response(self, callsign: str):
         now = time.time()
@@ -636,11 +597,9 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
         with self._lock:
             info = self._flights[callsign]
-            info["state"]        = STATE_ACTIVE
-            info["data"]         = display_entry
-            info["last_polled"]  = now
-            info["last_lat"]     = lat
-            info["last_lng"]     = lng
+            info["state"]         = STATE_ACTIVE
+            info["data"]          = display_entry
+            info["last_polled"]   = now
             info["last_altitude"] = altitude
             info["last_alt_ts"]   = now
             if arr_ts:
