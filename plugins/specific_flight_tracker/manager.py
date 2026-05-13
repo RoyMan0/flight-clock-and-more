@@ -32,7 +32,7 @@ STATE_ACTIVE   = "ACTIVE"
 STATE_COMPLETE = "COMPLETE"
 
 IDLE_POLL_INTERVAL   =  5 * 60   # seconds between polls when not yet airborne
-ACTIVE_POLL_INTERVAL =  3 * 60   # seconds between position polls when airborne
+ACTIVE_POLL_INTERVAL =       60   # seconds between position polls when airborne
 ROUTE_CACHE_TTL      =      3600  # fallback TTL when no arrival time known
 
 AIRLABS_URL  = "https://airlabs.co/api/v9/flight?flight_icao={callsign}&api_key={key}"
@@ -190,14 +190,16 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                     cs_upper = callsign.upper()
                     for ac in resp.json().get("ac", []):
                         if (ac.get("flight") or "").strip().upper() == cs_upper:
-                            log.debug(f"[specific_flight_tracker] adsb.lol hit for {callsign}")
+                            baro_rate = int(ac.get("baro_rate", 0) or 0)
+                            alt_baro  = int(ac.get("alt_baro", 0) or 0)
+                            log.info(f"[specific_flight_tracker] adsb.lol {callsign}: alt={alt_baro} baro_rate={baro_rate}")
                             return {
                                 "lat":            ac["lat"],
                                 "lng":            ac.get("lon", ac.get("lng", 0)),
-                                "altitude":       int(ac.get("alt_baro", 0) or 0),
+                                "altitude":       alt_baro,
                                 "ground_speed":   int(ac.get("gs", 0) or 0),
                                 "heading":        ac.get("track", 0) or 0,
-                                "vertical_speed": int(ac.get("baro_rate", 0) or 0),  # ft/min
+                                "vertical_speed": baro_rate,  # ft/min
                             }
             except Exception as e:
                 log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
@@ -442,39 +444,39 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 merged = pos
             self._handle_active_response(callsign, merged)
         else:
-            # IDLE — try AirLabs position first, then fall back to adsb.lol/OpenSky
-            if route and (route.get("lat") is not None) and (route.get("lng") is not None):
-                merged = {
-                    "lat":          route["lat"],
-                    "lng":          route["lng"],
-                    "altitude":     route["alt"],
-                    "ground_speed": route["speed"],
-                    "heading":      0,
+            # IDLE — try to get a real-time position, seeding adsb.lol with AirLabs
+            # lat/lng if available (AirLabs alt is often stale, so always prefer
+            # a fresh adsb.lol/OpenSky fix over route["alt"]).
+            seed_lat = last_lat or (route["lat"] if route else None)
+            seed_lng = last_lng or (route["lng"] if route else None)
+            pos = self._get_position(callsign, seed_lat, seed_lng)
+
+            if pos is None and route and route.get("lat") is not None:
+                # adsb.lol/OpenSky not tracking yet; fall back to AirLabs position
+                # (altitude will be stale but at least we can go ACTIVE)
+                log.info(f"[specific_flight_tracker] {callsign}: using AirLabs position fallback (no real-time fix)")
+                pos = {
+                    "lat":            route["lat"],
+                    "lng":            route["lng"],
+                    "altitude":       route.get("alt", 0),
+                    "ground_speed":   route.get("speed", 0),
+                    "heading":        0,
                     "vertical_speed": 0,
-                    "dep_iata":     route["dep_iata"],
-                    "arr_iata":     route["arr_iata"],
-                    "plane_type":   route["plane_type"],
-                    "sched_dep":    route["sched_dep"],
-                    "actual_dep":   route["actual_dep"],
-                    "sched_arr":    route["sched_arr"],
-                    "est_arr":      route["est_arr"],
                 }
+
+            if pos is not None:
+                if last_lat is None:
+                    log.info(f"[specific_flight_tracker] {callsign} found via position API while IDLE")
+                if route:
+                    merged = {**pos, **{k: route[k] for k in (
+                        "dep_iata", "arr_iata", "plane_type",
+                        "sched_dep", "actual_dep", "sched_arr", "est_arr",
+                    ) if route.get(k) is not None}}
+                else:
+                    merged = pos
                 self._handle_active_response(callsign, merged)
             else:
-                # AirLabs has no position — try adsb.lol/OpenSky directly
-                pos = self._get_position(callsign, last_lat, last_lng)
-                if pos is not None:
-                    log.info(f"[specific_flight_tracker] {callsign} found via position API while IDLE")
-                    if route:
-                        merged = {**pos, **{k: route[k] for k in (
-                            "dep_iata", "arr_iata", "plane_type",
-                            "sched_dep", "actual_dep", "sched_arr", "est_arr",
-                        ) if route.get(k) is not None}}
-                    else:
-                        merged = pos
-                    self._handle_active_response(callsign, merged)
-                else:
-                    self._handle_no_response(callsign)
+                self._handle_no_response(callsign)
 
     def _handle_no_response(self, callsign: str):
         now = time.time()
@@ -607,7 +609,8 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
         log.info(
             f"[specific_flight_tracker] {callsign} -> ACTIVE "
-            f"({dep_iata}->{arr_iata}, {progress:.0%})"
+            f"({dep_iata}->{arr_iata}, {progress:.0%}) "
+            f"alt={int(altitude)} vs={int(vertical_speed)}"
         )
 
     def _build_display_data(self) -> list:
