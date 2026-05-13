@@ -122,6 +122,9 @@ def _new_flight_entry():
         "last_lng":       None,
         # Airline IATA code discovered via adsbdb (persists so we can call FlightStats)
         "airline_iata":   None,
+        # Altitude history for VS estimation when API doesn't report vertical rate
+        "last_altitude":  None,
+        "last_alt_ts":    None,
     }
 
 
@@ -527,6 +530,15 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         ground_speed = data.get("ground_speed", 0) or data.get("speed", 0) or 0
         vertical_speed = data.get("vertical_speed", 0) or 0  # ft/min (converted in _get_position)
 
+        # Estimate VS from altitude change if the API didn't report it
+        with self._lock:
+            last_alt    = self._flights[callsign].get("last_altitude")
+            last_alt_ts = self._flights[callsign].get("last_alt_ts")
+        if vertical_speed == 0 and altitude and last_alt is not None and last_alt_ts is not None:
+            elapsed_min = (now - last_alt_ts) / 60.0
+            if elapsed_min >= 0.5:  # need at least 30s between samples
+                vertical_speed = int((altitude - last_alt) / elapsed_min)
+
         sched_dep  = data.get("sched_dep")  or iso_to_unix(data.get("dep_time"))
         actual_dep = data.get("actual_dep") or iso_to_unix(data.get("dep_actual"))
         sched_arr  = data.get("sched_arr")  or iso_to_unix(data.get("arr_time"))
@@ -583,11 +595,13 @@ class SpecificFlightTrackerPlugin(BasePlugin):
 
         with self._lock:
             info = self._flights[callsign]
-            info["state"]       = STATE_ACTIVE
-            info["data"]        = display_entry
-            info["last_polled"] = now
-            info["last_lat"]    = lat
-            info["last_lng"]    = lng
+            info["state"]        = STATE_ACTIVE
+            info["data"]         = display_entry
+            info["last_polled"]  = now
+            info["last_lat"]     = lat
+            info["last_lng"]     = lng
+            info["last_altitude"] = altitude
+            info["last_alt_ts"]   = now
             if arr_ts:
                 info["arr_time_ts"] = arr_ts
 
