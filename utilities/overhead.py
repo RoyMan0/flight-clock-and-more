@@ -623,12 +623,14 @@ def log_flight_count(entry: dict, home_airport: str):
         dest    = entry.get("destination", "")
 
         day["flights"].append({
-            "callsign":    callsign,
-            "time":        now_str,
-            "hour":        hour,
-            "origin":      origin,
-            "destination": dest,
-            "airline_icao": entry.get("owner_icao", ""),
+            "callsign":      callsign,
+            "time":          now_str,
+            "hour":          hour,
+            "origin":        origin,
+            "destination":   dest,
+            "airline_icao":  entry.get("owner_icao", ""),
+            "airline":       entry.get("airline", ""),
+            "aircraft_type": entry.get("plane", ""),
         })
         day["count"] = len(day["flights"])
 

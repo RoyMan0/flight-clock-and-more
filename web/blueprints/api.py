@@ -433,7 +433,8 @@ def flight_history_summary():
     hourly_totals = [0] * 24
     dow_totals    = [0] * 7   # 0=Mon … 6=Sun in isoweekday; we convert to Sun=0
     dow_counts    = [0] * 7
-    airline_counts = {}
+    airline_counts  = {}
+    ac_type_counts  = {}
     local = flyover = unknown = 0
     busiest_date = None
     busiest_count = 0
@@ -471,6 +472,12 @@ def flight_history_summary():
             else:
                 airline_counts["Unknown"] = airline_counts.get("Unknown", 0) + 1
 
+            ac_type = (flight.get("aircraft_type") or "").strip()
+            if ac_type:
+                ac_type_counts[ac_type] = ac_type_counts.get(ac_type, 0) + 1
+            else:
+                ac_type_counts["Unknown"] = ac_type_counts.get("Unknown", 0) + 1
+
             orig = (flight.get("origin") or "").strip()
             dest = (flight.get("destination") or "").strip()
             if not orig and not dest:
@@ -500,7 +507,8 @@ def flight_history_summary():
     DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     peak_dow_idx = dow_avg.index(max(dow_avg))
 
-    top_airlines = dict(sorted(airline_counts.items(), key=lambda x: x[1], reverse=True)[:12])
+    top_airlines  = dict(sorted(airline_counts.items(),  key=lambda x: x[1], reverse=True)[:12])
+    top_ac_types  = dict(sorted(ac_type_counts.items(),  key=lambda x: x[1], reverse=True)[:12])
 
     return jsonify({
         "daily_average":    daily_avg,
@@ -513,7 +521,8 @@ def flight_history_summary():
         "days_tracked":     num_days,
         "hourly_avg":       hourly_avg,
         "dow_avg":          dow_avg,
-        "airline_breakdown": top_airlines,
+        "airline_breakdown":        top_airlines,
+        "aircraft_type_breakdown":  top_ac_types,
         "local_vs_flyover": {"local": local, "flyover": flyover, "unknown": unknown},
         "daily_log":        daily_log,
     })
@@ -531,6 +540,7 @@ def flight_history_day(date):
     # Compute per-day stats for the detail page
     hourly = [0] * 24
     airline_counts = {}
+    ac_type_counts = {}
     cfg = _cfg()
     home_airport = (cfg.get("location") or {}).get("journey_code", "") if cfg else ""
     local = flyover = unknown = 0
@@ -549,6 +559,12 @@ def flight_history_day(date):
         else:
             airline_counts["Unknown"] = airline_counts.get("Unknown", 0) + 1
 
+        ac_type = (flight.get("aircraft_type") or "").strip()
+        if ac_type:
+            ac_type_counts[ac_type] = ac_type_counts.get(ac_type, 0) + 1
+        else:
+            ac_type_counts["Unknown"] = ac_type_counts.get("Unknown", 0) + 1
+
         orig = (flight.get("origin") or "").strip()
         dest = (flight.get("destination") or "").strip()
         if not orig and not dest:
@@ -562,11 +578,12 @@ def flight_history_day(date):
 
     return jsonify({
         **day,
-        "hourly":           hourly,
-        "peak_hour":        peak_hour,
-        "peak_hour_count":  peak_hour_count,
-        "airline_breakdown": dict(sorted(airline_counts.items(), key=lambda x: x[1], reverse=True)[:12]),
-        "local_vs_flyover": {"local": local, "flyover": flyover, "unknown": unknown},
+        "hourly":                   hourly,
+        "peak_hour":                peak_hour,
+        "peak_hour_count":          peak_hour_count,
+        "airline_breakdown":        dict(sorted(airline_counts.items(), key=lambda x: x[1], reverse=True)[:12]),
+        "aircraft_type_breakdown":  dict(sorted(ac_type_counts.items(), key=lambda x: x[1], reverse=True)[:12]),
+        "local_vs_flyover":         {"local": local, "flyover": flyover, "unknown": unknown},
     })
 
 
