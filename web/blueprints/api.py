@@ -158,10 +158,13 @@ def get_plugin_config(plugin_id):
 @api_bp.post("/plugins/<plugin_id>/config")
 def save_plugin_config(plugin_id):
     cfg = _cfg()
+    pm = _pm()
     if cfg is None:
         return jsonify({"error": "config not available"}), 503
     data = request.get_json(force=True)
     cfg.save_plugin_config(plugin_id, data)
+    if pm:
+        pm.reload_rotation()
     return jsonify({"ok": True})
 
 

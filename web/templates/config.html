@@ -204,7 +204,7 @@
               <label class="form-label">Tracked Callsigns <span class="text-muted small">(comma-separated, e.g. UAL2345, SWA123)</span></label>
               <input type="text" class="form-control bg-dark text-light border-secondary"
                      :value="(pluginConfigs.specific_flight_tracker.tracked_callsigns || []).join(', ')"
-                     @change="pluginConfigs.specific_flight_tracker.tracked_callsigns = $event.target.value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)">
+                     @input="pluginConfigs.specific_flight_tracker.tracked_callsigns = $event.target.value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)">
             </div>
             <div class="col-md-4">
               <label class="form-label">Display Duration (s)</label>
