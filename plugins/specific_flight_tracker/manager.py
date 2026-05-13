@@ -122,6 +122,9 @@ def _new_flight_entry():
         "last_lng":       None,
         # Airline IATA code discovered via adsbdb (persists so we can call FlightStats)
         "airline_iata":   None,
+        # Aircraft type and registration — cached once found, survive across polls
+        "plane_type":     "",
+        "registration":   "",
         # Altitude history for VS estimation when API doesn't report vertical rate
         "last_altitude":  None,
         "last_alt_ts":    None,
@@ -369,17 +372,18 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 est_arr    = est_arr    or fs_result.get("time_estimated_arrival")
 
             route = {
-                "dep_iata":   al_data.get("dep_iata", ""),
-                "arr_iata":   al_data.get("arr_iata", ""),
-                "plane_type": al_data.get("aircraft_icao", "") or al_data.get("aircraft_iata", ""),
-                "sched_dep":  sched_dep,
-                "actual_dep": actual_dep,
-                "sched_arr":  sched_arr,
-                "est_arr":    est_arr,
-                "lat":        al_data.get("lat"),
-                "lng":        al_data.get("lng"),
-                "alt":        al_data.get("alt", 0) or 0,
-                "speed":      al_data.get("speed", 0) or 0,
+                "dep_iata":     al_data.get("dep_iata", ""),
+                "arr_iata":     al_data.get("arr_iata", ""),
+                "plane_type":   al_data.get("aircraft_icao", "") or al_data.get("aircraft_iata", ""),
+                "registration": (al_data.get("reg_number") or "").strip().upper(),
+                "sched_dep":    sched_dep,
+                "actual_dep":   actual_dep,
+                "sched_arr":    sched_arr,
+                "est_arr":      est_arr,
+                "lat":          al_data.get("lat"),
+                "lng":          al_data.get("lng"),
+                "alt":          al_data.get("alt", 0) or 0,
+                "speed":        al_data.get("speed", 0) or 0,
             }
         elif fs_result:
             # AirLabs failed but FlightStats has route info
@@ -444,7 +448,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
                 return
             if route:
                 merged = {**pos, **{k: route[k] for k in (
-                    "dep_iata", "arr_iata", "plane_type",
+                    "dep_iata", "arr_iata", "plane_type", "registration",
                     "sched_dep", "actual_dep", "sched_arr", "est_arr",
                 ) if route.get(k)}}
             else:
@@ -538,7 +542,20 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         altitude      = data.get("altitude", 0) or data.get("alt", 0) or 0
         ground_speed  = data.get("ground_speed", 0) or data.get("speed", 0) or 0
         vertical_speed = data.get("vertical_speed", 0) or 0  # ft/min (converted in _get_position)
-        registration  = data.get("registration", "") or ""
+
+        # Use cached plane_type/registration as fallback when position APIs don't supply them
+        with self._lock:
+            cached_type = self._flights[callsign].get("plane_type", "")
+            cached_reg  = self._flights[callsign].get("registration", "")
+        plane_type   = plane_type or cached_type
+        registration = data.get("registration", "") or cached_reg
+
+        # Update cache whenever we get a better (non-empty) value
+        with self._lock:
+            if plane_type:
+                self._flights[callsign]["plane_type"] = plane_type
+            if registration:
+                self._flights[callsign]["registration"] = registration
 
         # Estimate VS from altitude change if the API didn't report it
         with self._lock:
