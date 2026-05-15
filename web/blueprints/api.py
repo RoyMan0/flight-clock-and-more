@@ -594,6 +594,15 @@ def flight_history_day(date):
 # System control
 # ------------------------------------------------------------------
 
+@api_bp.post("/system/connect-bt")
+def connect_bt():
+    threading.Thread(
+        target=lambda: subprocess.run(["/home/royman/bt-connect.sh"]),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True})
+
+
 @api_bp.post("/system/restart-app")
 def restart_app():
     threading.Thread(

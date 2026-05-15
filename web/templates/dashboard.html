@@ -67,6 +67,11 @@
             </div>
           </div>
           <div class="border-top pt-3 d-flex flex-column gap-2">
+            <button class="btn btn-sm btn-outline-secondary w-100"
+                    :disabled="sysActionPending"
+                    @click="systemAction('connect-bt', null)">
+              <i class="bi bi-bluetooth me-1"></i>Connect to BT Speaker
+            </button>
             <button class="btn btn-sm btn-outline-warning w-100"
                     :disabled="sysActionPending"
                     @click="systemAction('restart-app', 'Restart the application?')">
@@ -174,8 +179,15 @@ function dashboard() {
     },
 
     async systemAction(action, confirmMsg) {
-      if (!confirm(confirmMsg)) return;
+      if (confirmMsg && !confirm(confirmMsg)) return;
       this.sysActionPending = true;
+      if (action === 'connect-bt') {
+        this.sysActionMsg = 'Connecting to BT speaker…';
+        try { await fetch('/api/system/connect-bt', {method: 'POST'}); } catch (_) {}
+        this.sysActionMsg = 'Connecting — takes up to 30s';
+        setTimeout(() => { this.sysActionMsg = ''; this.sysActionPending = false; }, 30000);
+        return;
+      }
       this.sysActionMsg = action === 'restart-app' ? 'Restarting…' : action === 'reboot' ? 'Rebooting…' : 'Shutting down…';
       try {
         await fetch(`/api/system/${action}`, {method: 'POST'});
