@@ -202,9 +202,18 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         }
 
     def _get_position(self, callsign: str) -> dict | None:
-        """Fetch real-time position: adsb.lol callsign → OpenSky fallback."""
+        """Fetch real-time position: FR24 → adsb.lol callsign → OpenSky."""
         cs_upper = callsign.upper()
 
+        # 1. FR24 — worldwide coverage including satellite/oceanic
+        from utilities.fr24_lookup import get_flight_position as _fr24_pos, is_available as _fr24_avail
+        if _fr24_avail():
+            ac = _fr24_pos(callsign)
+            if ac:
+                log.info(f"[specific_flight_tracker] FR24 hit for {callsign}")
+                return self._parse_adsb_lol_ac(callsign, ac)
+
+        # 2. adsb.lol callsign endpoint
         try:
             resp = requests.get(
                 ADSB_LOL_CALLSIGN_URL.format(callsign=callsign),
@@ -217,7 +226,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         except Exception as e:
             log.debug(f"[specific_flight_tracker] adsb.lol failed for {callsign}: {e}")
 
-        # Fall back to OpenSky (returns vertical_speed in m/s → convert to ft/min)
+        # 3. OpenSky fallback (returns vertical_speed in m/s → convert to ft/min)
         pos = get_flight_position(callsign)
         if pos is None:
             return None
@@ -457,13 +466,41 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         if state == STATE_IDLE:
             log.info(f"[specific_flight_tracker] {callsign} found via position API while IDLE")
 
+        # adsbdb aircraft lookup — enriches plane_type and registration for GA flights
+        from utilities.adsbdb_aircraft import get_aircraft_info as _get_aircraft_info
+        _reg = (pos.get("r") or pos.get("registration") or "").strip()
+        _aircraft_info = _get_aircraft_info(_reg) if _reg else {}
+
+        # FR24 route fallback — use origin/destination from position dict when
+        # all route lookups failed (GA flights without a filed plan on other sources)
+        if route is None:
+            _fr24_dep = (pos.get("origin") or "").strip()
+            _fr24_arr = (pos.get("destination") or "").strip()
+            if _fr24_dep and _fr24_arr:
+                route = {
+                    "dep_iata": _fr24_dep, "arr_iata": _fr24_arr,
+                    "plane_type": _aircraft_info.get("icao_type", ""),
+                    "registration": _aircraft_info.get("registration", ""),
+                    "sched_dep": None, "actual_dep": None,
+                    "sched_arr": None, "est_arr": None,
+                    "lat": None, "lng": None, "alt": 0, "speed": 0,
+                }
+                log.info(f"[specific_flight_tracker] FR24 route for {callsign}: {_fr24_dep}→{_fr24_arr}")
+
         if route:
             merged = {**pos, **{k: route[k] for k in (
                 "dep_iata", "arr_iata", "plane_type", "registration",
                 "sched_dep", "actual_dep", "sched_arr", "est_arr",
             ) if route.get(k)}}
+            # Fill gaps in plane_type / registration from adsbdb_aircraft
+            if not merged.get("plane_type"):
+                merged["plane_type"] = _aircraft_info.get("icao_type", "")
+            if not merged.get("registration"):
+                merged["registration"] = _aircraft_info.get("registration", "")
         else:
-            merged = pos
+            merged = {**pos,
+                      "plane_type":   _aircraft_info.get("icao_type", ""),
+                      "registration": _aircraft_info.get("registration", "") or pos.get("r", "")}
         self._handle_active_response(callsign, merged)
 
     def _handle_no_response(self, callsign: str):

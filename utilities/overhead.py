@@ -810,19 +810,30 @@ class Overhead:
 
         data = []
         try:
-            # ── Step 1: Positions (adsb.lol → OpenSky fallback) ──────────
+            # ── Step 1: Positions (FR24 → adsb.lol → OpenSky fallback) ──────────
+            from utilities.fr24_lookup import get_flights_in_area as _fr24_area, is_available as _fr24_avail
             from utilities.opensky import get_aircraft_in_area as _opensky_area
             aircraft_list = None
-            try:
-                url  = ADSB_LOL_URL.format(lat=home_lat, lon=home_lon, dist=int(radius_nm))
-                resp = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
-                if resp.status_code == 200:
-                    aircraft_list = resp.json().get("ac", [])
-                    log.debug(f"[overhead] adsb.lol: {len(aircraft_list)} aircraft in radius")
-                else:
-                    log.warning(f"[overhead] adsb.lol {resp.status_code} — trying OpenSky")
-            except Exception as e:
-                log.warning(f"[overhead] adsb.lol error ({e}) — trying OpenSky")
+
+            if _fr24_avail():
+                zone = loc.get("zone_home", {})
+                if zone:
+                    fr24_list = _fr24_area(zone)
+                    if fr24_list:
+                        aircraft_list = fr24_list
+                        log.debug(f"[overhead] FR24: {len(aircraft_list)} aircraft in zone")
+
+            if aircraft_list is None:
+                try:
+                    url  = ADSB_LOL_URL.format(lat=home_lat, lon=home_lon, dist=int(radius_nm))
+                    resp = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
+                    if resp.status_code == 200:
+                        aircraft_list = resp.json().get("ac", [])
+                        log.debug(f"[overhead] adsb.lol: {len(aircraft_list)} aircraft in radius")
+                    else:
+                        log.warning(f"[overhead] adsb.lol {resp.status_code} — trying OpenSky")
+                except Exception as e:
+                    log.warning(f"[overhead] adsb.lol error ({e}) — trying OpenSky")
 
             if aircraft_list is None:
                 aircraft_list = _opensky_area(home_lat, home_lon, radius_nm)
@@ -860,6 +871,16 @@ class Overhead:
                 vert_speed = ac.get("baro_rate") or 0
                 plane_type = ac.get("t", "") or ""
 
+                # adsbdb aircraft lookup by hex (adsb.lol) or registration (FR24)
+                _icao24 = (ac.get("hex") or "").strip().lower()
+                _reg    = (ac.get("r")   or "").strip()
+                from utilities.adsbdb_aircraft import get_aircraft_info as _get_aircraft_info
+                _aircraft_info = _get_aircraft_info(_icao24 or _reg)
+
+                # FR24 provides origin/destination IATA in the position dict
+                _fr24_origin = (ac.get("origin") or "").strip()
+                _fr24_dest   = (ac.get("destination") or "").strip()
+
                 if callsign not in self._alerted_callsigns:
                     log.info(f"[overhead] New flight: {callsign}")
                     self._alerted_callsigns.add(callsign)
@@ -877,8 +898,10 @@ class Overhead:
                 # historical. AirLabs wins for origin/destination; adsbdb
                 # coordinates are only used when its route matches AirLabs.
                 airline    = route.get("airline", "")    or sched.get("al_airline", "")
+                airline    = airline or _aircraft_info.get("operator", "")
                 owner_iata = owner_iata                  or sched.get("al_owner_iata", "")
                 owner_icao = route.get("owner_icao", "") or sched.get("al_owner_icao", "")
+                plane_type = plane_type or _aircraft_info.get("icao_type", "")
 
                 al_origin = sched.get("al_origin", "")
                 al_dest   = sched.get("al_destination", "")
@@ -907,6 +930,12 @@ class Overhead:
                     origin_lon  = route.get("origin_lon")
                     dest_lat    = route.get("dest_lat")
                     dest_lon    = route.get("dest_lon")
+                    # FR24 position data includes route as last-resort source
+                    if not origin and not destination and _fr24_origin and _fr24_dest:
+                        origin      = _fr24_origin
+                        destination = _fr24_dest
+                        origin_lat = origin_lon = dest_lat = dest_lon = None
+                        log.debug(f"[overhead] FR24 route for {callsign}: {origin}→{destination}")
                     if not origin or not destination:
                         log.warning(
                             f"[overhead] {callsign}: no route "
@@ -1091,9 +1120,6 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def _get_schedule(self, callsign: str, owner_iata: str) -> dict:
-        if not owner_iata:
-            log.debug(f"[overhead] Skipping schedule lookup for {callsign}: no owner_iata")
-            return {}
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
