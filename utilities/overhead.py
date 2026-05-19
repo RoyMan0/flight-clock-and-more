@@ -810,30 +810,51 @@ class Overhead:
 
         data = []
         try:
-            # ── Step 1: Positions (FR24 → adsb.lol → OpenSky fallback) ──────────
+            # ── Step 1: Positions ─────────────────────────────────────────────
+            # adsb.lol is primary (accurate full callsigns + ICAO24 hex).
+            # FR24 supplements with aircraft adsb.lol missed (satellite coverage).
+            # FR24 truncates some callsigns so we never let it override adsb.lol.
             from utilities.fr24_lookup import get_flights_in_area as _fr24_area, is_available as _fr24_avail
             from utilities.opensky import get_aircraft_in_area as _opensky_area
             aircraft_list = None
 
+            try:
+                url  = ADSB_LOL_URL.format(lat=home_lat, lon=home_lon, dist=int(radius_nm))
+                resp = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
+                if resp.status_code == 200:
+                    aircraft_list = resp.json().get("ac", [])
+                    log.debug(f"[overhead] adsb.lol: {len(aircraft_list)} aircraft in radius")
+                else:
+                    log.warning(f"[overhead] adsb.lol {resp.status_code} — trying OpenSky")
+            except Exception as e:
+                log.warning(f"[overhead] adsb.lol error ({e}) — trying OpenSky")
+
+            # FR24 supplement: add aircraft adsb.lol doesn't see (dedup by proximity)
             if _fr24_avail():
                 zone = loc.get("zone_home", {})
                 if zone:
                     fr24_list = _fr24_area(zone)
                     if fr24_list:
-                        aircraft_list = fr24_list
-                        log.debug(f"[overhead] FR24: {len(aircraft_list)} aircraft in zone")
-
-            if aircraft_list is None:
-                try:
-                    url  = ADSB_LOL_URL.format(lat=home_lat, lon=home_lon, dist=int(radius_nm))
-                    resp = requests.get(url, timeout=10, headers={"User-Agent": "LEDMatrix/1.0"})
-                    if resp.status_code == 200:
-                        aircraft_list = resp.json().get("ac", [])
-                        log.debug(f"[overhead] adsb.lol: {len(aircraft_list)} aircraft in radius")
-                    else:
-                        log.warning(f"[overhead] adsb.lol {resp.status_code} — trying OpenSky")
-                except Exception as e:
-                    log.warning(f"[overhead] adsb.lol error ({e}) — trying OpenSky")
+                        if aircraft_list is not None:
+                            # Only add FR24 aircraft with no adsb.lol match within 2 nm
+                            for fr_ac in fr24_list:
+                                fr_lat = fr_ac.get("lat")
+                                fr_lon = fr_ac.get("lon")
+                                if fr_lat is None or fr_lon is None:
+                                    continue
+                                nearby = any(
+                                    haversine(fr_lat, fr_lon,
+                                              a.get("lat", 0), a.get("lon", 0), units) < 2.0
+                                    for a in aircraft_list
+                                    if a.get("lat") is not None
+                                )
+                                if not nearby:
+                                    aircraft_list.append(fr_ac)
+                                    log.debug(f"[overhead] FR24 supplement: {fr_ac.get('flight','?')}")
+                        else:
+                            # adsb.lol failed — use FR24 as fallback
+                            aircraft_list = fr24_list
+                            log.info(f"[overhead] FR24 fallback: {len(fr24_list)} aircraft")
 
             if aircraft_list is None:
                 aircraft_list = _opensky_area(home_lat, home_lon, radius_nm)
@@ -892,7 +913,7 @@ class Overhead:
                 # Schedule / delay (AirLabs → FlightAware)
                 # Done before building the entry so AirLabs route data can fill
                 # gaps when adsbdb sanity check fails.
-                sched = self._get_schedule(callsign, owner_iata)
+                sched = self._get_schedule(callsign, owner_iata, plane_lat, plane_lon)
 
                 # Merge sources — AirLabs has live daily assignments, adsbdb is
                 # historical. AirLabs wins for origin/destination; adsbdb
@@ -1119,7 +1140,8 @@ class Overhead:
     # Also returns origin/destination from AirLabs when adsbdb data is stale.
     # ------------------------------------------------------------------
 
-    def _get_schedule(self, callsign: str, owner_iata: str) -> dict:
+    def _get_schedule(self, callsign: str, owner_iata: str,
+                      plane_lat: float = None, plane_lon: float = None) -> dict:
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
@@ -1142,9 +1164,23 @@ class Overhead:
         from utilities.flightstats import get_flight_info as _fs_get
         fs = _fs_get(callsign, owner_iata)
         if fs and fs.get("al_origin") and fs.get("al_destination"):
-            log.info(f"[overhead] FlightStats {callsign}: "
-                     f"{fs['al_origin']}→{fs['al_destination']}")
-            result = fs
+            # Sanity-check FlightStats route against actual aircraft position.
+            # Some codeshare flight numbers (e.g. UA 8000-series) have stale/wrong
+            # entries in FlightStats that would otherwise skip AirLabs entirely.
+            fs_ok = True
+            if plane_lat is not None and plane_lon is not None:
+                o_lat, o_lon = self._get_airport_coords(fs["al_origin"])
+                d_lat, d_lon = self._get_airport_coords(fs["al_destination"])
+                if not _route_makes_sense(plane_lat, plane_lon, o_lat, o_lon, d_lat, d_lon):
+                    log.warning(
+                        f"[overhead] FlightStats {callsign}: "
+                        f"{fs['al_origin']}→{fs['al_destination']} failed sanity check — trying AirLabs"
+                    )
+                    fs_ok = False
+            if fs_ok:
+                log.info(f"[overhead] FlightStats {callsign}: "
+                         f"{fs['al_origin']}→{fs['al_destination']}")
+                result = fs
 
         # ── AirLabs (primary) ─────────────────────────────────────────
         # Try flight_icao=callsign first (no IATA mapping needed), then
