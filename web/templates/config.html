@@ -120,6 +120,53 @@
         </div>
       </div>
 
+      <!-- WiFi Network -->
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-wifi me-2"></i>WiFi Network</div>
+        <div class="card-body">
+          <div class="mb-2 text-muted small" x-show="currentSsid">
+            Currently connected: <strong class="text-light" x-text="currentSsid"></strong>
+          </div>
+          <div class="mb-3">
+            <button class="btn btn-outline-secondary btn-sm" @click="scanWifi()" :disabled="wifiScanning">
+              <span x-show="!wifiScanning"><i class="bi bi-arrow-repeat me-1"></i>Scan Networks</span>
+              <span x-show="wifiScanning">Scanning…</span>
+            </button>
+          </div>
+          <div x-show="wifiNetworks.length > 0">
+            <div class="mb-2">
+              <label class="form-label">Select Network</label>
+              <select class="form-select bg-dark text-light border-secondary"
+                      x-model="wifiSsid"
+                      @change="wifiPassword = ''">
+                <option value="">— choose a network —</option>
+                <template x-for="n in wifiNetworks" :key="n.ssid">
+                  <option :value="n.ssid"
+                          x-text="n.ssid + ' (' + n.signal + '%' + (n.security ? ', ' + n.security : ', open') + (n.current ? ' ✓' : '') + ')'">
+                  </option>
+                </template>
+              </select>
+            </div>
+            <div class="mb-2" x-show="wifiSsid">
+              <label class="form-label">Password <span class="text-muted small">(leave blank for open networks)</span></label>
+              <input type="password" class="form-control bg-dark text-light border-secondary"
+                     x-model="wifiPassword" autocomplete="new-password" placeholder="Network password">
+            </div>
+            <div x-show="wifiSsid" class="alert alert-warning py-2 px-3 small mb-2">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              Changing WiFi may disconnect the web interface. Reconnect on the new network to get back.
+            </div>
+            <button class="btn btn-primary btn-sm" @click="connectWifi()"
+                    :disabled="!wifiSsid || wifiConnecting">
+              <span x-show="!wifiConnecting"><i class="bi bi-wifi me-1"></i>Connect</span>
+              <span x-show="wifiConnecting">Connecting…</span>
+            </button>
+          </div>
+          <div x-show="wifiStatus" x-text="wifiStatus"
+               class="mt-2 small" :class="wifiStatusOk ? 'text-success' : 'text-warning'"></div>
+        </div>
+      </div>
+
       <!-- Overhead Flight Tracker Config -->
       <div class="card mb-4" x-show="'flight_tracker' in pluginConfigs">
         <div class="card-header"><i class="bi bi-airplane me-2"></i>Overhead Flight Tracker</div>
@@ -631,6 +678,14 @@ function configPage() {
     teamsLoading: false,
     teamsData: {},
     teamTab: '',
+    wifiNetworks: [],
+    wifiSsid: '',
+    wifiPassword: '',
+    wifiStatus: '',
+    wifiStatusOk: false,
+    wifiScanning: false,
+    wifiConnecting: false,
+    currentSsid: '',
 
     async init() {
       await this.loadAll();
@@ -768,6 +823,49 @@ function configPage() {
         if (!favs.includes(key)) this.pluginConfigs.sports.favorite_teams = [...favs, key].sort();
       } else {
         this.pluginConfigs.sports.favorite_teams = favs.filter(t => t !== key);
+      }
+    },
+
+    async scanWifi() {
+      this.wifiScanning = true;
+      this.wifiStatus = '';
+      this.wifiNetworks = [];
+      this.wifiSsid = '';
+      try {
+        const d = await fetch('/api/system/wifi/networks').then(r => r.json());
+        this.wifiNetworks = d.networks || [];
+        this.currentSsid = d.current || '';
+        if (!this.wifiNetworks.length) {
+          this.wifiStatus = 'No networks found.';
+          this.wifiStatusOk = false;
+        }
+      } catch (_) {
+        this.wifiStatus = 'Scan failed.';
+        this.wifiStatusOk = false;
+      } finally {
+        this.wifiScanning = false;
+      }
+    },
+
+    async connectWifi() {
+      if (!this.wifiSsid) return;
+      if (!confirm(`Connect to "${this.wifiSsid}"? The web interface may disconnect if switching networks.`)) return;
+      this.wifiConnecting = true;
+      this.wifiStatus = `Connecting to ${this.wifiSsid}…`;
+      this.wifiStatusOk = false;
+      try {
+        await fetch('/api/system/wifi/connect', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ssid: this.wifiSsid, password: this.wifiPassword}),
+        });
+        this.wifiStatus = `Connection initiated — if switching networks, reconnect your device to ${this.wifiSsid}.`;
+        this.wifiStatusOk = true;
+      } catch (_) {
+        this.wifiStatus = 'Request failed.';
+        this.wifiStatusOk = false;
+      } finally {
+        this.wifiConnecting = false;
       }
     },
   };

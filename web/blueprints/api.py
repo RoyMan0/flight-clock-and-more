@@ -603,6 +603,77 @@ def connect_bt():
     return jsonify({"ok": True})
 
 
+@api_bp.get("/system/wifi/networks")
+def wifi_networks():
+    try:
+        subprocess.run(
+            ["sudo", "nmcli", "dev", "wifi", "rescan"],
+            capture_output=True, timeout=8,
+        )
+        result = subprocess.run(
+            ["sudo", "nmcli", "-e", "yes", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"],
+            capture_output=True, text=True, timeout=10,
+        )
+        active_result = subprocess.run(
+            ["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"],
+            capture_output=True, text=True, timeout=5,
+        )
+        current_ssid = ""
+        for line in active_result.stdout.splitlines():
+            if line.startswith("yes:"):
+                current_ssid = line[4:].replace("\\:", ":")
+                break
+        networks = []
+        seen = set()
+        for line in result.stdout.splitlines():
+            parts = line.rsplit(":", 2)
+            if len(parts) == 3:
+                ssid = parts[0].replace("\\:", ":")
+                signal = parts[1]
+                security = parts[2]
+            elif len(parts) == 2:
+                ssid = parts[0].replace("\\:", ":")
+                signal = parts[1]
+                security = ""
+            else:
+                continue
+            if not ssid or ssid in seen:
+                continue
+            seen.add(ssid)
+            try:
+                sig_int = int(signal)
+            except ValueError:
+                sig_int = 0
+            networks.append({
+                "ssid": ssid,
+                "signal": sig_int,
+                "security": security,
+                "current": ssid == current_ssid,
+            })
+        networks.sort(key=lambda x: x["signal"], reverse=True)
+        return jsonify({"ok": True, "networks": networks, "current": current_ssid})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "networks": [], "current": ""}), 500
+
+
+@api_bp.post("/system/wifi/connect")
+def wifi_connect():
+    data = request.get_json(force=True)
+    ssid = data.get("ssid", "").strip()
+    password = data.get("password", "").strip()
+    if not ssid:
+        return jsonify({"ok": False, "error": "SSID required"}), 400
+
+    def _connect():
+        cmd = ["sudo", "nmcli", "dev", "wifi", "connect", ssid]
+        if password:
+            cmd += ["password", password]
+        subprocess.run(cmd, capture_output=True, timeout=30)
+
+    threading.Thread(target=_connect, daemon=True).start()
+    return jsonify({"ok": True})
+
+
 @api_bp.post("/system/restart-app")
 def restart_app():
     threading.Thread(
