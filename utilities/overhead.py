@@ -916,7 +916,8 @@ class Overhead:
                 plane_vs = ac.get("baro_rate")  # ft/min from adsb.lol; 0 for FR24 anon
                 sched = self._get_schedule(callsign, owner_iata, plane_lat, plane_lon,
                                            fr24_has_route=bool(_fr24_origin and _fr24_dest),
-                                           plane_vs=plane_vs)
+                                           plane_vs=plane_vs,
+                                           plane_reg=_reg)
 
                 # Merge sources — AirLabs has live daily assignments, adsbdb is
                 # historical. AirLabs wins for origin/destination; adsbdb
@@ -1146,7 +1147,8 @@ class Overhead:
     def _get_schedule(self, callsign: str, owner_iata: str,
                       plane_lat: float = None, plane_lon: float = None,
                       fr24_has_route: bool = False,
-                      plane_vs: float = None) -> dict:
+                      plane_vs: float = None,
+                      plane_reg: str = None) -> dict:
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
@@ -1277,23 +1279,40 @@ class Overhead:
                     f"{'no keys configured' if not fa_keys else f'all {len(fa_keys)} key(s) over budget ${fa_budget}'}"
                 )
         if (not result or airlabs_incomplete) and fa_key and not fr24_has_route:
-            try:
-                resp = requests.get(
-                    FLIGHTAWARE_URL.format(ident=callsign),
-                    headers={"x-apikey": fa_key},
-                    timeout=8,
-                )
-                if resp.status_code != 200:
-                    log.warning(f"[overhead] FlightAware {resp.status_code} for {callsign}")
-                else:
+            from datetime import timezone as _tz
+            today_pfx = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+            twelve_hrs_ago = now - 43200
+
+            def _fa_dep_ts(f):
+                return iso_to_unix(f.get("actual_out") or f.get("scheduled_out"))
+
+            def _fa_iata(a: dict) -> str:
+                iata = _clean(a.get("code_iata", ""))
+                if iata:
+                    return iata
+                icao = _clean(a.get("code_icao", "") or a.get("code", ""))
+                if icao and len(icao) == 4 and icao[0] == "K":
+                    return icao[1:]
+                return ""
+
+            # Try callsign first, then registration as fallback for non-standard
+            # callsigns (charter, medical, repositioning) that FA indexes by tail number.
+            _fa_idents = [callsign]
+            if plane_reg and plane_reg.upper() != callsign.upper():
+                _fa_idents.append(plane_reg)
+
+            for _fa_ident in _fa_idents:
+                try:
+                    resp = requests.get(
+                        FLIGHTAWARE_URL.format(ident=_fa_ident),
+                        headers={"x-apikey": fa_key},
+                        timeout=8,
+                    )
+                    if resp.status_code != 200:
+                        log.warning(f"[overhead] FlightAware {resp.status_code} for {_fa_ident}")
+                        continue
                     flights = resp.json().get("flights", [])
-                    from datetime import timezone as _tz
-                    today_pfx = datetime.now(_tz.utc).strftime("%Y-%m-%d")
-                    twelve_hrs_ago = now - 43200
-                    def _fa_dep_ts(f):
-                        return iso_to_unix(f.get("actual_out") or f.get("scheduled_out"))
                     fa = (
-                        # En Route and departed within last 12 hours — best match
                         next((f for f in flights
                               if f.get("status") == "En Route"
                               and (_fa_dep_ts(f) or 0) > twelve_hrs_ago), None)
@@ -1312,18 +1331,10 @@ class Overhead:
                         orig = (fa.get("origin") or {})
                         dest = (fa.get("destination") or {})
                         log.warning(
-                            f"[overhead] FA airports for {callsign}: "
+                            f"[overhead] FA airports for {callsign} (ident={_fa_ident}): "
                             f"orig={orig.get('code_iata')} / {orig.get('code_icao')} / {orig.get('code')} "
                             f"dest={dest.get('code_iata')} / {dest.get('code_icao')} / {dest.get('code')}"
                         )
-                        def _fa_iata(a: dict) -> str:
-                            iata = _clean(a.get("code_iata", ""))
-                            if iata:
-                                return iata
-                            icao = _clean(a.get("code_icao", "") or a.get("code", ""))
-                            if icao and len(icao) == 4 and icao[0] == "K":
-                                return icao[1:]
-                            return ""
                         result = {
                             "time_scheduled_departure": iso_to_unix(fa.get("scheduled_out")),
                             "time_real_departure":      iso_to_unix(fa.get("actual_out")),
@@ -1339,12 +1350,13 @@ class Overhead:
                         }
                         fa_idx = fa_keys.index(fa_key)
                         _fa_record_call(fa_key, fa_reset_days[fa_idx])
-                        log.info(f"[overhead] FlightAware schedule for {callsign}: "
+                        log.info(f"[overhead] FlightAware schedule for {callsign} (ident={_fa_ident}): "
                                  f"{result['al_origin']}→{result['al_destination']}")
+                        break
                     else:
-                        log.info(f"[overhead] FlightAware returned no flights for {callsign}")
-            except Exception as e:
-                log.warning(f"[overhead] FlightAware error ({callsign}): {e}")
+                        log.info(f"[overhead] FlightAware returned no flights for {_fa_ident}")
+                except Exception as e:
+                    log.warning(f"[overhead] FlightAware error ({_fa_ident}): {e}")
 
         arr_ts    = result.get("time_scheduled_arrival") if result else None
         has_route = bool(result.get("al_origin") and result.get("al_destination")) if result else False
