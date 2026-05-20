@@ -232,11 +232,14 @@ class SportsPlugin(BasePlugin):
         self._has_live = False
         self._prev_scores: dict = {}  # game_id → (away_score, home_score)
         self._sound_pending = False
+        self._data_version: int = 0
+        self._last_game_key: Optional[tuple] = None  # (idx, data_version)
 
     def reset(self):
         self._current_idx = 0
         self._idx_start = time.monotonic()
         self._cycle_done = False
+        self._last_game_key = None  # force re-render on next draw
 
     def update(self):
         leagues_cfg = self.config.get("leagues", {})
@@ -314,6 +317,7 @@ class SportsPlugin(BasePlugin):
         with self._lock:
             self._games  = games
             self._has_live = bool(live)
+            self._data_version += 1
             if sound_needed:
                 self._sound_pending = True
 
@@ -339,9 +343,11 @@ class SportsPlugin(BasePlugin):
                 self._cycle_done = True
                 self._current_idx = 0
 
-        game = games[min(self._current_idx, len(games) - 1)]
-        frame = _render_game(game)
-        _push_pil_to_canvas(frame, self.display_manager)
+        game_key = (self._current_idx, self._data_version)
+        if game_key != self._last_game_key:
+            game = games[min(self._current_idx, len(games) - 1)]
+            _push_pil_to_canvas(_render_game(game), self.display_manager)
+            self._last_game_key = game_key
         return True
 
     def is_cycle_complete(self) -> bool:
