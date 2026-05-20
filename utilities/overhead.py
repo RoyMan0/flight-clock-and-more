@@ -910,10 +910,11 @@ class Overhead:
                 route = self._get_route(callsign, plane_lat, plane_lon)
                 owner_iata  = route.get("owner_iata", "")
 
-                # Schedule / delay (AirLabs → FlightAware)
-                # Done before building the entry so AirLabs route data can fill
-                # gaps when adsbdb sanity check fails.
-                sched = self._get_schedule(callsign, owner_iata, plane_lat, plane_lon)
+                # Schedule / delay (FlightStats → AirLabs → FlightAware)
+                # AirLabs and FlightAware are skipped when FR24 already provided
+                # origin/destination — they are only fallbacks for unknown routes.
+                sched = self._get_schedule(callsign, owner_iata, plane_lat, plane_lon,
+                                           fr24_has_route=bool(_fr24_origin and _fr24_dest))
 
                 # Merge sources — AirLabs has live daily assignments, adsbdb is
                 # historical. AirLabs wins for origin/destination; adsbdb
@@ -1141,7 +1142,8 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def _get_schedule(self, callsign: str, owner_iata: str,
-                      plane_lat: float = None, plane_lon: float = None) -> dict:
+                      plane_lat: float = None, plane_lon: float = None,
+                      fr24_has_route: bool = False) -> dict:
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
@@ -1186,7 +1188,7 @@ class Overhead:
         # Try flight_icao=callsign first (no IATA mapping needed), then
         # fall back to flight_iata=owner_iata+digits if that returns nothing.
         airlabs_key = _al_get_active_key(al_keys, al_reset_days)
-        if not result and airlabs_key:
+        if not result and airlabs_key and not fr24_has_route:
             for params in self._airlabs_params(callsign, owner_iata):
                 try:
                     resp = requests.get(AIRLABS_URL, params={**params, "api_key": airlabs_key}, timeout=8)
@@ -1232,6 +1234,19 @@ class Overhead:
                     )
                     log.warning(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
                                f"{result['al_origin'] or '?'}→{result['al_destination'] or '?'}")
+                    # Sanity-check: routes can be stale for operators that rotate
+                    # flight numbers daily (e.g. NetJets EJA). Mirrors FlightStats check.
+                    if (result.get("al_origin") and result.get("al_destination")
+                            and plane_lat is not None and plane_lon is not None):
+                        o_lat, o_lon = self._get_airport_coords(result["al_origin"])
+                        d_lat, d_lon = self._get_airport_coords(result["al_destination"])
+                        if not _route_makes_sense(plane_lat, plane_lon, o_lat, o_lon, d_lat, d_lon):
+                            log.warning(
+                                f"[overhead] AirLabs {callsign}: "
+                                f"{result['al_origin']}→{result['al_destination']} failed sanity check"
+                                f" — trying FlightAware"
+                            )
+                            result = None
                     break
                 except Exception as e:
                     log.debug(f"[overhead] AirLabs error ({callsign}): {e}")
@@ -1240,13 +1255,13 @@ class Overhead:
         # Also try FA when AirLabs returned partial data (origin but no destination)
         airlabs_incomplete = result and not result.get("al_destination")
         fa_key = _fa_get_active_key(fa_keys, fa_budget, fa_reset_days)
-        if not result or airlabs_incomplete:
+        if (not result or airlabs_incomplete) and not fr24_has_route:
             if not fa_key:
                 log.warning(
                     f"[overhead] FA skipped for {callsign}: "
                     f"{'no keys configured' if not fa_keys else f'all {len(fa_keys)} key(s) over budget ${fa_budget}'}"
                 )
-        if (not result or airlabs_incomplete) and fa_key:
+        if (not result or airlabs_incomplete) and fa_key and not fr24_has_route:
             try:
                 resp = requests.get(
                     FLIGHTAWARE_URL.format(ident=callsign),
