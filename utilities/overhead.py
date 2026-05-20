@@ -913,8 +913,10 @@ class Overhead:
                 # Schedule / delay (FlightStats → AirLabs → FlightAware)
                 # AirLabs and FlightAware are skipped when FR24 already provided
                 # origin/destination — they are only fallbacks for unknown routes.
+                plane_vs = ac.get("baro_rate")  # ft/min from adsb.lol; 0 for FR24 anon
                 sched = self._get_schedule(callsign, owner_iata, plane_lat, plane_lon,
-                                           fr24_has_route=bool(_fr24_origin and _fr24_dest))
+                                           fr24_has_route=bool(_fr24_origin and _fr24_dest),
+                                           plane_vs=plane_vs)
 
                 # Merge sources — AirLabs has live daily assignments, adsbdb is
                 # historical. AirLabs wins for origin/destination; adsbdb
@@ -1143,7 +1145,8 @@ class Overhead:
 
     def _get_schedule(self, callsign: str, owner_iata: str,
                       plane_lat: float = None, plane_lon: float = None,
-                      fr24_has_route: bool = False) -> dict:
+                      fr24_has_route: bool = False,
+                      plane_vs: float = None) -> dict:
         now    = time.time()
         cached = self._schedule_cache.get(callsign)
         if cached and now < cached["expires"]:
@@ -1174,11 +1177,17 @@ class Overhead:
                 o_lat, o_lon = self._get_airport_coords(fs["al_origin"])
                 d_lat, d_lon = self._get_airport_coords(fs["al_destination"])
                 if not _route_makes_sense(plane_lat, plane_lon, o_lat, o_lon, d_lat, d_lon):
+                    fs_ok = False
+                elif plane_vs is not None and o_lat and d_lat:
+                    d_mi = haversine(plane_lat, plane_lon, d_lat, d_lon)
+                    o_mi = haversine(plane_lat, plane_lon, o_lat, o_lon)
+                    if (d_mi < 60 and plane_vs > 500) or (o_mi < 60 and plane_vs < -500):
+                        fs_ok = False
+                if not fs_ok:
                     log.warning(
                         f"[overhead] FlightStats {callsign}: "
                         f"{fs['al_origin']}→{fs['al_destination']} failed sanity check — trying AirLabs"
                     )
-                    fs_ok = False
             if fs_ok:
                 log.info(f"[overhead] FlightStats {callsign}: "
                          f"{fs['al_origin']}→{fs['al_destination']}")
@@ -1235,12 +1244,18 @@ class Overhead:
                     log.warning(f"[overhead] AirLabs {list(params.values())[0]}: dep delay {delay}, "
                                f"{result['al_origin'] or '?'}→{result['al_destination'] or '?'}")
                     # Sanity-check: routes can be stale for operators that rotate
-                    # flight numbers daily (e.g. NetJets EJA). Mirrors FlightStats check.
+                    # flight numbers daily (e.g. NetJets EJA, Flexjet LXJ).
                     if (result.get("al_origin") and result.get("al_destination")
                             and plane_lat is not None and plane_lon is not None):
                         o_lat, o_lon = self._get_airport_coords(result["al_origin"])
                         d_lat, d_lon = self._get_airport_coords(result["al_destination"])
-                        if not _route_makes_sense(plane_lat, plane_lon, o_lat, o_lon, d_lat, d_lon):
+                        al_ok = _route_makes_sense(plane_lat, plane_lon, o_lat, o_lon, d_lat, d_lon)
+                        if al_ok and plane_vs is not None and o_lat and d_lat:
+                            d_mi = haversine(plane_lat, plane_lon, d_lat, d_lon)
+                            o_mi = haversine(plane_lat, plane_lon, o_lat, o_lon)
+                            if (d_mi < 60 and plane_vs > 500) or (o_mi < 60 and plane_vs < -500):
+                                al_ok = False
+                        if not al_ok:
                             log.warning(
                                 f"[overhead] AirLabs {callsign}: "
                                 f"{result['al_origin']}→{result['al_destination']} failed sanity check"
