@@ -57,6 +57,8 @@ class SnowReportPlugin(BasePlugin):
         self._idx_start: float = 0.0
         self._lock = threading.Lock()
         self._cycle_done = False
+        self._data_version: int = 0
+        self._last_resort_key: Optional[tuple] = None  # (idx, data_version)
 
     # ------------------------------------------------------------------
     # BasePlugin
@@ -72,6 +74,7 @@ class SnowReportPlugin(BasePlugin):
         self._current_idx = 0
         self._idx_start = time.monotonic()
         self._cycle_done = False
+        self._last_resort_key = None  # force re-render on next draw
 
     def update(self):
         resorts = self.config.get("resorts", [])
@@ -81,6 +84,7 @@ class SnowReportPlugin(BasePlugin):
             reports.append(report)
         with self._lock:
             self._reports = reports
+            self._data_version += 1
         log.debug(f"[snow] Updated {len(reports)} resorts")
 
     def draw(self) -> bool:
@@ -106,9 +110,11 @@ class SnowReportPlugin(BasePlugin):
                 self._cycle_done = True
                 self._current_idx = 0  # wrap for next cycle
 
-        report = reports[min(self._current_idx, len(reports) - 1)]
-        frame = _render_report(report)
-        _push_pil_to_canvas(frame, self.display_manager)
+        resort_key = (self._current_idx, self._data_version)
+        if resort_key != self._last_resort_key:
+            report = reports[min(self._current_idx, len(reports) - 1)]
+            _push_pil_to_canvas(_render_report(report), self.display_manager)
+            self._last_resort_key = resort_key
         return True
 
     def is_cycle_complete(self) -> bool:
