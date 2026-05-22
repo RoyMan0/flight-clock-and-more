@@ -964,7 +964,7 @@ class Overhead:
                     if not origin or not destination:
                         log.warning(
                             f"[overhead] {callsign}: no route "
-                            f"(AirLabs={al_origin or '?'}→{al_dest or '?'} "
+                            f"(sched={al_origin or '?'}→{al_dest or '?'} "
                             f"adsbdb={db_origin or '?'}→{db_dest or '?'})"
                         )
 
