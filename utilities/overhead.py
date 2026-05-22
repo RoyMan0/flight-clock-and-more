@@ -1374,7 +1374,11 @@ class Overhead:
     @staticmethod
     def _airlabs_params(callsign: str, owner_iata: str):
         """Yield AirLabs query param dicts to try in order."""
-        yield {"flight_icao": callsign}
+        import re
+        # Bare registrations (N9764W, C-FABC) have no AirLabs schedule data.
+        # Only try flight_icao for airline-style callsigns (3+ letters + digit).
+        if owner_iata or re.match(r'^[A-Z]{3,}\d', callsign):
+            yield {"flight_icao": callsign}
         if owner_iata:
             digits = "".join(c for c in callsign if c.isdigit())
             if digits:

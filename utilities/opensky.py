@@ -82,7 +82,8 @@ def get_aircraft_in_area(lat: float, lon: float, radius_nm: float) -> list[dict]
                 "track":     s[_IDX_HEADING] or 0,
                 "baro_rate": round(vrate * 196.85),       # m/s → ft/min
                 "t":         "",
-                "r":         s[0] or "",
+                "hex":       s[0] or "",   # ICAO24 transponder address
+                "r":         "",           # registration not provided by OpenSky area query
             })
         return ac
     except Exception as e:
