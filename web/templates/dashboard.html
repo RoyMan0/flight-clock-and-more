@@ -67,6 +67,11 @@
             </div>
           </div>
           <div class="border-top pt-3 d-flex flex-column gap-2">
+            <button class="btn btn-sm btn-outline-success w-100"
+                    :disabled="sysActionPending"
+                    @click="checkForUpdates()">
+              <i class="bi bi-cloud-download me-1"></i>Check for Updates
+            </button>
             <button class="btn btn-sm btn-outline-secondary w-100"
                     :disabled="sysActionPending"
                     @click="systemAction('connect-bt', null)">
@@ -197,6 +202,28 @@ function dashboard() {
         setTimeout(() => { window.location.reload(); }, 5000);
       } else {
         this.sysActionMsg = action === 'reboot' ? 'Rebooting — come back in ~60s' : 'Shut down. Goodbye.';
+      }
+    },
+
+    async checkForUpdates() {
+      this.sysActionPending = true;
+      this.sysActionMsg = 'Checking for updates…';
+      try {
+        const d = await fetch('/api/system/update', {method: 'POST'}).then(r => r.json());
+        if (!d.ok) {
+          this.sysActionMsg = 'Update failed: ' + d.output;
+          this.sysActionPending = false;
+        } else if (d.updated) {
+          this.sysActionMsg = 'Updates found — restarting…';
+          setTimeout(() => { window.location.reload(); }, 6000);
+        } else {
+          this.sysActionMsg = 'Already up to date.';
+          this.sysActionPending = false;
+          setTimeout(() => { this.sysActionMsg = ''; }, 4000);
+        }
+      } catch (_) {
+        this.sysActionMsg = 'Update check failed.';
+        this.sysActionPending = false;
       }
     },
 

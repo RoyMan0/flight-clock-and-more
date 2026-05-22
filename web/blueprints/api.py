@@ -683,6 +683,28 @@ def restart_app():
     return jsonify({"ok": True})
 
 
+@api_bp.post("/system/update")
+def update_app():
+    try:
+        result = subprocess.run(
+            ["git", "pull"],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        output = result.stdout.strip()
+        updated = output != "Already up to date."
+        if updated:
+            threading.Thread(
+                target=lambda: (time.sleep(1), subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"])),
+                daemon=True,
+            ).start()
+        return jsonify({"ok": True, "updated": updated, "output": output})
+    except Exception as e:
+        return jsonify({"ok": False, "updated": False, "output": str(e)}), 500
+
+
 @api_bp.post("/system/reboot")
 def reboot_system():
     threading.Thread(
