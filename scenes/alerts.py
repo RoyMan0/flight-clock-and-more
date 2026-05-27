@@ -138,8 +138,6 @@ class AlertsScene(object):
             self._alert_cycle_counter = 0
 
         if not self._active_alerts:
-            # Clear any leftover alert text row when returning to no-alert mode
-            self.draw_square(0, 9, 64, 16, colours.BLACK)
             return
 
         # Rotation: 3s per item when >4 active, else 4s
