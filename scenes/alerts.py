@@ -112,6 +112,8 @@ class AlertsScene(object):
 
     @Animator.KeyFrame.add(frames.PER_SECOND * 1)
     def alerts(self, count):
+        if getattr(self, '_iss_active', False):
+            return
         from core.config_manager import get_config as _get_config
         config_manager = _get_config()
         now = time.time()

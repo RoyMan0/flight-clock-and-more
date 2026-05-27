@@ -30,11 +30,12 @@
       "display_duration": 30,
       "forecast_days": 3,
       "alerts": {
-        "owm_precip":   false,
-        "owm_wind":     false,
-        "nws_alerts":   false,
-        "faa_delays":   false,
-        "iss_passes":   false,
+        "owm_precip":    false,
+        "owm_wind":      false,
+        "nws_alerts":    false,
+        "faa_delays":    false,
+        "iss_passes":    false,
+        "iss_fullscreen": false,
         "sun_countdown": false
       }
     },

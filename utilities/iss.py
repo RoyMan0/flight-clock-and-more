@@ -100,11 +100,74 @@ def _refresh():
     return _cached_passes or []
 
 
+def _azimuth_to_compass(degrees):
+    """Convert azimuth degrees to 2-char compass direction string."""
+    if degrees is None:
+        return None
+    dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    return dirs[int((degrees + 22.5) / 45) % 8]
+
+
+def get_iss_pass_data():
+    """
+    Return detailed metrics for the currently active ISS pass, or None.
+
+    Returns:
+        {
+            "rise_time": datetime,
+            "duration_sec": int,
+            "elapsed_sec": float,
+            "progress": float,       # 0.0–1.0
+            "remaining_sec": float,
+            "rise_azimuth": str|None,
+            "set_azimuth":  str|None,
+            "max_elevation": int|None,
+        }
+        or None if no pass is currently active.
+    """
+    passes = _refresh()
+    if not passes:
+        return None
+
+    now = datetime.now(timezone.utc)
+
+    for p in passes:
+        try:
+            rise_str = p.get("rise", {}).get("time", "")
+            if not rise_str:
+                continue
+            rise_time = datetime.fromisoformat(rise_str.replace("Z", "+00:00"))
+            duration = p.get("duration_sec", 0)
+            elapsed = (now - rise_time).total_seconds()
+
+            if 0 <= elapsed <= duration:
+                el = p.get("max", {}).get("elevation")
+                return {
+                    "rise_time":     rise_time,
+                    "duration_sec":  duration,
+                    "elapsed_sec":   elapsed,
+                    "progress":      elapsed / duration if duration > 0 else 0,
+                    "remaining_sec": max(0.0, duration - elapsed),
+                    "rise_azimuth":  _azimuth_to_compass(p.get("rise", {}).get("azimuth")),
+                    "set_azimuth":   _azimuth_to_compass(p.get("set",  {}).get("azimuth")),
+                    "max_elevation": int(el) if el is not None else None,
+                }
+        except (KeyError, ValueError, TypeError) as e:
+            logger.debug(f"[ISS] Pass data parse error: {e}")
+            continue
+
+    return None
+
+
 def get_iss_alert():
     """
     Return alert dict if a visible ISS pass is within 10 minutes, else None.
 
-    Returns {"text": "ISS 3m", "color": "white"} or {"text": "ISS now!", "color": "white"}
+    During an active pass, returns None — the full-screen takeover scene handles
+    that state when iss_fullscreen is enabled; the alert text is suppressed to
+    avoid the alert bar and the takeover scene fighting for the display.
+
+    Returns {"text": "ISS 3m", "color": "white"} or None.
     """
     passes = _refresh()
     if not passes:
@@ -121,9 +184,8 @@ def get_iss_alert():
             seconds_until = (rise_time - now).total_seconds()
 
             if seconds_until < 0:
-                duration = p.get("duration_sec", 0)
-                if seconds_until > -duration:
-                    return {"text": "ISS now!", "color": "white"}
+                # Pass is active — suppress "ISS now!" regardless of fullscreen toggle.
+                # ISSPassScene handles active-pass display; alerts.py handles pre-pass.
                 continue
 
             if seconds_until <= _ALERT_WINDOW:

@@ -14,10 +14,11 @@ from scenes.date import DateScene
 from scenes.temperature import TemperatureScene
 from scenes.daysforecast import DaysForecastScene
 from scenes.alerts import AlertsScene
+from scenes.isspass import ISSPassScene
 from setup import frames
 
 
-class _ClockWeatherDisplay(ClockScene, DateScene, TemperatureScene, DaysForecastScene, AlertsScene, Animator):
+class _ClockWeatherDisplay(ClockScene, DateScene, TemperatureScene, DaysForecastScene, AlertsScene, ISSPassScene, Animator):
     """
     Internal display class using the existing multiple-inheritance scene pattern.
     All scenes share this single object via cooperative __init__ chaining.
