@@ -1,9 +1,23 @@
 import logging
+from datetime import datetime, timezone, timedelta
 from utilities.animator import Animator
 from setup import colours, fonts, frames
 from rgbmatrix import graphics
 
 logger = logging.getLogger(__name__)
+
+# Set to True to force-activate the ISS scene for testing (no real pass needed)
+_DEBUG_FORCE_PASS = False
+_DEBUG_PASS = {
+    "rise_time": None,       # filled at runtime
+    "duration_sec": 300,
+    "elapsed_sec": 30.0,
+    "progress": 30 / 300,
+    "remaining_sec": 270.0,
+    "rise_azimuth": "NW",
+    "set_azimuth": "SE",
+    "max_elevation": 45,
+}
 
 _ISS_SOLAR = colours.LIGHT_ORANGE
 _ISS_BODY  = colours.CYAN
@@ -66,11 +80,15 @@ class ISSPassScene(object):
                 self._iss_clear_and_restore()
             return
 
-        try:
-            data = get_iss_pass_data()
-        except Exception as e:
-            logger.debug(f"[ISS] Pass data error: {e}")
-            data = None
+        if _DEBUG_FORCE_PASS:
+            data = dict(_DEBUG_PASS)
+            data["rise_time"] = datetime.now(timezone.utc) - timedelta(seconds=30)
+        else:
+            try:
+                data = get_iss_pass_data()
+            except Exception as e:
+                logger.debug(f"[ISS] Pass data error: {e}")
+                data = None
 
         if data is None:
             if self._iss_active:
