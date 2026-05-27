@@ -87,6 +87,8 @@
           "enabled": false,
           "sub_leagues": [
             {"id": "eng.1", "name": "EPL"},
+            {"id": "eng.2", "name": "Championship"},
+            {"id": "ger.1", "name": "Bundesliga"},
             {"id": "usa.1", "name": "MLS"},
             {"id": "uefa.champions", "name": "UCL"}
           ]

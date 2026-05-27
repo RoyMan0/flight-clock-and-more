@@ -326,11 +326,13 @@ def sports_teams():
         ("NHL",       f"{ESPNW}/hockey/nhl/teams",                           False),
         ("NCAAF",     f"{ESPN}/football/college-football/teams",              True),
         ("NCAAB",     f"{ESPN}/basketball/mens-college-basketball/teams",     True),
-        ("MLS",       f"{ESPN}/soccer/usa.1/teams",                          False),
-        ("EPL",       f"{ESPN}/soccer/eng.1/teams",                          False),
-        ("UCL",       f"{ESPN}/soccer/uefa.champions/teams",                 False),
-        ("La Liga",   f"{ESPN}/soccer/esp.1/teams",                          False),
-        ("World Cup", f"{ESPNW}/soccer/fifa.world/teams",                    False),
+        ("MLS",          f"{ESPN}/soccer/usa.1/teams",                          False),
+        ("EPL",          f"{ESPN}/soccer/eng.1/teams",                          False),
+        ("Championship", f"{ESPN}/soccer/eng.2/teams",                          False),
+        ("Bundesliga",   f"{ESPN}/soccer/ger.1/teams",                          False),
+        ("UCL",          f"{ESPN}/soccer/uefa.champions/teams",                 False),
+        ("La Liga",      f"{ESPN}/soccer/esp.1/teams",                          False),
+        ("World Cup",    f"{ESPNW}/soccer/fifa.world/teams",                    False),
     ]
     PAGE_SIZE = 200
 
