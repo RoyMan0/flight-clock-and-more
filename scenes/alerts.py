@@ -132,10 +132,9 @@ class AlertsScene(object):
 
         # Detect mode change (alerts appeared or disappeared)
         if self._has_active_alerts != self._prev_had_alerts:
-            self.draw_square(0, 0, 64, 12, colours.BLACK)
+            self.draw_square(0, 0, 40, 12, colours.BLACK)
             self._redraw_time = True
             self._redraw_temp = True
-            self._redraw_date = True
             self._prev_had_alerts = self._has_active_alerts
             self._alert_cycle_counter = 0
 
@@ -151,7 +150,7 @@ class AlertsScene(object):
         if self._alert_cycle_counter > 0:
             prev_slot = ((self._alert_cycle_counter - 1) // cycle_secs) % n
             if slot != prev_slot:
-                self.draw_square(0, 6, 64, 12, colours.BLACK)
+                self.draw_square(0, 6, 40, 12, colours.BLACK)
 
         self._alert_cycle_counter += 1
 

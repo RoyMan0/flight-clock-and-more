@@ -97,8 +97,6 @@ class DateScene(object):
     def date(self, count):
         if getattr(self, '_iss_active', False):
             return
-        if getattr(self, '_has_active_alerts', False):
-            return
         now = datetime.now()
         current_date = now.strftime("%b %d")
 
