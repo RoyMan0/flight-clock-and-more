@@ -12,7 +12,7 @@ LINE_COLOR = graphics.Color(0, 120, 30)
 CENTER_X = screen.WIDTH // 2
 CENTER_Y = screen.HEIGHT // 2
 LINE_LEN = 3
-LINE_HEIGHT = 6
+LINE_HEIGHT = 6  # 5px glyph + 1px gap between lines
 NUM_LINES = 4
 
 
@@ -91,7 +91,7 @@ class RadarScene:
 
         for i, line in enumerate(lines):
             y = text_start_y + i * LINE_HEIGHT + LINE_HEIGHT - 1  # baseline
-            graphics.DrawText(canvas, fonts.extrasmall, text_x, y, TEXT_COLOR, line)
+            graphics.DrawText(canvas, fonts.tiny, text_x, y, TEXT_COLOR, line)
 
     def _build_lines(self, flight):
         callsign = flight.get("callsign") or ""
