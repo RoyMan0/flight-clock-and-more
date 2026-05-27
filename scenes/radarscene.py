@@ -12,8 +12,7 @@ LINE_COLOR = graphics.Color(0, 120, 30)
 CENTER_X = screen.WIDTH // 2
 CENTER_Y = screen.HEIGHT // 2
 LINE_LEN = 3
-LINE_HEIGHT = 6  # 5px glyph + 1px gap between lines
-NUM_LINES = 4
+LINE_HEIGHT = 6  # 5px glyph + 1px gap
 
 
 class RadarScene:
@@ -106,11 +105,7 @@ class RadarScene:
         callsign = flight.get("callsign") or ""
         reg = flight.get("registration") or ""
         label = callsign if (callsign and callsign != "N/A") else reg or "?"
-        aircraft = flight.get("plane") or "?"
-        alt_ft = flight.get("altitude") or 0
-        fl = f"FL{alt_ft // 100:03d}"
-
-        return [label[:7], aircraft[:4], fl]
+        return [label[:7]]
 
 
 def _rgb(color):
