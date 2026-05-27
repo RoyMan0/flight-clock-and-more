@@ -120,6 +120,12 @@ class FlightTrackerPlugin(BasePlugin):
     # BasePlugin interface
     # ------------------------------------------------------------------
 
+    @property
+    def update_interval(self) -> float:
+        if self.config.get("radar_mode", False):
+            return 15.0
+        return float(self.config.get("update_interval", 60))
+
     def update(self):
         """Periodic data refresh — called from plugin_manager background thread."""
         if not self.enabled:
