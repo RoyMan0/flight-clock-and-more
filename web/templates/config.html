@@ -532,41 +532,6 @@
   <div x-show="activeTab === 'api'">
     <div class="row g-4">
 
-      <!-- OpenWeatherMap -->
-      <div class="col-md-6">
-        <div class="card mb-4">
-          <div class="card-header"><i class="bi bi-cloud-rain me-2"></i>OpenWeatherMap</div>
-          <div class="card-body">
-            <p class="text-muted small mb-3">Free tier: 1,000 calls/day for One Call 3.0. Requires credit card at signup; hard-cap at 1,000 to guarantee $0. Used for precip &amp; wind alerts.</p>
-            <template x-if="metrics.owm">
-              <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                  <span class="small">Today</span>
-                  <span class="small" :class="(metrics.owm.calls||0) >= metrics.owm.limit ? 'text-danger fw-bold' : 'text-muted'">
-                    <span x-text="metrics.owm.calls||0"></span> / <span x-text="metrics.owm.limit"></span> calls
-                  </span>
-                </div>
-                <div class="progress" style="height:8px">
-                  <div class="progress-bar"
-                       :class="(metrics.owm.calls||0)/metrics.owm.limit > 0.8 ? 'bg-warning' : 'bg-success'"
-                       :style="'width:' + Math.min(100, ((metrics.owm.calls||0)/metrics.owm.limit*100)) + '%'">
-                  </div>
-                </div>
-              </div>
-            </template>
-            <hr class="border-secondary">
-            <h6 class="text-muted mb-2">API Key</h6>
-            <div class="d-flex gap-2 align-items-center">
-              <input type="password" class="form-control bg-dark text-light border-secondary form-control-sm"
-                     x-model="secrets.owm_api_key" autocomplete="off" placeholder="OpenWeatherMap API key">
-              <button class="btn btn-success btn-sm" @click="saveSecrets()">
-                <i class="bi bi-save me-1"></i>Save
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- AirLabs -->
       <div class="col-md-6">
         <div class="card mb-4">
@@ -682,6 +647,41 @@
             <button class="btn btn-success btn-sm mt-1 ms-2" @click="saveSecrets()">
               <i class="bi bi-save me-1"></i>Save
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenWeatherMap -->
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header"><i class="bi bi-cloud-rain me-2"></i>OpenWeatherMap</div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Free tier: 1,000 calls/day for One Call 3.0. Requires credit card at signup; hard-cap at 1,000 to guarantee $0. Used for precip &amp; wind alerts.</p>
+            <template x-if="metrics.owm">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="small">Today</span>
+                  <span class="small" :class="(metrics.owm.calls||0) >= metrics.owm.limit ? 'text-danger fw-bold' : 'text-muted'">
+                    <span x-text="metrics.owm.calls||0"></span> / <span x-text="metrics.owm.limit"></span> calls
+                  </span>
+                </div>
+                <div class="progress" style="height:8px">
+                  <div class="progress-bar"
+                       :class="(metrics.owm.calls||0)/metrics.owm.limit > 0.8 ? 'bg-warning' : 'bg-success'"
+                       :style="'width:' + Math.min(100, ((metrics.owm.calls||0)/metrics.owm.limit*100)) + '%'">
+                  </div>
+                </div>
+              </div>
+            </template>
+            <hr class="border-secondary">
+            <h6 class="text-muted mb-2">API Key</h6>
+            <div class="d-flex gap-2 align-items-center">
+              <input type="password" class="form-control bg-dark text-light border-secondary form-control-sm"
+                     x-model="secrets.owm_api_key" autocomplete="off" placeholder="OpenWeatherMap API key">
+              <button class="btn btn-success btn-sm" @click="saveSecrets()">
+                <i class="bi bi-save me-1"></i>Save
+              </button>
+            </div>
           </div>
         </div>
       </div>
