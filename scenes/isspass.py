@@ -116,7 +116,7 @@ class ISSPassScene(object):
 
         # Title blink
         title_col = colours.WHITE if self._iss_blink else colours.GREY
-        graphics.DrawText(self.canvas, fonts.regular, 1, 8, title_col, "ISS OVERHEAD")
+        graphics.DrawText(self.canvas, fonts.small, 1, 8, title_col, "ISS OVERHEAD")
 
         # Sprite + trail (center row y=11, sprite traverses x=1..56)
         sprite_x = 1 + int(data["progress"] * 55)
