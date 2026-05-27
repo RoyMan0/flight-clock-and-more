@@ -1,5 +1,5 @@
-from datetime import datetime
-from utilities.temperature import grab_forecast
+from datetime import datetime, timedelta
+from utilities.temperature import get_forecast_cached
 from utilities.animator import Animator
 from setup import colours, fonts, frames
 from rgbmatrix import graphics
@@ -22,34 +22,38 @@ class DateScene(object):
         super().__init__()
         self._last_date = None
         self.today_moonphase = None
-        self.last_fetched_moonphase = None  # Store the date of the last forecast 
-
+        self.last_fetched_moonphase = None
+        self._moon_retry_after = None  # throttle retries when forecast unavailable
 
     def moonphase(self):
         now = datetime.now()
 
-        # Only fetch forecast if it's a new day
-        if self.last_fetched_moonphase != now.day:
-            try:
-                forecast = grab_forecast(tag="DateScene")
-                if not forecast:  # None or empty list
-                    logging.error("Forecast data missing or API error (moon phase).")
-                    # Return cached moon phase if available, otherwise None
-                    return self.today_moonphase
+        if self.last_fetched_moonphase == now.day:
+            return self.today_moonphase
 
-                for day in forecast:
-                    forecast_date = day['startTime'][:10]
-                    if forecast_date == now.strftime('%Y-%m-%d'):
-                        utc_moonphase = int(day["values"]["moonPhase"])
-                        self.today_moonphase = utc_moonphase
-                        self.last_fetched_moonphase = now.day
-                        break
+        # Don't hammer the cache on every frame when data is unavailable
+        if self._moon_retry_after and now < self._moon_retry_after:
+            return self.today_moonphase
 
-            except Exception as e:
-                logging.error(f"Error fetching forecast for moon phase: {e}")
-                return self.today_moonphase  # Return cached if available
+        try:
+            forecast = get_forecast_cached()
+            if not forecast:
+                logging.error("Forecast data missing or API error (moon phase).")
+                self._moon_retry_after = now + timedelta(minutes=1)
+                return self.today_moonphase
 
-        # Return cached value if fetch is not needed or on error
+            for day in forecast:
+                forecast_date = day['startTime'][:10]
+                if forecast_date == now.strftime('%Y-%m-%d'):
+                    self.today_moonphase = int(day["values"]["moonPhase"])
+                    self.last_fetched_moonphase = now.day
+                    self._moon_retry_after = None
+                    break
+
+        except Exception as e:
+            logging.error(f"Error fetching forecast for moon phase: {e}")
+            self._moon_retry_after = now + timedelta(minutes=1)
+
         return self.today_moonphase
 
     def map_moon_phase_to_color(self, moonphase):
