@@ -18,6 +18,8 @@ from scenes.flightlogo import FlightLogoScene
 from scenes.journey import JourneyScene
 from scenes.planedetails import PlaneDetailsScene
 from scenes.loadingpulse import LoadingPulseScene
+from scenes.radarscene import RadarScene
+from core.config_manager import get_config
 from setup import frames
 
 log = logging.getLogger(__name__)
@@ -107,6 +109,7 @@ class FlightTrackerPlugin(BasePlugin):
         if self.enabled:
             self.overhead.grab_data()
         self._last_data: list = []
+        self._radar_scene = RadarScene()
 
     def _ensure_display(self):
         if self._display is None:
@@ -155,8 +158,29 @@ class FlightTrackerPlugin(BasePlugin):
             if was_empty and len(new_data) > 0:
                 play_plane_sound()
 
+        if self.config.get("radar_mode", False):
+            return self._draw_radar()
+
         self._display.tick()
         return len(self._display._data) > 0
+
+    def _draw_radar(self) -> bool:
+        flights = self._display._data if self._display else []
+        if not flights:
+            return False
+        cfg = get_config()
+        loc = cfg.get("location") or {}
+        home = loc.get("location_home", [39.725715, -105.203208])
+        home_lat, home_lon = home[0], home[1]
+        radius_nm = float(loc.get("search_radius_nm") or 50)
+        self._radar_scene.draw(
+            self.display_manager.canvas,
+            flights,
+            home_lat,
+            home_lon,
+            radius_nm,
+        )
+        return True
 
     def is_cycle_complete(self) -> bool:
         if self._display is None:
