@@ -32,8 +32,9 @@ class RadarScene:
 
         placed = []  # (x0, y0, x1, y1) bounding boxes of placed labels
         for idx, (sx, sy, flight) in enumerate(positioned):
-            canvas.SetPixel(sx, sy, 0, 220, 60)
             self._draw_label(canvas, flight, sx, sy, idx, placed)
+            # Draw dot last so the line doesn't overwrite it
+            canvas.SetPixel(sx, sy, 0, 220, 60)
 
     def _draw_grid(self, canvas):
         for x in range(screen.WIDTH):
