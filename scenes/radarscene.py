@@ -95,14 +95,11 @@ class RadarScene:
         callsign = flight.get("callsign") or ""
         reg = flight.get("registration") or ""
         label = callsign if (callsign and callsign != "N/A") else reg or "?"
-
-        origin = flight.get("origin") or "?"
-        dest = flight.get("destination") or "?"
         aircraft = flight.get("plane") or "?"
         alt_ft = flight.get("altitude") or 0
         fl = f"FL{alt_ft // 100:03d}"
 
-        return [label[:7], f"{origin}-{dest}", aircraft[:4], fl]
+        return [label[:7], aircraft[:4], fl]
 
 
 def _rgb(color):
@@ -110,4 +107,4 @@ def _rgb(color):
 
 
 def _text_width(text):
-    return len(text) * 4  # 4x6 font is 4px per character
+    return len(text) * 4  # tom-thumb: 3px glyph + 1px advance = 4px per char
