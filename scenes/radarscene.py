@@ -20,14 +20,21 @@ class RadarScene:
     def draw(self, canvas, flights, home_lat, home_lon, search_radius_nm):
         self._clear(canvas)
         self._draw_grid(canvas)
+
+        # Pre-compute positions, sort by x so alternating sides spread labels apart
+        positioned = []
         for flight in flights:
             lat = flight.get("plane_latitude")
             lon = flight.get("plane_longitude")
             if lat is None or lon is None:
                 continue
             sx, sy = self._to_screen(lat, lon, home_lat, home_lon, search_radius_nm)
+            positioned.append((sx, sy, flight))
+        positioned.sort(key=lambda t: t[0])
+
+        for idx, (sx, sy, flight) in enumerate(positioned):
             canvas.SetPixel(sx, sy, 0, 220, 60)
-            self._draw_label(canvas, flight, sx, sy)
+            self._draw_label(canvas, flight, sx, sy, idx)
 
     def _clear(self, canvas):
         canvas.Clear()
@@ -62,17 +69,21 @@ class RadarScene:
         sy = max(0, min(screen.HEIGHT - 1, sy))
         return sx, sy
 
-    def _draw_label(self, canvas, flight, sx, sy):
+    def _draw_label(self, canvas, flight, sx, sy, idx=0):
         lines = self._build_lines(flight)
         text_height = len(lines) * LINE_HEIGHT
 
-        # Decide left vs right placement
-        go_right = sx < CENTER_X
+        # Alternate sides by sorted index; fall back to screen-edge avoidance
+        go_right = (idx % 2 == 0)
+        max_w = max((_text_width(l) for l in lines), default=0)
+        if go_right and sx + LINE_LEN + 1 + max_w > screen.WIDTH:
+            go_right = False
+        elif not go_right and sx - LINE_LEN - max_w < 0:
+            go_right = True
+
         if go_right:
             text_x = sx + LINE_LEN + 1
         else:
-            char_widths = [_text_width(l) for l in lines]
-            max_w = max(char_widths) if char_widths else 0
             text_x = sx - LINE_LEN - max_w
 
         # Connector line
