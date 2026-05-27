@@ -3,7 +3,11 @@ from utilities.animator import Animator
 from utilities.cities import get_nearest_city
 from utilities.nps_pois import get_nearest_poi
 from setup import colours, fonts, screen
-from config import UNITS
+from core.config_manager import get_config as _get_config
+
+
+def _units():
+    return _get_config().get("location", "units", default="imperial")
 
 STATS_ROW = 31   # baseline; rows 26-31 = 6px extrasmall font, rows 25-31 cleared each frame
 STATS_FONT = fonts.extrasmall
@@ -25,7 +29,7 @@ LOC_CACHE_DEG    = 0.01   # ~1 km; skip re-lookup until aircraft moves this far
 def _fmt_altitude(altitude: int) -> str:
     if altitude >= 18000:
         return f"FL{altitude // 100}"
-    if UNITS == "metric":
+    if _units() == "metric":
         return f"{int(altitude * 0.3048)}m"
     return f"{altitude}ft"
 
@@ -73,7 +77,8 @@ class TrackedStatsScene(object):
         else:
             city_result = poi_result = None
 
-        dist_suffix = "mi" if UNITS == "imperial" else "km"
+        units = _units()
+        dist_suffix = "mi" if units == "imperial" else "km"
         speed_val = int(ground_speed)
         speed_suffix = "kt"
 

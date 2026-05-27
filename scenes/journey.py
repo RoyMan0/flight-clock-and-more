@@ -1,7 +1,7 @@
 from utilities.animator import Animator
 from setup import colours, fonts
 from rgbmatrix import graphics
-from config import DISTANCE_UNITS
+from core.config_manager import get_config as _get_config
 
 try:
     from config import JOURNEY_CODE_SELECTED
@@ -52,12 +52,10 @@ class JourneyScene(object):
         time_real_departure = self._data[self._data_index]["time_real_departure"]
         time_scheduled_departure = self._data[self._data_index]["time_scheduled_departure"]
 
-        if DISTANCE_UNITS == "imperial":
-            distance_units = "mi"
-        elif DISTANCE_UNITS == "metric":
+        if _get_config().get("location", "units", default="imperial") == "metric":
             distance_units = "KM"
         else:
-            distance_units = "Units"
+            distance_units = "mi"
 
         distance_origin_text = f'{dist_origin:.0f}{distance_units}'
         distance_destination_text = f'{dist_destination:.0f}{distance_units}'

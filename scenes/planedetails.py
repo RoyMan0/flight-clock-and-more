@@ -1,7 +1,11 @@
 from rgbmatrix import graphics
 from utilities.animator import Animator
 from setup import colours, fonts, screen
-from config import DISTANCE_UNITS, UNITS
+from core.config_manager import get_config as _get_config
+
+
+def _units():
+    return _get_config().get("location", "units", default="imperial")
 
 # Setup
 PLANE_COLOUR = colours.LIGHT_MID_BLUE
@@ -33,7 +37,8 @@ class PlaneDetailsScene(object):
         plane_name = plane_data["plane"]
         distance = plane_data["distance"]
         direction = plane_data["direction"]
-        distance_units = "mi" if DISTANCE_UNITS == "imperial" else "KM"
+        units = _units()
+        distance_units = "mi" if units == "imperial" else "KM"
 
         # Construct the plane details strings
         plane_name_text = f'{plane_name} '
@@ -77,7 +82,7 @@ class PlaneDetailsScene(object):
                 segments.append(('  ', colours.GREY))
                 if altitude >= 18000:
                     segments.append((f'FL{altitude // 100}', colours.LIGHT_ORANGE))
-                elif UNITS == "metric":
+                elif units == "metric":
                     segments.append((str(int(altitude * 0.3048)), colours.LIGHT_ORANGE))
                     segments.append(('m', colours.GREY))
                 else:

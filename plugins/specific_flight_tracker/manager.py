@@ -17,7 +17,7 @@ from utilities.overhead import (
     _fa_get_active_key, _fa_record_call,
     FLIGHTAWARE_URL,
 )
-from config import UNITS
+from core.config_manager import get_config as _get_config
 from scenes.trackedtopbar import TrackedTopBarScene
 from scenes.trackedheader import TrackedHeaderScene
 from scenes.trackedprogress import TrackedProgressScene
@@ -599,14 +599,14 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         progress = 0.0
 
         if arr_coords:
-            dist_remaining = haversine(lat, lng, arr_coords[0], arr_coords[1], UNITS)
+            dist_remaining = haversine(lat, lng, arr_coords[0], arr_coords[1], _get_config().get("location", "units", default="imperial"))
 
         with self._lock:
             info = self._flights[callsign]
             existing_total = info.get("total_distance")
 
             if existing_total is None and dep_coords and arr_coords:
-                total_distance = haversine(dep_coords[0], dep_coords[1], arr_coords[0], arr_coords[1], UNITS)
+                total_distance = haversine(dep_coords[0], dep_coords[1], arr_coords[0], arr_coords[1], _get_config().get("location", "units", default="imperial"))
                 info["total_distance"] = total_distance
             else:
                 total_distance = existing_total

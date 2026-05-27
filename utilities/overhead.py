@@ -792,7 +792,7 @@ class Overhead:
 
         home = loc.get("location_home", [39.725715, -105.203208])
         home_lat, home_lon = home[0], home[1]
-        units        = loc.get("distance_units", "imperial")
+        units        = loc.get("units", loc.get("distance_units", "imperial"))
         min_alt      = ft_cfg.get("min_altitude",    8000)
         max_alt      = ft_cfg.get("max_altitude",    MAX_ALTITUDE)
         max_lookup   = ft_cfg.get("max_flight_lookup", 5)

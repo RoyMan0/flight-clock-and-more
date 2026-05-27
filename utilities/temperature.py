@@ -56,17 +56,43 @@ _forecast_next_fetch: Optional[datetime] = None
 # Attempt to load config data
 try:
     from config import TOMORROW_API_KEY
-    from config import TEMPERATURE_UNITS
     from config import FORECAST_DAYS
 
 except (ModuleNotFoundError, NameError, ImportError):
     # If there's no config data
     TOMORROW_API_KEY = None
-    TEMPERATURE_UNITS = "metric"
     FORECAST_DAYS = 3
 
-if TEMPERATURE_UNITS != "metric" and TEMPERATURE_UNITS != "imperial":
-    TEMPERATURE_UNITS = "metric"
+_last_units: Optional[str] = None
+
+
+def _get_units() -> str:
+    try:
+        from core.config_manager import get_config as _get_config
+        u = _get_config().get("location", "units", default="imperial")
+        return u if u in ("metric", "imperial") else "imperial"
+    except Exception:
+        return "imperial"
+
+
+def _flush_if_units_changed() -> None:
+    global _last_units, _temp_data, _temp_next_fetch, _forecast_data, _forecast_next_fetch
+    current = _get_units()
+    if _last_units is not None and _last_units != current:
+        _temp_data = None
+        _temp_next_fetch = None
+        _forecast_data = None
+        _forecast_next_fetch = None
+        try:
+            os.remove(_TEMP_CACHE_FILE)
+        except OSError:
+            pass
+        try:
+            os.remove(_FORECAST_CACHE_FILE)
+        except OSError:
+            pass
+        logging.info(f"[Temp] Units changed {_last_units}→{current}, cache flushed")
+    _last_units = current
 
 from config import TEMPERATURE_LOCATION
 
@@ -130,6 +156,7 @@ def _set_rate_limited():
 
 
 def grab_temperature_and_humidity():
+    _flush_if_units_changed()
     if _is_rate_limited():
         return None, None
 
@@ -139,7 +166,7 @@ def grab_temperature_and_humidity():
             f"{TOMORROW_API_URL}/weather/realtime",
             params={
                 "location": TEMPERATURE_LOCATION,
-                "units": TEMPERATURE_UNITS,
+                "units": _get_units(),
                 "apikey": TOMORROW_API_KEY
             },
             timeout=(5, 20)
@@ -177,6 +204,7 @@ def grab_temperature_and_humidity():
         
         
 def grab_forecast(tag="unknown"):
+    _flush_if_units_changed()
     if _is_rate_limited():
         return []
 
@@ -194,7 +222,7 @@ def grab_forecast(tag="unknown"):
             params={"apikey": TOMORROW_API_KEY},
             json={
                 "location": TEMPERATURE_LOCATION,
-                "units": TEMPERATURE_UNITS,
+                "units": _get_units(),
                 "timezone": "auto",
                 "dailyStartHour": 6,
                 "fields": [
