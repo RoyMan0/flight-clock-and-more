@@ -110,6 +110,7 @@ class FlightTrackerPlugin(BasePlugin):
             self.overhead.grab_data()
         self._last_data: list = []
         self._radar_scene = RadarScene()
+        self._radar_dirty = True
 
     def _ensure_display(self):
         if self._display is None:
@@ -123,8 +124,10 @@ class FlightTrackerPlugin(BasePlugin):
         """Periodic data refresh — called from plugin_manager background thread."""
         if not self.enabled:
             return
+        radar_mode = self.config.get("radar_mode", False)
         if not self.overhead.processing and (
-            self._display is None
+            radar_mode
+            or self._display is None
             or self._display._data_all_looped
             or len(self._display._data) <= 1
         ):
@@ -138,6 +141,7 @@ class FlightTrackerPlugin(BasePlugin):
         self._display._data_all_looped = False
         self._display._show_additional_details = self.config.get("show_additional_details", False)
         self._display.reset_scene()
+        self._radar_dirty = True
 
     def draw(self) -> bool:
         self._ensure_display()
@@ -155,6 +159,7 @@ class FlightTrackerPlugin(BasePlugin):
                 self._display.reset_scroll_completion()
                 self._display._data = new_data
                 self._display.reset_scene()
+            self._radar_dirty = True
             if was_empty and len(new_data) > 0:
                 play_plane_sound()
 
@@ -168,6 +173,8 @@ class FlightTrackerPlugin(BasePlugin):
         flights = self._display._data if self._display else []
         if not flights:
             return False
+        if not self._radar_dirty:
+            return True
         cfg = get_config()
         loc = cfg.get("location") or {}
         home = loc.get("location_home", [39.725715, -105.203208])
@@ -180,6 +187,7 @@ class FlightTrackerPlugin(BasePlugin):
             home_lon,
             radius_nm,
         )
+        self._radar_dirty = False
         return True
 
     def is_cycle_complete(self) -> bool:

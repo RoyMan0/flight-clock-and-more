@@ -30,9 +30,7 @@ class RadarScene:
             self._draw_label(canvas, flight, sx, sy)
 
     def _clear(self, canvas):
-        for x in range(screen.WIDTH):
-            for y in range(screen.HEIGHT):
-                canvas.SetPixel(x, y, 0, 0, 0)
+        canvas.Clear()
 
     def _draw_grid(self, canvas):
         # Cross-hair
