@@ -130,6 +130,7 @@ def _fetch_resort(resort_id: Optional[int], name: str) -> dict:
         "name": name,
         "base_depth": None,
         "new_snow_24h": None,
+        "snow_unit": '"',
         "conditions": "N/A",
         "open_trails": None,
         "total_trails": None,
@@ -148,9 +149,20 @@ def _fetch_resort(resort_id: Optional[int], name: str) -> dict:
             base["error"] = f"HTTP {r.status_code}"
             return base
         data = r.json()
+        try:
+            from config import UNITS as _units
+        except Exception:
+            _units = "imperial"
+        if _units == "metric":
+            base_depth  = data.get("snowBaseCm")  or data.get("snowBaseIn")
+            new_snow_24h = data.get("newSnow24Cm") or data.get("newSnow24In")
+        else:
+            base_depth  = data.get("snowBaseIn")  or data.get("snowBaseCm")
+            new_snow_24h = data.get("newSnow24In") or data.get("newSnow24Cm")
         base.update({
-            "base_depth": data.get("snowBaseIn") or data.get("snowBaseCm"),
-            "new_snow_24h": data.get("newSnow24In") or data.get("newSnow24Cm"),
+            "base_depth": base_depth,
+            "new_snow_24h": new_snow_24h,
+            "snow_unit": "cm" if _units == "metric" else '"',
             "conditions": data.get("surfaceConditions") or data.get("surfaceCondition") or "N/A",
             "open_trails": data.get("openTrails"),
             "total_trails": data.get("totalTrails"),
@@ -177,12 +189,13 @@ def _render_report(report: dict) -> Image.Image:
 
     # Row 1: Name + base depth
     draw.text((1, 1), name.upper(), font=FONT_SM, fill=COL_NAME)
+    su = report.get("snow_unit", '"')
     if report["base_depth"] is not None:
-        base_str = f'❄{int(report["base_depth"])}"'
+        base_str = f'❄{int(report["base_depth"])}{su}'
         draw.text((MATRIX_W - len(base_str) * 5 - 1, 1), base_str, font=FONT_SM, fill=COL_SNOW)
 
     # Row 2: New snow + conditions
-    new_snow = f'+{int(report["new_snow_24h"])}"' if report["new_snow_24h"] else "  0"
+    new_snow = f'+{int(report["new_snow_24h"])}{su}' if report["new_snow_24h"] else "  0"
     cond = (report["conditions"] or "")[:10]
     draw.text((1, 12), new_snow, font=FONT_SM, fill=COL_NEW)
     draw.text((20, 12), cond, font=FONT_SM, fill=COL_COND)

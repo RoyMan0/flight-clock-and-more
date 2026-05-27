@@ -18,8 +18,7 @@
     "location_home": [0.0, 0.0],
     "temperature_location": "0.0,0.0",
     "clock_format": "12hr",
-    "temperature_units": "imperial",
-    "distance_units": "imperial",
+    "units": "imperial",
     "journey_code": "",
     "journey_blank_filler": " ? ",
     "search_radius_nm": 30

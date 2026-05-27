@@ -3,6 +3,7 @@ from utilities.animator import Animator
 from utilities.cities import get_nearest_city
 from utilities.nps_pois import get_nearest_poi
 from setup import colours, fonts, screen
+from config import UNITS
 
 STATS_ROW = 31   # baseline; rows 26-31 = 6px extrasmall font, rows 25-31 cleared each frame
 STATS_FONT = fonts.extrasmall
@@ -70,11 +71,19 @@ class TrackedStatsScene(object):
         else:
             city_result = poi_result = None
 
+        dist_suffix = "mi" if UNITS == "imperial" else "km"
+        if UNITS == "metric":
+            speed_val = int(ground_speed * 1.852)
+            speed_suffix = "kph"
+        else:
+            speed_val = int(ground_speed)
+            speed_suffix = "kt"
+
         segments = [
             (time_remaining,       TIME_COLOUR),
             ("  ",                 SUFFIX_COLOUR),
             (f"{int(dist_remaining)}", DIST_COLOUR),
-            ("mi",                 SUFFIX_COLOUR),
+            (dist_suffix,          SUFFIX_COLOUR),
         ]
         if show_details:
             alt_str = _fmt_altitude(altitude)
@@ -97,8 +106,8 @@ class TrackedStatsScene(object):
                 segments.append(("v", DOWN_COLOUR))
             segments += [
                 ("  ",             SUFFIX_COLOUR),
-                (f"{int(ground_speed)}", NUMBER_COLOUR),
-                ("kt",             SUFFIX_COLOUR),
+                (f"{speed_val}",   NUMBER_COLOUR),
+                (speed_suffix,     SUFFIX_COLOUR),
             ]
         if city_result:
             segments += [

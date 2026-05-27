@@ -1,7 +1,7 @@
 from rgbmatrix import graphics
 from utilities.animator import Animator
 from setup import colours, fonts, screen
-from config import DISTANCE_UNITS
+from config import DISTANCE_UNITS, UNITS
 
 # Setup
 PLANE_COLOUR = colours.LIGHT_MID_BLUE
@@ -81,9 +81,15 @@ class PlaneDetailsScene(object):
                     segments.append((str(altitude), colours.LIGHT_ORANGE))
                     segments.append(('ft', colours.GREY))
             if speed:
+                if UNITS == "metric":
+                    speed_val = int(speed * 1.852)
+                    speed_unit = "kph"
+                else:
+                    speed_val = speed
+                    speed_unit = "kt"
                 segments.append(('  ', colours.GREY))
-                segments.append((str(speed), colours.LIGHT_ORANGE))
-                segments.append(('kt', colours.GREY))
+                segments.append((str(speed_val), colours.LIGHT_ORANGE))
+                segments.append((speed_unit, colours.GREY))
 
             for text, color in segments:
                 w = graphics.DrawText(

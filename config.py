@@ -31,8 +31,11 @@ ZONE_HOME = _loc.get("zone_home", {
 })
 LOCATION_HOME = _loc.get("location_home", [39.725715, -105.203208])
 TEMPERATURE_LOCATION = _loc.get("temperature_location", "39.725715,-105.203208")
-TEMPERATURE_UNITS = _loc.get("temperature_units", "imperial")
-DISTANCE_UNITS = _loc.get("distance_units", "imperial")
+# Unified units setting — drives temperature, distance, speed, and snow depth.
+# Falls back to legacy distance_units for backward compatibility.
+UNITS = _loc.get("units", _loc.get("distance_units", "imperial"))
+TEMPERATURE_UNITS = UNITS
+DISTANCE_UNITS = UNITS
 CLOCK_FORMAT = _loc.get("clock_format", "12hr")
 JOURNEY_CODE_SELECTED = _loc.get("journey_code", "DEN")
 JOURNEY_BLANK_FILLER = _loc.get("journey_blank_filler", " ? ")

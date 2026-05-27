@@ -74,10 +74,12 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label">Distance Units</label>
-              <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.location.distance_units">
-                <option value="imperial">Imperial (miles)</option>
-                <option value="metric">Metric (km)</option>
+              <label class="form-label">Units</label>
+              <select class="form-select bg-dark text-light border-secondary"
+                      x-model="sysCfg.location.units"
+                      @change="sysCfg.location.distance_units = sysCfg.location.units; sysCfg.location.temperature_units = sysCfg.location.units">
+                <option value="imperial">Imperial (°F, mi, mph)</option>
+                <option value="metric">Metric (°C, km, km/h)</option>
               </select>
             </div>
             <div class="col-md-4">
@@ -769,6 +771,10 @@ function configPage() {
       if (!cfgs.clock_weather.alerts) cfgs.clock_weather.alerts = {};
       this.pluginConfigs = cfgs;
       this.sysCfg = sys;
+      // Seed units from legacy field if new field absent (backward compat)
+      if (!this.sysCfg.location.units) {
+        this.sysCfg.location.units = this.sysCfg.location.distance_units || 'imperial';
+      }
       // Ensure array fields exist for key management UI
       if (!Array.isArray(sec.airlabs_api_keys)) sec.airlabs_api_keys = [];
       if (!Array.isArray(sec.flightaware_api_keys)) sec.flightaware_api_keys = [];

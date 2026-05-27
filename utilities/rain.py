@@ -29,8 +29,9 @@ _CACHE_FILE = os.path.join(_CACHE_DIR, "rain.json")
 _USAGE_FILE = os.path.join(_BASE_DIR, "data", "owm_usage.json")
 _POLL_INTERVAL = 300        # 5 minutes
 _PRECIP_THRESHOLD = 0.1     # mm/h – below this is dry
-_WIND_THRESHOLD_MPH = 20
+_WIND_THRESHOLD_MPH = 20   # ~32 km/h equivalent
 _MS_TO_MPH = 2.237
+_MS_TO_KPH = 3.6
 _DAILY_LIMIT = 1000
 
 # In-memory cache
@@ -219,17 +220,29 @@ def get_wind_info():
 
     Returns {"text": "Wind 25", "color": "cyan"} or None.
     Uses existing OWM data — no extra API call.
+    Speed shown in mph (imperial) or kph (metric) based on UNITS setting.
     """
     data = _refresh()
     if not data:
         return None
     try:
+        import config as cfg
+        metric = getattr(cfg, "UNITS", "imperial") == "metric"
+
         current = data.get("current", {})
         wind_speed_ms = current.get("wind_speed", 0) or 0
         wind_gust_ms = current.get("wind_gust", 0) or 0
-        peak_mph = int(max(wind_speed_ms, wind_gust_ms) * _MS_TO_MPH)
-        if peak_mph >= _WIND_THRESHOLD_MPH:
-            return {"text": f"Wind {peak_mph}", "color": "cyan"}
+        peak_ms = max(wind_speed_ms, wind_gust_ms)
+
+        if metric:
+            peak = int(peak_ms * _MS_TO_KPH)
+            threshold = int(_WIND_THRESHOLD_MPH * _MS_TO_KPH / _MS_TO_MPH)  # ≈ 32 kph
+        else:
+            peak = int(peak_ms * _MS_TO_MPH)
+            threshold = _WIND_THRESHOLD_MPH
+
+        if peak >= threshold:
+            return {"text": f"Wind {peak}", "color": "cyan"}
     except (KeyError, TypeError, ValueError):
         pass
     return None
