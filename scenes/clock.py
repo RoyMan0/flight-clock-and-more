@@ -11,7 +11,9 @@ from config import CLOCK_FORMAT, NIGHT_END, NIGHT_START
 
 # Setup
 CLOCK_FONT = fonts.large_bold
+CLOCK_FONT_SMALL = fonts.small
 CLOCK_POSITION = (0, 11)
+CLOCK_POSITION_SMALL = (0, 8)
 DAY_COLOUR = colours.LIGHT_ORANGE
 NIGHT_COLOUR = colours.LIGHT_BLUE
 
@@ -24,6 +26,8 @@ class ClockScene(object):
     def __init__(self):
         super().__init__()
         self._last_time = None
+        self._last_clock_font = CLOCK_FONT
+        self._last_clock_pos = CLOCK_POSITION
         self.today_sunrise = None
         self.today_sunset = None
         self.last_fetch_date = None  # Store the date of the last forecast fetch
@@ -83,23 +87,29 @@ class ClockScene(object):
         else:
             clock_color = NIGHT_COLOUR
 
+        has_alerts = bool(getattr(self, "_has_active_alerts", False))
+        font = CLOCK_FONT_SMALL if has_alerts else CLOCK_FONT
+        pos = CLOCK_POSITION_SMALL if has_alerts else CLOCK_POSITION
+
         if self._last_time and (self._last_time != current_time or getattr(self, "_redraw_time", False)):
             graphics.DrawText(
                 self.canvas,
-                CLOCK_FONT,
-                CLOCK_POSITION[0],
-                CLOCK_POSITION[1],
+                self._last_clock_font,
+                self._last_clock_pos[0],
+                self._last_clock_pos[1],
                 colours.BLACK,
                 self._last_time,
             )
 
         self._last_time = current_time
+        self._last_clock_font = font
+        self._last_clock_pos = pos
 
         graphics.DrawText(
             self.canvas,
-            CLOCK_FONT,
-            CLOCK_POSITION[0],
-            CLOCK_POSITION[1],
+            font,
+            pos[0],
+            pos[1],
             clock_color,
             current_time,
         )

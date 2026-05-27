@@ -261,6 +261,7 @@ def save_secrets():
 @api_bp.get("/metrics")
 def get_metrics():
     from utilities.overhead import get_al_metrics, get_fa_metrics, _get_keys, _get_reset_days
+    from utilities.rain import get_owm_metrics
     cfg = _cfg()
     if cfg is None:
         return jsonify({}), 503
@@ -273,6 +274,7 @@ def get_metrics():
     return jsonify({
         "airlabs":     get_al_metrics(al_keys, al_reset_days),
         "flightaware": get_fa_metrics(fa_keys, budget, fa_reset_days),
+        "owm":         get_owm_metrics(),
     })
 
 

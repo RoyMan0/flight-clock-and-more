@@ -52,6 +52,21 @@ TOMORROW_API_KEY = _sec.get("tomorrow_api_key", "")
 # Forecast
 FORECAST_DAYS = _plg.get("clock_weather", {}).get("forecast_days", 3)
 
+# Alert features (used as fallback; AlertsScene reads config_manager at runtime)
+_cw_alerts = _plg.get("clock_weather", {}).get("alerts", {})
+ALERTS_OWM_PRECIP   = _cw_alerts.get("owm_precip",    False)
+ALERTS_OWM_WIND     = _cw_alerts.get("owm_wind",       False)
+ALERTS_NWS          = _cw_alerts.get("nws_alerts",     False)
+ALERTS_FAA          = _cw_alerts.get("faa_delays",     False)
+ALERTS_ISS          = _cw_alerts.get("iss_passes",     False)
+ALERTS_SUN          = _cw_alerts.get("sun_countdown",  False)
+
+# OWM API key (dynamic reads via config_manager preferred in utilities)
+OWM_API_KEY = _sec.get("owm_api_key", "")
+
+# Additional airports to monitor for FAA delays (comma-separated IATA codes)
+AIRPORT_STATUS_LIST = _loc.get("airport_status_list", "")
+
 # Flight tracker plugin settings
 _ft = _plg.get("flight_tracker", {})
 MIN_ALTITUDE = _ft.get("min_altitude", 8000)

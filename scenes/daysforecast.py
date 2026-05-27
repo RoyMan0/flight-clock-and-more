@@ -100,8 +100,9 @@ class DaysForecastScene(object):
                 day_x = offset + (space_width - 12) // 2 + 1
 
                 # --- Draw to Matrix ---
-                # Draw day name
-                graphics.DrawText(self.canvas, TEXT_FONT, day_x, DAY_POSITION, DAY_COLOUR, day_name)
+                # Draw day name (hidden in alert mode — alert text occupies that row)
+                if not getattr(self, "_has_active_alerts", False):
+                    graphics.DrawText(self.canvas, TEXT_FONT, day_x, DAY_POSITION, DAY_COLOUR, day_name)
 
                 # Draw icon
                 try:

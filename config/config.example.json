@@ -29,7 +29,15 @@
     "clock_weather": {
       "enabled": true,
       "display_duration": 30,
-      "forecast_days": 3
+      "forecast_days": 3,
+      "alerts": {
+        "owm_precip":   false,
+        "owm_wind":     false,
+        "nws_alerts":   false,
+        "faa_delays":   false,
+        "iss_passes":   false,
+        "sun_countdown": false
+      }
     },
     "flight_tracker": {
       "enabled": false,
