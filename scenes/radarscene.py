@@ -5,7 +5,6 @@ from rgbmatrix import graphics
 from setup import fonts, screen
 
 GRID_COLOR = graphics.Color(0, 40, 0)
-PLANE_COLOR = graphics.Color(0, 220, 60)
 TEXT_COLOR = graphics.Color(0, 200, 50)
 LINE_COLOR = graphics.Color(0, 120, 30)
 
@@ -17,10 +16,10 @@ LINE_HEIGHT = 6  # 5px glyph + 1px gap
 
 class RadarScene:
     def draw(self, canvas, flights, home_lat, home_lon, search_radius_nm):
-        self._clear(canvas)
+        canvas.Clear()
         self._draw_grid(canvas)
 
-        # Pre-compute positions, sort by x so alternating sides spread labels apart
+        # Pre-compute screen positions, sort by x so alternating sides work spatially
         positioned = []
         for flight in flights:
             lat = flight.get("plane_latitude")
@@ -31,20 +30,16 @@ class RadarScene:
             positioned.append((sx, sy, flight))
         positioned.sort(key=lambda t: t[0])
 
+        placed = []  # (x0, y0, x1, y1) bounding boxes of placed labels
         for idx, (sx, sy, flight) in enumerate(positioned):
             canvas.SetPixel(sx, sy, 0, 220, 60)
-            self._draw_label(canvas, flight, sx, sy, idx)
-
-    def _clear(self, canvas):
-        canvas.Clear()
+            self._draw_label(canvas, flight, sx, sy, idx, placed)
 
     def _draw_grid(self, canvas):
-        # Cross-hair
         for x in range(screen.WIDTH):
             canvas.SetPixel(x, CENTER_Y, *_rgb(GRID_COLOR))
         for y in range(screen.HEIGHT):
             canvas.SetPixel(CENTER_X, y, *_rgb(GRID_COLOR))
-        # Inner range ring (half-scale rectangle)
         hw, hh = screen.WIDTH // 4, screen.HEIGHT // 4
         x0, y0 = CENTER_X - hw, CENTER_Y - hh
         x1, y1 = CENTER_X + hw, CENTER_Y + hh
@@ -64,48 +59,65 @@ class RadarScene:
         dy = (plane_lat - home_lat) * nm_per_lat * scale_y
         sx = int(CENTER_X + dx)
         sy = int(CENTER_Y - dy)
-        sx = max(0, min(screen.WIDTH - 1, sx))
-        sy = max(0, min(screen.HEIGHT - 1, sy))
-        return sx, sy
+        return max(0, min(screen.WIDTH - 1, sx)), max(0, min(screen.HEIGHT - 1, sy))
 
-    def _draw_label(self, canvas, flight, sx, sy, idx=0):
-        lines = self._build_lines(flight)
-        text_height = len(lines) * LINE_HEIGHT
+    def _draw_label(self, canvas, flight, sx, sy, idx, placed):
+        label = self._build_label(flight)
+        w = _text_width(label)
+        h = LINE_HEIGHT
 
-        # Alternate sides by sorted index; fall back to screen-edge avoidance
+        # Preferred horizontal side: alternate by sorted index, override if off-screen
         go_right = (idx % 2 == 0)
-        max_w = max((_text_width(l) for l in lines), default=0)
-        if go_right and sx + LINE_LEN + 1 + max_w > screen.WIDTH:
+        if go_right and sx + LINE_LEN + 1 + w > screen.WIDTH:
             go_right = False
-        elif not go_right and sx - LINE_LEN - max_w < 0:
+        elif not go_right and sx - LINE_LEN - w < 0:
             go_right = True
 
-        if go_right:
-            text_x = sx + LINE_LEN + 1
-        else:
-            text_x = sx - LINE_LEN - max_w
+        text_x = (sx + LINE_LEN + 1) if go_right else (sx - LINE_LEN - w)
 
-        # Connector line
-        if go_right:
-            for lx in range(sx + 1, sx + LINE_LEN + 1):
-                canvas.SetPixel(lx, sy, *_rgb(LINE_COLOR))
-        else:
-            for lx in range(sx - LINE_LEN, sx):
-                canvas.SetPixel(lx, sy, *_rgb(LINE_COLOR))
+        # Find a vertical position that doesn't overlap any already-placed label
+        preferred_y = sy - h // 2
+        text_y = _find_clear_y(text_x, preferred_y, w, h, placed)
 
-        # Vertical start: center label on dot, clamped to screen
-        text_start_y = sy - text_height // 2
-        text_start_y = max(0, min(screen.HEIGHT - text_height, text_start_y))
+        placed.append((text_x, text_y, text_x + w, text_y + h))
 
-        for i, line in enumerate(lines):
-            y = text_start_y + i * LINE_HEIGHT + LINE_HEIGHT - 1  # baseline
-            graphics.DrawText(canvas, fonts.tiny, text_x, y, TEXT_COLOR, line)
+        # Connector line from dot to the nearest horizontal edge of the text box,
+        # at the vertical midpoint of the text box
+        anchor_x = (text_x - 1) if go_right else (text_x + w)
+        anchor_y = text_y + h // 2
+        graphics.DrawLine(canvas, sx, sy, anchor_x, anchor_y, LINE_COLOR)
 
-    def _build_lines(self, flight):
+        # Draw label (baseline is bottom of cell)
+        graphics.DrawText(canvas, fonts.tiny, text_x, text_y + h - 1, TEXT_COLOR, label)
+
+    def _build_label(self, flight):
         callsign = flight.get("callsign") or ""
         reg = flight.get("registration") or ""
         label = callsign if (callsign and callsign != "N/A") else reg or "?"
-        return [label[:7]]
+        return label[:7]
+
+
+def _find_clear_y(text_x, preferred_y, w, h, placed):
+    seen = set()
+    for delta in _nudge_sequence():
+        y = max(0, min(screen.HEIGHT - h, preferred_y + delta))
+        if y in seen:
+            continue
+        seen.add(y)
+        if not any(_overlaps(text_x, y, text_x + w, y + h, *b) for b in placed):
+            return y
+    return max(0, min(screen.HEIGHT - h, preferred_y))
+
+
+def _nudge_sequence():
+    yield 0
+    for i in range(1, screen.HEIGHT):
+        yield -i
+        yield i
+
+
+def _overlaps(ax0, ay0, ax1, ay1, bx0, by0, bx1, by1):
+    return not (ax1 < bx0 or ax0 > bx1 or ay1 < by0 or ay0 > by1)
 
 
 def _rgb(color):
@@ -113,4 +125,4 @@ def _rgb(color):
 
 
 def _text_width(text):
-    return len(text) * 4  # tom-thumb: 3px glyph + 1px advance = 4px per char
+    return len(text) * 4  # tom-thumb: 3px glyph + 1px advance
