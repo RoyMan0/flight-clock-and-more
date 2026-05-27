@@ -159,7 +159,10 @@ class FlightTrackerPlugin(BasePlugin):
             was_empty = len(self._display._data) == 0
             new_data = self.overhead.data
             log.info(f"[flight_tracker] draw: was_empty={was_empty}, flights={len(new_data)}")
-            if _callsigns(self._display._data) != _callsigns(new_data):
+            if self.config.get("radar_mode", False):
+                # Always accept new data in radar mode so positions stay current
+                self._display._data = new_data
+            elif _callsigns(self._display._data) != _callsigns(new_data):
                 self._display._data_index = 0
                 self._display._data_all_looped = False
                 self._display.reset_scroll_completion()
@@ -181,6 +184,16 @@ class FlightTrackerPlugin(BasePlugin):
             return False
         if not self._radar_dirty:
             return True
+        # Deduplicate by callsign (or registration) — same aircraft can appear
+        # from multiple data sources (adsb.lol + FR24)
+        seen_keys: set = set()
+        unique: list = []
+        for f in flights:
+            key = f.get("callsign") or f.get("registration") or id(f)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                unique.append(f)
+        flights = unique
         cfg = get_config()
         loc = cfg.get("location") or {}
         home = loc.get("location_home", [39.725715, -105.203208])
