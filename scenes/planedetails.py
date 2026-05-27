@@ -77,19 +77,16 @@ class PlaneDetailsScene(object):
                 segments.append(('  ', colours.GREY))
                 if altitude >= 18000:
                     segments.append((f'FL{altitude // 100}', colours.LIGHT_ORANGE))
+                elif UNITS == "metric":
+                    segments.append((str(int(altitude * 0.3048)), colours.LIGHT_ORANGE))
+                    segments.append(('m', colours.GREY))
                 else:
                     segments.append((str(altitude), colours.LIGHT_ORANGE))
                     segments.append(('ft', colours.GREY))
             if speed:
-                if UNITS == "metric":
-                    speed_val = int(speed * 1.852)
-                    speed_unit = "kph"
-                else:
-                    speed_val = speed
-                    speed_unit = "kt"
                 segments.append(('  ', colours.GREY))
-                segments.append((str(speed_val), colours.LIGHT_ORANGE))
-                segments.append((speed_unit, colours.GREY))
+                segments.append((str(speed), colours.LIGHT_ORANGE))
+                segments.append(('kt', colours.GREY))
 
             for text, color in segments:
                 w = graphics.DrawText(

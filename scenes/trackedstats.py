@@ -25,6 +25,8 @@ LOC_CACHE_DEG    = 0.01   # ~1 km; skip re-lookup until aircraft moves this far
 def _fmt_altitude(altitude: int) -> str:
     if altitude >= 18000:
         return f"FL{altitude // 100}"
+    if UNITS == "metric":
+        return f"{int(altitude * 0.3048)}m"
     return f"{altitude}ft"
 
 
@@ -72,12 +74,8 @@ class TrackedStatsScene(object):
             city_result = poi_result = None
 
         dist_suffix = "mi" if UNITS == "imperial" else "km"
-        if UNITS == "metric":
-            speed_val = int(ground_speed * 1.852)
-            speed_suffix = "kph"
-        else:
-            speed_val = int(ground_speed)
-            speed_suffix = "kt"
+        speed_val = int(ground_speed)
+        speed_suffix = "kt"
 
         segments = [
             (time_remaining,       TIME_COLOUR),
