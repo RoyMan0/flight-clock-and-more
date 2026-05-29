@@ -49,14 +49,14 @@ class DisplayManager:
         options.parallel = 1
         options.row_address_type = 0
         options.multiplexing = 0
-        options.pwm_bits = 11
+        options.pwm_bits = config.get("pwm_bits", 11)
         options.brightness = self._brightness
         options.pwm_lsb_nanoseconds = config.get("pwm_lsb_nanoseconds", 130)
         options.led_rgb_sequence = "RBG"
         options.pixel_mapper_config = ""
         options.show_refresh_rate = 0
         options.gpio_slowdown = config.get("gpio_slowdown", 2)
-        options.disable_hardware_pulsing = True
+        options.disable_hardware_pulsing = False
         options.drop_privileges = True
 
         self.matrix = RGBMatrix(options=options)
