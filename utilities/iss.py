@@ -54,7 +54,7 @@ def _fetch(lat, lon):
         return passes
 
     except Exception as e:
-        logger.error(f"[ISS] Fetch failed: {e}")
+        logger.warning(f"[ISS] Fetch failed: {e}")
         return None
 
 
@@ -95,7 +95,8 @@ def _refresh():
         passes = _fetch(location[0], location[1])
         if passes is not None:
             _cached_passes = passes
-            _cached_ts = now
+        # Always update timestamp so a failed fetch waits the full interval before retry
+        _cached_ts = now
 
     return _cached_passes or []
 
