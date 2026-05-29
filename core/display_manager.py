@@ -56,7 +56,7 @@ class DisplayManager:
         options.pixel_mapper_config = ""
         options.show_refresh_rate = 0
         options.gpio_slowdown = config.get("gpio_slowdown", 2)
-        options.disable_hardware_pulsing = True
+        options.disable_hardware_pulsing = False
         options.drop_privileges = True
 
         self.matrix = RGBMatrix(options=options)
