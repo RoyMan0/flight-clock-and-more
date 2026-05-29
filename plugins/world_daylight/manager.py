@@ -431,7 +431,7 @@ def _render_frame(
         if temp_str: entries.append((temp_str, None,       temp_col))
 
         n_rows = len(entries)
-        overlay_h = 1 + n_rows * (_BDF_H + 1)
+        overlay_h = n_rows * (_BDF_H + 1)
         min_tx = min(MATRIX_W - _bdf_text_width(s, _BDF, k) for s, k, _ in entries)
         _darken_region(img, max(0, min_tx - 1), 0, MATRIX_W, overlay_h)
 
