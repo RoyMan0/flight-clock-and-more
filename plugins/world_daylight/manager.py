@@ -536,8 +536,6 @@ class WorldDaylightPlugin(BasePlugin):
             )
             self._rendered_img    = img
             self._last_render_key = render_key
+            _push_pil_to_canvas(img, self.display_manager)
 
-        if self._rendered_img is not None:
-            _push_pil_to_canvas(self._rendered_img, self.display_manager)
-            return True
-        return False
+        return self._rendered_img is not None
