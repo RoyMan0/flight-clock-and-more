@@ -530,9 +530,11 @@ class WorldDaylightPlugin(BasePlugin):
                 show_date = bool(self.config.get("show_date", True)),
                 show_temp = bool(self.config.get("show_temp", True)),
             )
-            self._rendered_img   = img
+            self._rendered_img    = img
             self._last_render_key = render_key
+            # Only push pixels when content changes — avoids writing 4096×
+            # per-pixel Python calls onto the live canvas every frame, which
+            # caused visible tearing while the hardware was scanning mid-update.
+            _push_pil_to_canvas(img, self.display_manager)
 
-        if self._rendered_img is not None:
-            _push_pil_to_canvas(self._rendered_img, self.display_manager)
-        return True
+        return self._rendered_img is not None
