@@ -261,10 +261,14 @@ def _blend_rgb(c1: tuple, c2: tuple, t: float) -> tuple:
 
 def _push_pil_to_canvas(img: Image.Image, display_manager):
     canvas = display_manager.canvas
-    for y in range(MATRIX_H):
-        for x in range(MATRIX_W):
-            r, g, b = img.getpixel((x, y))
-            canvas.SetPixel(x, y, r, g, b)
+    if hasattr(canvas, 'SetImage'):
+        canvas.SetImage(img.convert('RGB'))
+    else:
+        pixels = img.load()
+        for y in range(MATRIX_H):
+            for x in range(MATRIX_W):
+                r, g, b = pixels[x, y]
+                canvas.SetPixel(x, y, r, g, b)
     with display_manager._lock:
         display_manager._pil_image.paste(img, (0, 0))
 
@@ -532,9 +536,8 @@ class WorldDaylightPlugin(BasePlugin):
             )
             self._rendered_img    = img
             self._last_render_key = render_key
-            # Only push pixels when content changes — avoids writing 4096×
-            # per-pixel Python calls onto the live canvas every frame, which
-            # caused visible tearing while the hardware was scanning mid-update.
-            _push_pil_to_canvas(img, self.display_manager)
 
-        return self._rendered_img is not None
+        if self._rendered_img is not None:
+            _push_pil_to_canvas(self._rendered_img, self.display_manager)
+            return True
+        return False
