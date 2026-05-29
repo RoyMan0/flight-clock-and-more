@@ -14,6 +14,7 @@ Display layout (64×32):
 import io
 import logging
 import os
+import re
 import time
 import threading
 import requests
@@ -570,6 +571,31 @@ def _football_status(game: dict) -> str:
     return f"{qtr} {clock}"
 
 
+def _short_date(game_date: str) -> str:
+    """Format 'YYYY-MM-DD' → 'M/D' with no zero-padding."""
+    try:
+        _, mo, dy = game_date.split("-")
+        return f"{int(mo)}/{int(dy)}"
+    except Exception:
+        return ""
+
+
+def _pre_status(game: dict) -> str:
+    """Compact upcoming-game header: '5/29 7:05P' with minimal spacing."""
+    game_date = game.get("game_date", "")
+    date_part = _short_date(game_date)
+
+    detail = game.get("status_detail", "")
+    time_part = ""
+    m = re.search(r'(\d{1,2}:\d{2})\s*(AM|PM)', detail, re.IGNORECASE)
+    if m:
+        time_part = m.group(1) + m.group(2)[0].upper()  # "7:05P"
+
+    if date_part and time_part:
+        return f"{date_part} {time_part}"
+    return date_part or time_part or detail[:10]
+
+
 def _render_game(game: dict) -> Image.Image:
     img  = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -593,12 +619,24 @@ def _render_game(game: dict) -> Image.Image:
     elif is_final:
         status_str = "FINAL"
     else:
-        status_str = game["status_detail"][:14]
+        status_str = _pre_status(game)
 
     # ── Header: BDF pixel text on clean black, y=1 (centered in HEADER_H zone)
     _bdf_draw(img, 1, 1, game["league"][:7], _BDF, COL_HEADER)
-    sw = _bdf_width(status_str, _BDF)
-    _bdf_draw(img, MATRIX_W - sw - 1, 1, status_str, _BDF, status_col)
+
+    if is_final:
+        # Draw "FINAL" and "M/D" separately with a 1px gap, both right-aligned as a unit
+        date_str = _short_date(game.get("game_date", ""))
+        date_w   = _bdf_width(date_str, _BDF)
+        final_w  = _bdf_width("FINAL", _BDF)
+        x_date   = MATRIX_W - date_w - 1
+        x_final  = x_date - 1 - final_w
+        _bdf_draw(img, x_final, 1, "FINAL", _BDF, COL_FINAL)
+        if date_str:
+            _bdf_draw(img, x_date, 1, date_str, _BDF, COL_HEADER)
+    else:
+        sw = _bdf_width(status_str, _BDF)
+        _bdf_draw(img, MATRIX_W - sw - 1, 1, status_str, _BDF, status_col)
 
     # ── Logo slots fill the space below header ────────────────────────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
