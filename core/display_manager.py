@@ -18,7 +18,7 @@ class DisplayManager:
 
     def __init__(self, config: dict, software_mode: bool = False):
         self.software_mode = software_mode
-        self._brightness = config.get("brightness", 100)
+        self._brightness = int(config.get("brightness", 100))
         self._lock = threading.Lock()
 
         # PIL mirror — always maintained for web dashboard snapshots
@@ -92,7 +92,7 @@ class DisplayManager:
     # ------------------------------------------------------------------
 
     def set_brightness(self, value: int):
-        value = max(0, min(100, value))
+        value = max(0, min(100, int(value)))
         if self._brightness == value:
             return
         self._brightness = value
