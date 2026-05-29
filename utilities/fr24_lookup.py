@@ -32,6 +32,14 @@ try:
     from fr24.grpc import live_feed as _grpc_live_feed
     from fr24.proto import parse_data as _parse_data
     from google.protobuf.field_mask_pb2 import FieldMask
+    try:
+        import h2
+        import h2.connection
+        import h2.config
+        import h2.events
+        import hpack
+    except ImportError:
+        pass
     _AVAILABLE = True
 except ImportError:
     pass
