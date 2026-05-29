@@ -510,6 +510,50 @@
         </div>
       </div>
 
+      <!-- World Daylight Map Config -->
+      <div class="card mb-4" x-show="'world_daylight' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-globe me-2"></i>World Daylight Map</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.world_daylight.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label d-flex justify-content-between">
+                <span>Display Duration</span>
+                <span class="text-muted small" x-text="pluginConfigs.world_daylight.display_duration + 's'"></span>
+              </label>
+              <input type="range" class="form-range" min="10" max="120" step="5"
+                     x-model="pluginConfigs.world_daylight.display_duration">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>10s</span><span>120s</span>
+              </div>
+            </div>
+            <div class="col-12 mt-1">
+              <p class="text-muted small mb-2">Overlay (top-right corner)</p>
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.world_daylight.show_time">
+                <label class="form-check-label">Show Time</label>
+              </div>
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.world_daylight.show_date">
+                <label class="form-check-label">Show Date</label>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.world_daylight.show_temp">
+                <label class="form-check-label">Show Temperature</label>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('world_daylight')">
+            <i class="bi bi-save me-1"></i>Save
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -734,6 +778,7 @@ function configPage() {
       stock_ticker:            { etf_symbols: [], stock_symbols: [] },
       snow_report:             { resorts: [] },
       sports:                  { favorite_teams: [], show_all_leagues: [], leagues: {} },
+      world_daylight:          { show_time: true, show_date: true, show_temp: true },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     secrets: {},

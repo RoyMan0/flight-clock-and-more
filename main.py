@@ -49,7 +49,7 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = create_app = None
     try:
         from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
     except Exception as e:
@@ -66,6 +66,10 @@ def main():
         from plugins.sports.manager import SportsPlugin
     except Exception as e:
         log.warning(f"Sports plugin failed to import: {e}")
+    try:
+        from plugins.world_daylight.manager import WorldDaylightPlugin
+    except Exception as e:
+        log.warning(f"World daylight plugin failed to import: {e}")
     try:
         from web.app import create_app
     except Exception as e:
@@ -129,6 +133,14 @@ def main():
             ))
         except Exception as e:
             log.warning(f"Specific flight tracker plugin failed to load: {e}")
+
+    if WorldDaylightPlugin:
+        try:
+            pm.register("world_daylight", WorldDaylightPlugin(
+                display, cfg.get_plugin_config("world_daylight"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"World daylight plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)
