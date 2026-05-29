@@ -116,11 +116,16 @@ def _parse_bdf(path: str) -> dict:
     return glyphs
 
 
-def _bdf_text_width(text: str, font: dict) -> int:
-    return sum(font[ord(c)]["dw"] for c in text if ord(c) in font)
+def _bdf_text_width(text: str, font: dict, kern: dict = None) -> int:
+    total = 0
+    for c in text:
+        if ord(c) in font:
+            g = font[ord(c)]
+            total += kern[c] if (kern and c in kern) else g["dw"]
+    return total
 
 
-def _bdf_draw(img: Image.Image, x: int, y: int, text: str, font: dict, color: tuple):
+def _bdf_draw(img: Image.Image, x: int, y: int, text: str, font: dict, color: tuple, kern: dict = None):
     """Stamp BDF glyphs directly into img pixels. y = top of character cell."""
     if not font:
         return
@@ -130,25 +135,31 @@ def _bdf_draw(img: Image.Image, x: int, y: int, text: str, font: dict, color: tu
     for ch in text:
         g = font.get(ord(ch))
         if g is None:
-            cx += 4
+            cx += kern[ch] if (kern and ch in kern) else 4
             continue
         bbw = g["bbw"]
         total_bits = ((bbw + 7) // 8) * 8
+        adv = kern[ch] if (kern and ch in kern) else g["dw"]
+        # When advance is narrowed, shift rendering left to keep 1px margin each side
+        x_shift = (g["dw"] - adv) // 2
         for ri, rv in enumerate(g["rows"]):
             py = y + ri
             if py < 0 or py >= ih:
                 continue
             for bi in range(bbw):
                 if (rv >> (total_bits - 1 - bi)) & 1:
-                    ox = cx + bi
+                    ox = cx + bi - x_shift
                     if 0 <= ox < iw:
                         px[ox, py] = color
-        cx += g["dw"]
+        cx += adv
 
 
 # 4x6 BDF font — smallest readable font in the fonts directory
 _BDF = _parse_bdf(os.path.join(_FONTS_DIR, "4x6.bdf"))
 _BDF_H = 6   # character cell height
+
+# Colon advance override: 1px margin each side instead of 2px
+_TIME_KERN = {':': 2}
 
 
 # ------------------------------------------------------------------
@@ -176,10 +187,11 @@ def _sun_geo_position(dt_utc: datetime) -> Tuple[float, float]:
     # Right ascension
     ra = math.degrees(math.atan2(math.cos(eps) * math.sin(lam), math.cos(lam))) % 360
 
-    # Greenwich Mean Sidereal Time → GHA
+    # Greenwich Mean Sidereal Time → GHA → geographic longitude
+    # GHA is measured westward; geographic lon is eastward, so lon = -GHA
     gmst = (280.46061837 + 360.98564736629 * n) % 360
     gha  = (gmst - ra) % 360
-    lon  = gha if gha <= 180 else gha - 360
+    lon  = -gha if gha <= 180 else 360 - gha
 
     return dec, lon
 
@@ -207,10 +219,10 @@ def _moon_geo_position(dt_utc: datetime) -> Tuple[float, float]:
         math.sin(bet) * math.cos(eps) + math.cos(bet) * math.sin(eps) * math.sin(lam)
     ))
 
-    # GHA
+    # GHA → geographic longitude (GHA is westward, lon is eastward)
     gmst = (280.46061837 + 360.98564736629 * n) % 360
     gha  = (gmst - ra) % 360
-    lon  = gha if gha <= 180 else gha - 360
+    lon  = -gha if gha <= 180 else 360 - gha
 
     return dec, lon
 
@@ -402,35 +414,32 @@ def _render_frame(
         time_col = COL_TIME_NIGHT if night else COL_TIME_DAY
         temp_col = _temp_color(humidity)
 
-        # Calculate overlay height: each row is BDF_H + 1px gap
-        n_rows = sum([show_time, show_date, show_temp and temperature is not None])
-        overlay_h = 1 + n_rows * (_BDF_H + 1)
-        # Semi-transparent background: darken the top-right corner
-        _darken_region(img, 40, 0, MATRIX_W, overlay_h)
-
-        row_y = 1  # first text row
-
+        # Build strings first so background can be sized to actual content (1px padding each side)
+        time_str = date_str = temp_str = None
         if show_time:
             fmt = "%l:%M%p" if CLOCK_FORMAT == "12hr" else "%H:%M"
             time_str = dt_local.strftime(fmt).strip().replace("AM", "A").replace("PM", "P")
-            tw = _bdf_text_width(time_str, _BDF)
-            tx = MATRIX_W - tw - 1
-            _bdf_draw(img, tx, row_y, time_str, _BDF, time_col)
-            row_y += _BDF_H + 1
-
         if show_date:
             date_str = dt_local.strftime("%-m/%-d")
-            dw = _bdf_text_width(date_str, _BDF)
-            dx_pos = MATRIX_W - dw - 1
-            _bdf_draw(img, dx_pos, row_y, date_str, _BDF, COL_DATE)
-            row_y += _BDF_H + 1
-
         if show_temp and temperature is not None:
             unit = "F" if TEMPERATURE_UNITS == "imperial" else "C"
             temp_str = f"{round(temperature)}\xb0{unit}"
-            tw2 = _bdf_text_width(temp_str, _BDF)
-            tx2 = MATRIX_W - tw2 - 1
-            _bdf_draw(img, tx2, row_y, temp_str, _BDF, temp_col)
+
+        entries = []
+        if time_str: entries.append((time_str, _TIME_KERN, time_col))
+        if date_str: entries.append((date_str, None,       COL_DATE))
+        if temp_str: entries.append((temp_str, None,       temp_col))
+
+        n_rows = len(entries)
+        overlay_h = 1 + n_rows * (_BDF_H + 1)
+        min_tx = min(MATRIX_W - _bdf_text_width(s, _BDF, k) - 1 for s, k, _ in entries)
+        _darken_region(img, max(0, min_tx - 1), 0, MATRIX_W, overlay_h)
+
+        row_y = 1
+        for text, kern, col in entries:
+            tw = _bdf_text_width(text, _BDF, kern)
+            _bdf_draw(img, MATRIX_W - tw - 1, row_y, text, _BDF, col, kern)
+            row_y += _BDF_H + 1
 
     # ------------------------------------------------------------------
     # Sun marker — drawn last so it's always visible on top of everything
