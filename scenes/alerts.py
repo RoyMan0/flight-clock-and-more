@@ -120,6 +120,7 @@ class AlertsScene(object):
 
         # Refresh alert list every 60 seconds
         if now - self._alert_last_fetch >= 60:
+            prev_alerts = self._active_alerts[:]
             try:
                 plugin_cfg = config_manager.get_plugin_config("clock_weather")
                 self._active_alerts = self._build_alert_items(plugin_cfg)
@@ -128,6 +129,10 @@ class AlertsScene(object):
                 logger.error(f"[Alerts] Build failed: {e}")
                 self._active_alerts = []
                 self._has_active_alerts = False
+            # If list content changed, clear the alert row and restart rotation
+            if self._active_alerts != prev_alerts:
+                self.draw_square(0, 6, 40, 12, colours.BLACK)
+                self._alert_cycle_counter = 0
             self._alert_last_fetch = now
 
         # Detect mode change (alerts appeared or disappeared)
