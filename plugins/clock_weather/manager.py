@@ -9,6 +9,7 @@ the plugin_manager's main loop instead.
 
 from plugins.base_plugin import BasePlugin
 from utilities.animator import Animator
+from utilities.temperature import get_temperature_cached, get_forecast_cached
 from scenes.clock import ClockScene
 from scenes.date import DateScene
 from scenes.temperature import TemperatureScene
@@ -52,9 +53,10 @@ class _ClockWeatherDisplay(ClockScene, DateScene, TemperatureScene, DaysForecast
             if self.frame == 0 and keyframe.properties["divisor"] == 0:
                 keyframe()
 
+            # No 'frame > 0' guard: at frame=0, 0 % N == 0 for all N, so every
+            # keyframe fires immediately on the first tick after activation.
             if (
-                self.frame > 0
-                and keyframe.properties["divisor"]
+                keyframe.properties["divisor"]
                 and not (
                     (self.frame - keyframe.properties["offset"])
                     % keyframe.properties["divisor"]
@@ -84,6 +86,7 @@ class ClockWeatherPlugin(BasePlugin):
         # Update canvas reference in case it changed after a swap
         self._display.canvas = self.display_manager.canvas
         self._display.matrix = self.display_manager.matrix
+        self._display.frame = 0   # restart keyframe cycle so frame-0 fires all scenes immediately
         self._display.reset_scene()
 
     def draw(self) -> bool:
@@ -93,6 +96,11 @@ class ClockWeatherPlugin(BasePlugin):
         self._display.matrix = self.display_manager.matrix
         self._display.tick()
         return True
+
+    def update(self):
+        # Pre-fetch in background so the render thread never blocks on an API call
+        get_temperature_cached()
+        get_forecast_cached()
 
     def is_cycle_complete(self) -> bool:
         # Clock/weather runs continuously; never signals completion
