@@ -1293,6 +1293,15 @@ class Overhead:
                 icao = _clean(a.get("code_icao", "") or a.get("code", ""))
                 if icao and len(icao) == 4 and icao[0] == "K":
                     return icao[1:]
+                # Last resort: reverse-lookup by coordinates (private strips, military fields)
+                _lat = a.get("latitude")
+                _lon = a.get("longitude")
+                if _lat is not None and _lon is not None:
+                    from utilities.airports import get_nearest_airport as _nearest
+                    _nearby = _nearest(_lat, _lon)
+                    if _nearby:
+                        log.info(f"[overhead] FA reverse airport lookup: ({_lat:.3f},{_lon:.3f}) → {_nearby}")
+                        return _nearby
                 return ""
 
             # Try callsign first, then registration as fallback for non-standard
