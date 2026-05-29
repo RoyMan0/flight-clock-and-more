@@ -53,9 +53,7 @@ class _ClockWeatherDisplay(ClockScene, DateScene, TemperatureScene, DaysForecast
             if self.frame == 0 and keyframe.properties["divisor"] == 0:
                 keyframe()
 
-            # No 'frame > 0' guard: at frame=0, 0 % N == 0 for all N, so every
-            # keyframe fires immediately on the first tick after activation.
-            if (
+            if self.frame > 0 and (
                 keyframe.properties["divisor"]
                 and not (
                     (self.frame - keyframe.properties["offset"])
@@ -86,7 +84,6 @@ class ClockWeatherPlugin(BasePlugin):
         # Update canvas reference in case it changed after a swap
         self._display.canvas = self.display_manager.canvas
         self._display.matrix = self.display_manager.matrix
-        self._display.frame = 0   # restart keyframe cycle so frame-0 fires all scenes immediately
         self._display.reset_scene()
 
     def draw(self) -> bool:
