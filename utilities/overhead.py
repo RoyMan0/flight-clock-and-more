@@ -948,6 +948,13 @@ class Overhead:
                                       f"adsbdb={db_origin}→{db_dest} AirLabs={al_origin}→{al_dest} "
                                       f"(using AirLabs)")
                         origin_lat = origin_lon = dest_lat = dest_lon = None
+                elif al_origin or al_dest:
+                    # Partial route — one airport known (e.g. VFR flight with no filed destination)
+                    origin      = al_origin or db_origin
+                    destination = al_dest   or db_dest
+                    origin_lat = origin_lon = dest_lat = dest_lon = None
+                    log.info(f"[overhead] {callsign}: partial route: "
+                             f"{origin or '?'}→{destination or '?'}")
                 else:
                     origin      = db_origin
                     destination = db_dest
@@ -1368,7 +1375,7 @@ class Overhead:
                     log.warning(f"[overhead] FlightAware error ({_fa_ident}): {e}")
 
         arr_ts    = result.get("time_scheduled_arrival") if result else None
-        has_route = bool(result.get("al_origin") and result.get("al_destination")) if result else False
+        has_route = bool(result.get("al_origin") or result.get("al_destination")) if result else False
         if has_route and arr_ts:
             smart_expires = max(arr_ts + 7200, now + 3 * 3600)
             smart_expires = min(smart_expires, now + 24 * 3600)
