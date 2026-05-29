@@ -432,13 +432,13 @@ def _render_frame(
 
         n_rows = len(entries)
         overlay_h = 1 + n_rows * (_BDF_H + 1)
-        min_tx = min(MATRIX_W - _bdf_text_width(s, _BDF, k) - 1 for s, k, _ in entries)
+        min_tx = min(MATRIX_W - _bdf_text_width(s, _BDF, k) for s, k, _ in entries)
         _darken_region(img, max(0, min_tx - 1), 0, MATRIX_W, overlay_h)
 
         row_y = 1
         for text, kern, col in entries:
             tw = _bdf_text_width(text, _BDF, kern)
-            _bdf_draw(img, MATRIX_W - tw - 1, row_y, text, _BDF, col, kern)
+            _bdf_draw(img, MATRIX_W - tw, row_y, text, _BDF, col, kern)
             row_y += _BDF_H + 1
 
     # ------------------------------------------------------------------
