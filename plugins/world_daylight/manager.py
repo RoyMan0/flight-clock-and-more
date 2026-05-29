@@ -36,8 +36,8 @@ _LAND_MASK_PATH = os.path.join(_ASSET_DIR, "land_mask.png")
 # ------------------------------------------------------------------
 COL_DAY_LAND    = (200, 200, 195)   # light grey-white
 COL_DAY_WATER   = (0,    72, 148)   # mid ocean blue
-COL_NIGHT_LAND  = (22,   42,  78)   # dark blue-grey
-COL_NIGHT_WATER = (4,    12,  32)   # near-black blue
+COL_NIGHT_LAND  = (30,   52,  95)   # dark blue-grey
+COL_NIGHT_WATER = (14,   26,  58)   # near-black blue
 COL_TWILIGHT    = (60,  105, 170)   # lighter blue band at terminator
 
 # Sun and moon markers
@@ -261,14 +261,10 @@ def _blend_rgb(c1: tuple, c2: tuple, t: float) -> tuple:
 
 def _push_pil_to_canvas(img: Image.Image, display_manager):
     canvas = display_manager.canvas
-    if hasattr(canvas, 'SetImage'):
-        canvas.SetImage(img.convert('RGB'))
-    else:
-        pixels = img.load()
-        for y in range(MATRIX_H):
-            for x in range(MATRIX_W):
-                r, g, b = pixels[x, y]
-                canvas.SetPixel(x, y, r, g, b)
+    for y in range(MATRIX_H):
+        for x in range(MATRIX_W):
+            r, g, b = img.getpixel((x, y))
+            canvas.SetPixel(x, y, r, g, b)
     with display_manager._lock:
         display_manager._pil_image.paste(img, (0, 0))
 
