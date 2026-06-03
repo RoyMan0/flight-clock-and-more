@@ -609,17 +609,31 @@ def connect_bt():
 
 @api_bp.get("/system/bt/devices")
 def bt_devices():
-    try:
-        result = subprocess.run(
-            ["bluetoothctl", "paired-devices"],
-            capture_output=True, text=True, timeout=5,
-        )
+    import re
+    _ansi = re.compile(r'\x1b\[[0-9;]*[mK]|\x1b\[[?][0-9]*[lh]|\r')
+    def _parse_devices(output):
         devices = []
-        for line in result.stdout.splitlines():
-            parts = line.strip().split(" ", 2)
+        for line in output.splitlines():
+            line = _ansi.sub('', line).strip()
+            parts = line.split(" ", 2)
             if len(parts) == 3 and parts[0] == "Device":
                 devices.append({"mac": parts[1], "name": parts[2]})
-        return jsonify({"ok": True, "devices": devices})
+        return devices
+    try:
+        # Try modern bluez syntax first (Pi OS Bookworm / bluez 5.64+)
+        result = subprocess.run(
+            ["bluetoothctl", "devices", "Paired"],
+            capture_output=True, text=True, timeout=5,
+        )
+        devices = _parse_devices(result.stdout)
+        if not devices and result.returncode != 0:
+            # Fall back to older syntax
+            result = subprocess.run(
+                ["bluetoothctl", "paired-devices"],
+                capture_output=True, text=True, timeout=5,
+            )
+            devices = _parse_devices(result.stdout)
+        return jsonify({"ok": True, "devices": devices, "_raw": result.stdout})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "devices": []}), 500
 
@@ -639,16 +653,38 @@ def bt_connect_device():
 
 @api_bp.get("/system/bt/scan")
 def bt_scan():
+    import re
+    _ansi = re.compile(r'\x1b\[[0-9;]*[mK]|\x1b\[[?][0-9]*[lh]|\r')
+    def _parse_macs(output):
+        macs = set()
+        for line in output.splitlines():
+            line = _ansi.sub('', line).strip()
+            parts = line.split(" ", 2)
+            if len(parts) >= 2 and parts[0] == "Device":
+                macs.add(parts[1])
+        return macs
+    def _parse_devices(output, exclude):
+        devices = []
+        for line in output.splitlines():
+            line = _ansi.sub('', line).strip()
+            parts = line.split(" ", 2)
+            if len(parts) == 3 and parts[0] == "Device":
+                mac, name = parts[1], parts[2]
+                if mac not in exclude:
+                    devices.append({"mac": mac, "name": name})
+        return devices
     try:
-        paired_result = subprocess.run(
-            ["bluetoothctl", "paired-devices"],
+        paired = subprocess.run(
+            ["bluetoothctl", "devices", "Paired"],
             capture_output=True, text=True, timeout=5,
         )
-        paired_macs = set()
-        for line in paired_result.stdout.splitlines():
-            parts = line.strip().split(" ", 2)
-            if len(parts) >= 2 and parts[0] == "Device":
-                paired_macs.add(parts[1])
+        paired_macs = _parse_macs(paired.stdout)
+        if not paired_macs:
+            fallback = subprocess.run(
+                ["bluetoothctl", "paired-devices"],
+                capture_output=True, text=True, timeout=5,
+            )
+            paired_macs = _parse_macs(fallback.stdout)
         try:
             subprocess.run(["bluetoothctl", "scan", "on"], capture_output=True, timeout=8)
         except subprocess.TimeoutExpired:
@@ -657,13 +693,7 @@ def bt_scan():
             ["bluetoothctl", "devices"],
             capture_output=True, text=True, timeout=5,
         )
-        devices = []
-        for line in all_result.stdout.splitlines():
-            parts = line.strip().split(" ", 2)
-            if len(parts) == 3 and parts[0] == "Device":
-                mac, name = parts[1], parts[2]
-                if mac not in paired_macs:
-                    devices.append({"mac": mac, "name": name})
+        devices = _parse_devices(all_result.stdout, paired_macs)
         return jsonify({"ok": True, "devices": devices})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "devices": []}), 500
