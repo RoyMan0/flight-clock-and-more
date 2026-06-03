@@ -905,7 +905,18 @@ function configPage() {
       try {
         const d = await fetch('/api/system/timezones').then(r => r.json());
         this.timezones = d.zones || [];
-      } catch(e) {}
+      } catch(e) {
+        // API failed — show a minimal hardcoded list so the field isn't broken
+        this.timezones = [
+          'UTC','America/New_York','America/Chicago','America/Denver',
+          'America/Los_Angeles','America/Anchorage','Pacific/Honolulu',
+          'America/Phoenix','America/Toronto','America/Vancouver',
+          'Europe/London','Europe/Paris','Europe/Berlin','Europe/Madrid',
+          'Europe/Rome','Europe/Moscow','Asia/Dubai','Asia/Kolkata',
+          'Asia/Singapore','Asia/Tokyo','Asia/Seoul',
+          'Australia/Sydney','Pacific/Auckland',
+        ];
+      }
     },
 
     async loadMetrics() {
@@ -931,6 +942,13 @@ function configPage() {
       // Seed units from legacy field if new field absent (backward compat)
       if (!this.sysCfg.location.units) {
         this.sysCfg.location.units = this.sysCfg.location.distance_units || 'imperial';
+      }
+      // Timezone: if not in config.json yet, pull current OS timezone
+      if (!this.sysCfg.location.timezone) {
+        try {
+          const tzr = await fetch('/api/system/timezone').then(r => r.json());
+          this.sysCfg.location.timezone = tzr.timezone || 'UTC';
+        } catch(e) {}
       }
       // Ensure array fields exist for key management UI
       if (!Array.isArray(sec.airlabs_api_keys)) sec.airlabs_api_keys = [];
