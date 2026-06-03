@@ -17,6 +17,9 @@ workdammit.log
 .cache/
 data/
 
+# Mac dev stub for rgbmatrix C extension (must NOT be deployed to Pi)
+rgbmatrix/
+
 # Editor / OS
 .DS_Store
 .claude/settings.local.json
