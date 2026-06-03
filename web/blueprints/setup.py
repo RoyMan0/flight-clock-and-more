@@ -89,12 +89,17 @@ def setup_page():
             "duration": pcfg.get("display_duration", 30),
         })
 
+    ft_cfg = plugins_cfg.get("flight_tracker", {})
+    flights_cfg = cfg.get("flights") or {}
+
     return render_template(
         "setup.html",
         location=location,
         secrets=secrets,
         plugins=plugin_list,
         plugin_order=plugin_order,
+        ft_min_altitude=ft_cfg.get("min_altitude", 8000),
+        flights_email=flights_cfg.get("email", ""),
     )
 
 
@@ -214,12 +219,33 @@ def setup_save():
     cfg.save_config_section("location", "units", value=units)
     cfg.save_config_section("location", "clock_format", value=clock_format)
 
+    try:
+        radius = int(loc.get("search_radius_nm", 30))
+    except (TypeError, ValueError):
+        radius = 30
+    cfg.save_config_section("location", "search_radius_nm", value=radius)
+
+    airport = loc.get("journey_code", "").strip().upper()
+    cfg.save_config_section("location", "journey_code", value=airport)
+
+    try:
+        min_alt = int(loc.get("min_altitude", 8000))
+    except (TypeError, ValueError):
+        min_alt = 8000
+    ft_cfg = dict(cfg.get_plugin_config("flight_tracker"))
+    ft_cfg["min_altitude"] = min_alt
+    cfg.save_plugin_config("flight_tracker", ft_cfg)
+
+    flight_email = loc.get("flight_email", "").strip()
+    cfg.save_config_section("flights", "email", value=flight_email)
+
     # ---- secrets / API keys ----
     secrets_data = data.get("secrets", {})
     if secrets_data:
         # Convert single-string api key fields to list format expected by config
         airlabs_key = secrets_data.get("airlabs_key", "").strip()
         fa_key = secrets_data.get("flightaware_key", "").strip()
+        owm_key = secrets_data.get("owm_api_key", "").strip()
         new_secrets = {
             "tomorrow_api_key": secrets_data.get("tomorrow_api_key", "").strip(),
         }
@@ -227,6 +253,8 @@ def setup_save():
             new_secrets["airlabs_api_keys"] = [airlabs_key]
         if fa_key:
             new_secrets["flightaware_api_keys"] = [fa_key]
+        if owm_key:
+            new_secrets["owm_api_key"] = owm_key
         cfg.save_secrets(new_secrets)
 
     # ---- plugins ----

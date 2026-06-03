@@ -304,6 +304,37 @@
           </select>
         </div>
       </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Flight search radius (nm)</label>
+          <input type="number" id="loc-radius" min="1" max="200"
+                 value="{{ location.get('search_radius_nm', 30) }}"
+                 placeholder="30">
+        </div>
+        <div class="field">
+          <label>Home airport (IATA code)</label>
+          <input type="text" id="loc-airport" maxlength="4"
+                 style="text-transform:uppercase;"
+                 value="{{ location.get('journey_code', '') }}"
+                 placeholder="e.g. JFK">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Min flight altitude (ft)</label>
+          <input type="number" id="loc-minalt" min="0" max="60000" step="500"
+                 value="{{ ft_min_altitude }}"
+                 placeholder="8000">
+        </div>
+        <div class="field">
+          <label>Flight alert email</label>
+          <input type="email" id="loc-email"
+                 value="{{ flights_email }}"
+                 placeholder="blank = no emails">
+        </div>
+      </div>
     </div>
 
     <div class="btn-row">
@@ -332,11 +363,18 @@
                value="{{ (secrets.get('airlabs_api_keys') or [''])[0] }}"
                autocomplete="off">
       </div>
-      <div class="field" style="margin-bottom:0;">
+      <div class="field">
         <label>FlightAware — Flight Data (alternative)</label>
         <input type="text" id="key-flightaware"
                placeholder="Paste key or leave blank"
                value="{{ (secrets.get('flightaware_api_keys') or [''])[0] }}"
+               autocomplete="off">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>OpenWeatherMap — Precipitation &amp; Wind Alerts</label>
+        <input type="text" id="key-owm"
+               placeholder="Paste key or leave blank"
+               value="{{ secrets.get('owm_api_key','') }}"
                autocomplete="off">
       </div>
     </div>
@@ -562,14 +600,19 @@ function showStatus(type, msg) {
 
 // ── Review ────────────────────────────────────────────────────────
 function buildReview() {
-  const lat  = document.getElementById('loc-lat').value || '—';
-  const lon  = document.getElementById('loc-lon').value || '—';
-  const units = document.getElementById('loc-units').value;
-  const clock = document.getElementById('loc-clock').value;
+  const lat    = document.getElementById('loc-lat').value || '—';
+  const lon    = document.getElementById('loc-lon').value || '—';
+  const units  = document.getElementById('loc-units').value;
+  const clock  = document.getElementById('loc-clock').value;
+  const radius = document.getElementById('loc-radius').value || '30';
+  const airport = document.getElementById('loc-airport').value.trim().toUpperCase() || '—';
+  const minalt  = document.getElementById('loc-minalt').value || '8000';
+  const femail  = document.getElementById('loc-email').value.trim();
 
   const tmKey = document.getElementById('key-tomorrow').value;
   const alKey = document.getElementById('key-airlabs').value;
   const faKey = document.getElementById('key-flightaware').value;
+  const owmKey = document.getElementById('key-owm').value;
 
   const enabledPlugins = [];
   document.querySelectorAll('[id^="tog-"]').forEach(t => {
@@ -583,9 +626,12 @@ function buildReview() {
 
   document.getElementById('review-card').innerHTML = `
     <b>Location:</b> ${lat}, ${lon} · ${units} · ${clock}<br>
+    <b>Flight radius:</b> ${radius} nm · <b>Home airport:</b> ${airport} · <b>Min altitude:</b> ${minalt} ft<br>
+    <b>Alert email:</b> ${femail || '— none'}<br>
     <b>Weather API:</b> ${tmKey ? '✓ Set' : '— not set'}<br>
     <b>AirLabs API:</b> ${alKey ? '✓ Set' : '— not set'}<br>
     <b>FlightAware API:</b> ${faKey ? '✓ Set' : '— not set'}<br>
+    <b>OpenWeatherMap API:</b> ${owmKey ? '✓ Set' : '— not set'}<br>
     <b>Plugins:</b> ${enabledPlugins.join(', ') || 'clock_weather only'}
   `;
 }
@@ -606,15 +652,20 @@ async function saveAndFinish() {
 
   const payload = {
     location: {
-      lat:          parseFloat(document.getElementById('loc-lat').value) || 0,
-      lon:          parseFloat(document.getElementById('loc-lon').value) || 0,
-      units:        document.getElementById('loc-units').value,
-      clock_format: document.getElementById('loc-clock').value,
+      lat:              parseFloat(document.getElementById('loc-lat').value) || 0,
+      lon:              parseFloat(document.getElementById('loc-lon').value) || 0,
+      units:            document.getElementById('loc-units').value,
+      clock_format:     document.getElementById('loc-clock').value,
+      search_radius_nm: parseInt(document.getElementById('loc-radius').value) || 30,
+      journey_code:     document.getElementById('loc-airport').value.trim().toUpperCase(),
+      min_altitude:     parseInt(document.getElementById('loc-minalt').value) || 8000,
+      flight_email:     document.getElementById('loc-email').value.trim(),
     },
     secrets: {
       tomorrow_api_key: document.getElementById('key-tomorrow').value.trim(),
       airlabs_key:      document.getElementById('key-airlabs').value.trim(),
       flightaware_key:  document.getElementById('key-flightaware').value.trim(),
+      owm_api_key:      document.getElementById('key-owm').value.trim(),
     },
     plugins,
   };
