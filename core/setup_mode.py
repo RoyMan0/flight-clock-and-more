@@ -156,26 +156,55 @@ def stop_hotspot():
 # Captive portal (dnsmasq + iptables)
 # ------------------------------------------------------------------
 
-def start_captive_portal(ap_interface: str = "ap0") -> bool:
+def _detect_ap_interface() -> str:
+    """Find which interface currently has the hotspot IP assigned."""
+    try:
+        result = subprocess.run(
+            ["ip", "-o", "-4", "addr", "show"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if HOTSPOT_IP in line:
+                iface = line.split()[1]
+                log.info(f"[setup] AP interface detected: {iface}")
+                return iface
+    except Exception:
+        pass
+    log.warning("[setup] Could not detect AP interface — falling back to wlan0")
+    return "wlan0"
+
+
+def start_captive_portal() -> bool:
+    """
+    Start dnsmasq (DNS spoof → HOTSPOT_IP) and add an iptables rule that
+    redirects port 80 → 8080 for traffic destined to the hotspot IP.
+    Uses the hotspot IP as the listen address rather than a hard-coded
+    interface name, so it works regardless of what NM names the AP.
+    """
     conf = (
-        f"interface={ap_interface}\n"
-        "bind-interfaces\n"
+        f"listen-address={HOTSPOT_IP}\n"
         f"dhcp-range={HOTSPOT_IP[:-1]}100,{HOTSPOT_IP[:-1]}200,1h\n"
         f"address=/#/{HOTSPOT_IP}\n"
         "no-resolv\n"
         "no-hosts\n"
+        "bind-dynamic\n"
     )
     try:
         with open(_DNSMASQ_CONF, "w") as f:
             f.write(conf)
-        subprocess.run(
+        result = subprocess.run(
             ["sudo", "dnsmasq", "-C", _DNSMASQ_CONF,
              f"--pid-file={_DNSMASQ_PID}"],
-            capture_output=True, timeout=10,
+            capture_output=True, text=True, timeout=10,
         )
+        if result.returncode != 0:
+            log.warning(f"[setup] dnsmasq failed: {result.stderr.strip()}")
+
+        # Match on destination IP rather than interface — works regardless of
+        # whether NM named the AP interface ap0, wlan0, wlan1, etc.
         subprocess.run(
             ["sudo", "iptables", "-t", "nat", "-A", "PREROUTING",
-             "-i", ap_interface, "-p", "tcp", "--dport", "80",
+             "-d", HOTSPOT_IP, "-p", "tcp", "--dport", "80",
              "-j", "REDIRECT", "--to-port", "8080"],
             capture_output=True, timeout=5,
         )
@@ -186,7 +215,7 @@ def start_captive_portal(ap_interface: str = "ap0") -> bool:
         return False
 
 
-def stop_captive_portal(ap_interface: str = "ap0"):
+def stop_captive_portal():
     log.info("[setup] Stopping captive portal")
     try:
         if os.path.exists(_DNSMASQ_PID):
@@ -205,7 +234,7 @@ def stop_captive_portal(ap_interface: str = "ap0"):
     try:
         subprocess.run(
             ["sudo", "iptables", "-t", "nat", "-D", "PREROUTING",
-             "-i", ap_interface, "-p", "tcp", "--dport", "80",
+             "-d", HOTSPOT_IP, "-p", "tcp", "--dport", "80",
              "-j", "REDIRECT", "--to-port", "8080"],
             capture_output=True, timeout=5,
         )
@@ -242,18 +271,29 @@ def wait_for_wifi_connected(
 # ------------------------------------------------------------------
 
 def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None:
+    """
+    Return a 2-D boolean matrix for a WIFI: QR code.
+    Uses fit=True so the library picks the smallest version that fits.
+    border=1 keeps the total size small enough for the 64×32 display.
+    Version 3 (29×29 modules + 2px border = 31px) fits within 32px height.
+    """
     try:
         import qrcode
         import qrcode.constants
         qr = qrcode.QRCode(
-            version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=1,
-            border=2,
+            border=1,
         )
         qr.add_data(f"WIFI:T:WPA;S:{ssid};P:{password};;")
-        qr.make(fit=False)
-        return qr.get_matrix()
+        qr.make(fit=True)
+        matrix = qr.get_matrix()
+        size = len(matrix)
+        log.info(f"[setup] QR code: version={qr.version}, size={size}×{size}px")
+        if size > 32:
+            log.warning(f"[setup] QR too large for display ({size}px > 32px) — text fallback only")
+            return None
+        return matrix
     except Exception as e:
         log.warning(f"[setup] QR generation failed: {e}")
         return None
@@ -279,8 +319,6 @@ def run_setup_mode(cfg, args, forced: bool = False):
 
     clear_setup_flag()
 
-    ap_iface = "ap0"
-
     # Remember the original WiFi so we can reconnect after teardown
     original_ssid = get_current_wifi_ssid() if not args.no_hardware else ""
 
@@ -290,8 +328,8 @@ def run_setup_mode(cfg, args, forced: bool = False):
         hotspot_ok = start_hotspot()
         if not hotspot_ok:
             log.warning("[setup] Hotspot failed — continuing without AP")
-        time.sleep(2)
-        captive_ok = start_captive_portal(ap_iface)
+        time.sleep(2)  # give NM time to assign the hotspot IP
+        captive_ok = start_captive_portal()
         if not captive_ok:
             log.warning("[setup] Captive portal failed — users will need to type the IP")
 
@@ -348,7 +386,7 @@ def run_setup_mode(cfg, args, forced: bool = False):
     display_thread.join(timeout=2)
 
     if not args.no_hardware:
-        stop_captive_portal(ap_iface)
+        stop_captive_portal()
         stop_hotspot()
         # Give NM a moment then explicitly reconnect original network
         time.sleep(2)
