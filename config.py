@@ -25,10 +25,6 @@ _flt = _cfg.get("flights", {})
 _plg = _cfg.get("plugins", {})
 
 # Location / units
-ZONE_HOME = _loc.get("zone_home", {
-    "tl_y": 39.796827, "tl_x": -105.298648,
-    "br_y": 39.666880, "br_x": -105.110076,
-})
 LOCATION_HOME = _loc.get("location_home", [39.725715, -105.203208])
 TEMPERATURE_LOCATION = _loc.get("temperature_location", "39.725715,-105.203208")
 # Unified units setting — drives temperature, distance, speed, and snow depth.

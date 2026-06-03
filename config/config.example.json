@@ -10,12 +10,6 @@
     "led_rgb_sequence": "RBG"
   },
   "location": {
-    "zone_home": {
-      "tl_y": 0.0,
-      "tl_x": 0.0,
-      "br_y": 0.0,
-      "br_x": 0.0
-    },
     "location_home": [0.0, 0.0],
     "temperature_location": "0.0,0.0",
     "clock_format": "12hr",

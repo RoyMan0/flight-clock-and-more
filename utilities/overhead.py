@@ -800,13 +800,7 @@ class Overhead:
         max_farthest = flights_cfg.get("max_farthest", 5)
         journey_code = loc.get("journey_code", "")
 
-        # Derive search radius from zone_home bounding box if not configured
-        radius_nm = loc.get("search_radius_nm")
-        if not radius_nm:
-            zone      = loc.get("zone_home", {})
-            lat_span  = abs(zone.get("tl_y", 0) - zone.get("br_y", 0)) / 2
-            lon_span  = abs(zone.get("tl_x", 0) - zone.get("br_x", 0)) / 2
-            radius_nm = max(10.0, min(max(lat_span, lon_span) * 60, 100.0))
+        radius_nm = loc.get("search_radius_nm") or 25
 
         data = []
         try:
@@ -831,30 +825,35 @@ class Overhead:
 
             # FR24 supplement: add aircraft adsb.lol doesn't see (dedup by proximity)
             if _fr24_avail():
-                zone = loc.get("zone_home", {})
-                if zone:
-                    fr24_list = _fr24_area(zone)
-                    if fr24_list:
-                        if aircraft_list is not None:
-                            # Only add FR24 aircraft with no adsb.lol match within 2 nm
-                            for fr_ac in fr24_list:
-                                fr_lat = fr_ac.get("lat")
-                                fr_lon = fr_ac.get("lon")
-                                if fr_lat is None or fr_lon is None:
-                                    continue
-                                nearby = any(
-                                    haversine(fr_lat, fr_lon,
-                                              a.get("lat", 0), a.get("lon", 0), units) < 2.0
-                                    for a in aircraft_list
-                                    if a.get("lat") is not None
-                                )
-                                if not nearby:
-                                    aircraft_list.append(fr_ac)
-                                    log.debug(f"[overhead] FR24 supplement: {fr_ac.get('flight','?')}")
-                        else:
-                            # adsb.lol failed — use FR24 as fallback
-                            aircraft_list = fr24_list
-                            log.info(f"[overhead] FR24 fallback: {len(fr24_list)} aircraft")
+                import math
+                lat_delta = radius_nm / 60.0
+                lon_delta = radius_nm / (60.0 * math.cos(math.radians(home_lat)))
+                zone = {
+                    "tl_y": home_lat + lat_delta, "br_y": home_lat - lat_delta,
+                    "tl_x": home_lon - lon_delta, "br_x": home_lon + lon_delta,
+                }
+                fr24_list = _fr24_area(zone)
+                if fr24_list:
+                    if aircraft_list is not None:
+                        # Only add FR24 aircraft with no adsb.lol match within 2 nm
+                        for fr_ac in fr24_list:
+                            fr_lat = fr_ac.get("lat")
+                            fr_lon = fr_ac.get("lon")
+                            if fr_lat is None or fr_lon is None:
+                                continue
+                            nearby = any(
+                                haversine(fr_lat, fr_lon,
+                                          a.get("lat", 0), a.get("lon", 0), units) < 2.0
+                                for a in aircraft_list
+                                if a.get("lat") is not None
+                            )
+                            if not nearby:
+                                aircraft_list.append(fr_ac)
+                                log.debug(f"[overhead] FR24 supplement: {fr_ac.get('flight','?')}")
+                    else:
+                        # adsb.lol failed — use FR24 as fallback
+                        aircraft_list = fr24_list
+                        log.info(f"[overhead] FR24 fallback: {len(fr24_list)} aircraft")
 
             if aircraft_list is None:
                 aircraft_list = _opensky_area(home_lat, home_lon, radius_nm)
