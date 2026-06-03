@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>FlightClock Setup</title>
+<style>
+  :root {
+    --bg:       #0d0d0d;
+    --surface:  #1a1a1a;
+    --border:   #2e2e2e;
+    --accent:   #fe a727;
+    --accent:   #fea727;
+    --blue:     #28c8e6;
+    --green:    #22c55e;
+    --red:      #ef4444;
+    --text:     #e5e5e5;
+    --muted:    #888;
+    --radius:   12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+    padding-bottom: 40px;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 20px 14px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 20px; font-weight: 700; color: var(--accent); }
+  header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .steps {
+    display: flex;
+    gap: 6px;
+    padding: 12px 20px 0;
+  }
+  .step-dot {
+    flex: 1; height: 4px; border-radius: 2px;
+    background: var(--border);
+    transition: background .3s;
+  }
+  .step-dot.done    { background: var(--green); }
+  .step-dot.active  { background: var(--accent); }
+
+  section {
+    display: none;
+    padding: 20px;
+    animation: fadeIn .2s;
+  }
+  section.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+  h2 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+
+  /* WiFi list */
+  .wifi-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .wifi-item:last-child { border-bottom: none; }
+  .wifi-item:active, .wifi-item.selected { background: #222; }
+  .wifi-item .ssid { flex: 1; font-size: 14px; font-weight: 500; }
+  .wifi-item .sig  { font-size: 11px; color: var(--muted); }
+  .wifi-item .lock { font-size: 12px; color: var(--muted); }
+  .wifi-item .check { color: var(--green); font-size: 16px; display:none; }
+  .wifi-item.selected .check { display:block; }
+
+  .scan-btn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; width: 100%;
+    padding: 11px;
+    background: transparent; border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--blue);
+    font-size: 14px; cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .scan-btn:active { opacity: .7; }
+
+  /* Password row */
+  .pw-row {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .pw-row.visible { display: block; }
+  .pw-row label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+  .pw-row input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; color: var(--text);
+    font-size: 15px; outline: none;
+  }
+  .pw-row input:focus { border-color: var(--accent); }
+
+  /* Status pill */
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+    background: #1f2e1f; color: var(--green);
+    margin-bottom: 14px; display: none;
+  }
+  .status-pill.show { display: inline-flex; }
+  .status-pill.connected { background: #1f2e1f; color: var(--green); }
+  .status-pill.connecting { background: #222; color: var(--accent); }
+  .status-pill.error { background: #2e1f1f; color: var(--red); }
+
+  /* Form rows */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field input, .field select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; color: var(--text);
+    font-size: 15px; outline: none; appearance: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Plugin toggles */
+  .plugin-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .plugin-row:last-child { border-bottom: none; }
+  .plugin-row .name { flex: 1; font-size: 14px; }
+  .plugin-row .dur  { width: 54px; }
+  .plugin-row .dur input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 8px; color: var(--text);
+    font-size: 13px; text-align: center; outline: none;
+  }
+  /* Toggle switch */
+  .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0; border-radius: 12px;
+    background: var(--border); cursor: pointer;
+    transition: background .2s;
+  }
+  .slider::before {
+    content: ""; position: absolute;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; top: 3px; left: 3px;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(20px); }
+
+  /* Buttons */
+  .btn {
+    display: block; width: 100%; padding: 14px;
+    border-radius: var(--radius); border: none;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn:active { opacity: .8; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-ghost   { background: transparent; color: var(--blue); border: 1px solid var(--border); }
+  .btn-green   { background: var(--green); color: #000; }
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .btn { flex: 1; }
+
+  .note {
+    font-size: 12px; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 14px; line-height: 1.5;
+  }
+  .note a { color: var(--blue); text-decoration: none; }
+
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid transparent;
+    border-top-color: currentColor; border-radius: 50%;
+    animation: spin .7s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Finish screen */
+  #finish-screen {
+    display: none; text-align: center; padding: 60px 20px;
+  }
+  #finish-screen.active { display: block; }
+  #finish-screen .big-icon { font-size: 64px; margin-bottom: 16px; }
+  #finish-screen h2 { font-size: 22px; margin-bottom: 8px; }
+  #finish-screen p  { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>✈ FlightClock Setup</h1>
+  <p>Get your display up and running</p>
+</header>
+
+<div class="steps" id="step-dots">
+  <!-- filled by JS -->
+</div>
+
+<div id="wizard">
+
+  <!-- ── Step 1: Wi-Fi ─────────────────────────────────────────── -->
+  <section id="step-wifi" class="active">
+    <h2>Connect to Wi-Fi</h2>
+    <p class="sub">Choose your home network so the display can fetch data.</p>
+
+    <div id="wifi-status" class="status-pill"></div>
+
+    <button class="scan-btn" onclick="scanNetworks()">
+      <span id="scan-icon">⟳</span> Scan for networks
+    </button>
+
+    <div class="card" id="wifi-list">
+      <div class="wifi-item" style="color:var(--muted);cursor:default;">
+        Tap "Scan" to find networks…
+      </div>
+    </div>
+
+    <div class="pw-row" id="pw-row">
+      <label id="pw-label">Password for <strong id="pw-ssid"></strong></label>
+      <input type="password" id="pw-input" placeholder="Wi-Fi password" autocomplete="current-password">
+    </div>
+
+    <button class="btn btn-primary" onclick="connectWifi()" id="connect-btn" style="display:none;">
+      Connect
+    </button>
+
+    <div style="margin-top:16px; text-align:center;">
+      <button class="btn btn-ghost" onclick="skipWifi()" style="margin:0 auto; max-width:200px;">
+        Skip (already connected)
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Step 2: Location ──────────────────────────────────────── -->
+  <section id="step-location">
+    <h2>Home Location</h2>
+    <p class="sub">Used for weather, sun times, and flight radius.</p>
+
+    <div class="note">
+      Enter your home coordinates. You can find them by searching your address on
+      <a href="#" onclick="return false;">maps.google.com</a> and reading the URL, or use
+      <a href="https://www.latlong.net" target="_blank">latlong.net</a>.
+    </div>
+
+    <div class="card" style="padding:16px;">
+      <div class="row2">
+        <div class="field">
+          <label>Latitude</label>
+          <input type="number" id="loc-lat" step="0.0001"
+                 placeholder="e.g. 40.7128"
+                 value="{{ location.get('location_home', [0,0])[0] }}">
+        </div>
+        <div class="field">
+          <label>Longitude</label>
+          <input type="number" id="loc-lon" step="0.0001"
+                 placeholder="e.g. -74.0060"
+                 value="{{ location.get('location_home', [0,0])[1] }}">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Temperature units</label>
+          <select id="loc-units">
+            <option value="imperial" {% if location.get('units','imperial')=='imperial' %}selected{% endif %}>
+              Imperial (°F)
+            </option>
+            <option value="metric" {% if location.get('units','')=='metric' %}selected{% endif %}>
+              Metric (°C)
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Clock format</label>
+          <select id="loc-clock">
+            <option value="12hr" {% if location.get('clock_format','12hr')=='12hr' %}selected{% endif %}>
+              12-hour
+            </option>
+            <option value="24hr" {% if location.get('clock_format','')=='24hr' %}selected{% endif %}>
+              24-hour
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next</button>
+    </div>
+  </section>
+
+  <!-- ── Step 3: API Keys ──────────────────────────────────────── -->
+  <section id="step-api">
+    <h2>API Keys</h2>
+    <p class="sub">All optional — add keys to unlock specific features.</p>
+
+    <div class="card" style="padding:16px;">
+      <div class="field">
+        <label>Tomorrow.io — Weather &amp; Forecast</label>
+        <input type="text" id="key-tomorrow"
+               placeholder="Paste key or leave blank"
+               value="{{ secrets.get('tomorrow_api_key','') }}"
+               autocomplete="off">
+      </div>
+      <div class="field">
+        <label>AirLabs — Flight Data</label>
+        <input type="text" id="key-airlabs"
+               placeholder="Paste key or leave blank"
+               value="{{ (secrets.get('airlabs_api_keys') or [''])[0] }}"
+               autocomplete="off">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>FlightAware — Flight Data (alternative)</label>
+        <input type="text" id="key-flightaware"
+               placeholder="Paste key or leave blank"
+               value="{{ (secrets.get('flightaware_api_keys') or [''])[0] }}"
+               autocomplete="off">
+      </div>
+    </div>
+
+    <div class="note">
+      Keys are saved locally on the Pi and never sent anywhere else.
+      You can update them anytime from the main web dashboard.
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next</button>
+    </div>
+  </section>
+
+  <!-- ── Step 4: Plugins ───────────────────────────────────────── -->
+  <section id="step-plugins">
+    <h2>Display Plugins</h2>
+    <p class="sub">Choose what to show and for how long (seconds each).</p>
+
+    <div class="card" id="plugin-list">
+      {% for p in plugins %}
+      <div class="plugin-row">
+        <div class="name">{{ p.label }}</div>
+        <div class="dur">
+          <input type="number" min="5" max="120"
+                 id="dur-{{ p.id }}" value="{{ p.duration }}"
+                 title="seconds">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="tog-{{ p.id }}"
+                 {% if p.enabled %}checked{% endif %}
+                 {% if p.id == 'clock_weather' %}disabled{% endif %}>
+          <span class="slider"></span>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="note">
+      Clock &amp; Weather is always on. Plugins without their required API keys
+      will be skipped automatically.
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next</button>
+    </div>
+  </section>
+
+  <!-- ── Step 5: Review &amp; Save ─────────────────────────────── -->
+  <section id="step-review">
+    <h2>Review &amp; Save</h2>
+    <p class="sub">Everything look good? Save to apply and restart the display.</p>
+
+    <div class="card" id="review-card" style="padding:16px; font-size:13px; line-height:1.8;">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      <button class="btn btn-green" onclick="saveAndFinish()" id="save-btn">
+        Save &amp; Start
+      </button>
+    </div>
+  </section>
+
+</div><!-- /wizard -->
+
+<!-- Finish screen (replaces wizard) -->
+<div id="finish-screen">
+  <div class="big-icon">✅</div>
+  <h2>You're all set!</h2>
+  <p>The display is restarting with your settings.<br>
+     The main dashboard will be available at<br>
+     <strong id="dashboard-url"></strong></p>
+  <div id="redirect-countdown" style="font-size:13px; color:var(--muted); margin-bottom:20px;"></div>
+  <a id="dashboard-link" href="/" class="btn btn-primary" style="max-width:240px; margin:0 auto; text-decoration:none; display:block; text-align:center; padding:14px;">
+    Go to Dashboard
+  </a>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────
+const STEPS = ['wifi','location','api','plugins','review'];
+let currentStep = 0;
+let selectedSSID = '';
+let selectedSecure = false;
+let wifiConnected = false;
+let statusPollTimer = null;
+
+// ── Step navigation ───────────────────────────────────────────────
+function buildDots() {
+  const c = document.getElementById('step-dots');
+  c.innerHTML = '';
+  STEPS.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i < currentStep ? ' done' : i === currentStep ? ' active' : '');
+    c.appendChild(d);
+  });
+}
+
+function showStep(idx) {
+  document.querySelectorAll('#wizard section').forEach(s => s.classList.remove('active'));
+  document.getElementById('step-' + STEPS[idx]).classList.add('active');
+  currentStep = idx;
+  buildDots();
+  if (STEPS[idx] === 'review') buildReview();
+  window.scrollTo(0, 0);
+}
+
+function nextStep() { showStep(currentStep + 1); }
+function prevStep() { showStep(currentStep - 1); }
+
+// ── WiFi ─────────────────────────────────────────────────────────
+async function scanNetworks() {
+  const icon = document.getElementById('scan-icon');
+  icon.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await fetch('/setup/networks');
+    const d = await r.json();
+    renderNetworks(d.networks || [], d.current || '');
+    if (d.current) {
+      wifiConnected = true;
+      showStatus('connected', '✓ Connected: ' + d.current);
+    }
+  } catch(e) {
+    showStatus('error', 'Scan failed');
+  }
+  icon.innerHTML = '⟳';
+}
+
+function renderNetworks(nets, current) {
+  const list = document.getElementById('wifi-list');
+  if (!nets.length) {
+    list.innerHTML = '<div class="wifi-item" style="color:var(--muted);cursor:default;">No networks found</div>';
+    return;
+  }
+  list.innerHTML = nets.map(n => {
+    const bars = n.signal > 70 ? '▂▄▆█' : n.signal > 40 ? '▂▄▆░' : n.signal > 15 ? '▂▄░░' : '▂░░░';
+    const lock = n.security ? '🔒' : '';
+    const curr = n.ssid === current ? ' selected' : '';
+    return `<div class="wifi-item${curr}" onclick="selectNetwork('${esc(n.ssid)}', ${!!n.security})">
+      <span class="ssid">${esc(n.ssid)}</span>
+      <span class="sig">${bars} ${n.signal}%</span>
+      <span class="lock">${lock}</span>
+      <span class="check">✓</span>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function selectNetwork(ssid, secure) {
+  selectedSSID = ssid;
+  selectedSecure = secure;
+  document.querySelectorAll('.wifi-item').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  const pw = document.getElementById('pw-row');
+  const btn = document.getElementById('connect-btn');
+  document.getElementById('pw-ssid').textContent = ssid;
+  document.getElementById('pw-label').innerHTML = 'Password for <strong>' + esc(ssid) + '</strong>';
+  if (secure) pw.classList.add('visible'); else pw.classList.remove('visible');
+  btn.style.display = 'block';
+}
+
+async function connectWifi() {
+  if (!selectedSSID) return;
+  const pw = document.getElementById('pw-input').value;
+  const btn = document.getElementById('connect-btn');
+  btn.textContent = 'Connecting…';
+  btn.disabled = true;
+  showStatus('connecting', '⟳ Connecting to ' + selectedSSID + '…');
+  try {
+    await fetch('/setup/connect', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ssid: selectedSSID, password: pw}),
+    });
+    pollConnectionStatus();
+  } catch(e) {
+    showStatus('error', 'Connection failed');
+    btn.textContent = 'Connect'; btn.disabled = false;
+  }
+}
+
+function pollConnectionStatus() {
+  if (statusPollTimer) clearInterval(statusPollTimer);
+  let tries = 0;
+  statusPollTimer = setInterval(async () => {
+    tries++;
+    try {
+      const r = await fetch('/setup/status');
+      const d = await r.json();
+      if (d.connected) {
+        clearInterval(statusPollTimer);
+        wifiConnected = true;
+        showStatus('connected', '✓ Connected: ' + (d.ssid || selectedSSID));
+        document.getElementById('connect-btn').style.display = 'none';
+        setTimeout(() => nextStep(), 1200);
+      } else if (tries > 20) {
+        clearInterval(statusPollTimer);
+        showStatus('error', 'Could not connect — check password');
+        const btn = document.getElementById('connect-btn');
+        btn.textContent = 'Retry'; btn.disabled = false;
+      }
+    } catch(e) {}
+  }, 2000);
+}
+
+function skipWifi() {
+  wifiConnected = true;
+  nextStep();
+}
+
+function showStatus(type, msg) {
+  const el = document.getElementById('wifi-status');
+  el.className = 'status-pill show ' + type;
+  el.textContent = msg;
+}
+
+// ── Review ────────────────────────────────────────────────────────
+function buildReview() {
+  const lat  = document.getElementById('loc-lat').value || '—';
+  const lon  = document.getElementById('loc-lon').value || '—';
+  const units = document.getElementById('loc-units').value;
+  const clock = document.getElementById('loc-clock').value;
+
+  const tmKey = document.getElementById('key-tomorrow').value;
+  const alKey = document.getElementById('key-airlabs').value;
+  const faKey = document.getElementById('key-flightaware').value;
+
+  const enabledPlugins = [];
+  document.querySelectorAll('[id^="tog-"]').forEach(t => {
+    if (t.checked) {
+      const pid = t.id.replace('tog-','');
+      const dur = document.getElementById('dur-' + pid)?.value || '30';
+      const label = t.closest('.plugin-row').querySelector('.name').textContent;
+      enabledPlugins.push(label + ' (' + dur + 's)');
+    }
+  });
+
+  document.getElementById('review-card').innerHTML = `
+    <b>Location:</b> ${lat}, ${lon} · ${units} · ${clock}<br>
+    <b>Weather API:</b> ${tmKey ? '✓ Set' : '— not set'}<br>
+    <b>AirLabs API:</b> ${alKey ? '✓ Set' : '— not set'}<br>
+    <b>FlightAware API:</b> ${faKey ? '✓ Set' : '— not set'}<br>
+    <b>Plugins:</b> ${enabledPlugins.join(', ') || 'clock_weather only'}
+  `;
+}
+
+// ── Save & Finish ─────────────────────────────────────────────────
+async function saveAndFinish() {
+  const btn = document.getElementById('save-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  // Gather plugins
+  const pluginIds = ['clock_weather','flight_tracker','specific_flight_tracker',
+                     'stock_ticker','snow_report','sports','world_daylight'];
+  const plugins = pluginIds.map(pid => ({
+    id:      pid,
+    enabled: document.getElementById('tog-' + pid)?.checked ?? false,
+    duration: parseInt(document.getElementById('dur-' + pid)?.value || '30', 10),
+  }));
+
+  const payload = {
+    location: {
+      lat:          parseFloat(document.getElementById('loc-lat').value) || 0,
+      lon:          parseFloat(document.getElementById('loc-lon').value) || 0,
+      units:        document.getElementById('loc-units').value,
+      clock_format: document.getElementById('loc-clock').value,
+    },
+    secrets: {
+      tomorrow_api_key: document.getElementById('key-tomorrow').value.trim(),
+      airlabs_key:      document.getElementById('key-airlabs').value.trim(),
+      flightaware_key:  document.getElementById('key-flightaware').value.trim(),
+    },
+    plugins,
+  };
+
+  try {
+    const r1 = await fetch('/setup/save', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!r1.ok) throw new Error('save failed');
+
+    await fetch('/setup/finish', { method:'POST' });
+    showFinish();
+  } catch(e) {
+    btn.textContent = 'Save & Start'; btn.disabled = false;
+    alert('Error saving config: ' + e.message);
+  }
+}
+
+function showFinish() {
+  document.getElementById('wizard').style.display = 'none';
+  document.getElementById('step-dots').style.display = 'none';
+  const fin = document.getElementById('finish-screen');
+  fin.style.display = 'block';
+
+  const host = window.location.hostname;
+  document.getElementById('dashboard-url').textContent = 'http://' + host + ':8080';
+  document.getElementById('dashboard-link').href = 'http://' + host + ':8080';
+
+  let secs = 15;
+  const cd = document.getElementById('redirect-countdown');
+  const timer = setInterval(() => {
+    secs--;
+    cd.textContent = 'Redirecting in ' + secs + 's…';
+    if (secs <= 0) {
+      clearInterval(timer);
+      window.location.href = 'http://' + host + ':8080';
+    }
+  }, 1000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+buildDots();
+// Auto-check if already connected when page loads
+fetch('/setup/status').then(r => r.json()).then(d => {
+  if (d.connected) {
+    wifiConnected = true;
+    showStatus('connected', '✓ Already connected: ' + (d.ssid || ''));
+  }
+}).catch(() => {});
+</script>
+</body>
+</html>

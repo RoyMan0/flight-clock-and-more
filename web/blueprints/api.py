@@ -687,6 +687,21 @@ def restart_app():
     return jsonify({"ok": True})
 
 
+@api_bp.post("/system/setup-mode")
+def enter_setup_mode():
+    """Write the setup flag and restart the service — it will enter setup mode on next boot."""
+    try:
+        from core.setup_mode import request_setup
+        request_setup()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    threading.Thread(
+        target=lambda: (time.sleep(0.5), subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"])),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True})
+
+
 @api_bp.post("/system/update")
 def update_app():
     try:

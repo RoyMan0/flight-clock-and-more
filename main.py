@@ -34,6 +34,16 @@ def parse_args():
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Force first-boot setup mode regardless of WiFi state",
+    )
+    parser.add_argument(
+        "--skip-setup",
+        action="store_true",
+        help="Skip the WiFi setup check on startup",
+    )
     return parser.parse_args()
 
 
@@ -79,6 +89,17 @@ def main():
     # Config
     # ------------------------------------------------------------------
     cfg = get_config()
+
+    # ------------------------------------------------------------------
+    # Setup mode — must run BEFORE DisplayManager (which drops root)
+    # run_setup_mode() never returns; it os.execv's back into this script
+    # with --skip-setup once WiFi is connected, or is killed by systemctl.
+    # ------------------------------------------------------------------
+    if not args.no_hardware and not args.skip_setup:
+        from core.setup_mode import is_wifi_connected, setup_requested, run_setup_mode
+        if args.setup or setup_requested() or not is_wifi_connected():
+            log.info("Entering first-boot setup mode")
+            run_setup_mode(cfg, args)   # does not return
 
     # ------------------------------------------------------------------
     # Display (hardware init — drops root privileges here)

@@ -1,0 +1,21 @@
+[Unit]
+Description=LED Matrix Plugin Display
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=__HOME__/venv/bin/python3 __REPO_DIR__/main.py
+WorkingDirectory=__REPO_DIR__
+StandardOutput=append:__REPO_DIR__/workdammit.log
+StandardError=append:__REPO_DIR__/workdammit.log
+Restart=on-failure
+RestartSec=5
+User=__USER__
+Group=__USER__
+Environment=PYTHONUNBUFFERED=1
+Environment=PULSE_RUNTIME_PATH=/run/user/__UID__/pulse
+Environment=PULSE_SERVER=unix:/run/user/__UID__/pulse/native
+
+[Install]
+WantedBy=multi-user.target

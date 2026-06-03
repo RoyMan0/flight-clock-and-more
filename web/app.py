@@ -23,7 +23,7 @@ def _load_json(path, default):
         return default
 
 
-def create_app(cfg=None, display=None, plugin_manager=None):
+def create_app(cfg=None, display=None, plugin_manager=None, setup_mode=False):
     app = Flask(
         __name__,
         template_folder=os.path.join(WEB_DIR, "templates"),
@@ -38,10 +38,14 @@ def create_app(cfg=None, display=None, plugin_manager=None):
     # ------------------------------------------------------------------
     # Register blueprints
     # ------------------------------------------------------------------
-    from web.blueprints.api import api_bp
-    from web.blueprints.pages import pages_bp
-    app.register_blueprint(api_bp, url_prefix="/api")
-    app.register_blueprint(pages_bp)
+    if setup_mode:
+        from web.blueprints.setup import setup_bp
+        app.register_blueprint(setup_bp)
+    else:
+        from web.blueprints.api import api_bp
+        from web.blueprints.pages import pages_bp
+        app.register_blueprint(api_bp, url_prefix="/api")
+        app.register_blueprint(pages_bp)
 
     # ------------------------------------------------------------------
     # Legacy routes (preserved)
