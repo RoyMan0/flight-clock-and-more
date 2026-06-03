@@ -182,7 +182,19 @@ def start_captive_portal() -> bool:
             log.warning(f"[setup] iptables add failed: {e}")
             ok = False
     if ok:
-        log.info("[setup] Captive portal iptables rules active")
+        # Confirm rules are visible in the chain
+        try:
+            check = subprocess.run(
+                ["sudo", "iptables", "-t", "nat", "-L", "PREROUTING", "-n"],
+                capture_output=True, text=True, timeout=5,
+            )
+            has_53  = "5300" in check.stdout
+            has_80  = "8080" in check.stdout
+            log.info(f"[setup] Captive portal rules active — DNS:{has_53} HTTP:{has_80}")
+            if not has_53 or not has_80:
+                log.warning(f"[setup] Rule check failed:\n{check.stdout}")
+        except Exception:
+            log.info("[setup] Captive portal iptables rules active")
     return ok
 
 
@@ -306,10 +318,26 @@ def run_setup_mode(cfg, args, forced: bool = False):
     if args.no_hardware:
         log.info("[setup] No-hardware mode — skipping network operations")
     else:
-        start_captive_portal()
+        # Start hotspot FIRST — NM rewrites iptables when it creates the AP,
+        # which would wipe any rules we add beforehand.
         hotspot_ok = start_hotspot()
         if not hotspot_ok:
             log.warning("[setup] Hotspot failed — continuing without AP")
+        # Give NM a moment to finish its own iptables setup, then add ours.
+        time.sleep(3)
+        start_captive_portal()
+
+    stop_display = threading.Event()
+
+    # Start DNS spoof server immediately after captive portal rules — before
+    # display init so queries from early-connecting clients are handled.
+    if not args.no_hardware:
+        dns_thread = threading.Thread(
+            target=run_dns_spoof, args=(stop_display,),
+            daemon=True, name="setup-dns",
+        )
+        dns_thread.start()
+        time.sleep(0.2)  # give socket time to bind before display init
 
     display_cfg = cfg.get("display") or {}
     display = DisplayManager(display_cfg, software_mode=args.no_hardware)
@@ -317,16 +345,6 @@ def run_setup_mode(cfg, args, forced: bool = False):
 
     from plugins.setup_qr.manager import SetupQRPlugin
     qr_plugin = SetupQRPlugin(display, {}, {})
-
-    stop_display = threading.Event()
-
-    # DNS spoof server (no-op in software mode — no real hotspot)
-    if not args.no_hardware:
-        dns_thread = threading.Thread(
-            target=run_dns_spoof, args=(stop_display,),
-            daemon=True, name="setup-dns",
-        )
-        dns_thread.start()
 
     def _display_loop():
         while not stop_display.is_set():
