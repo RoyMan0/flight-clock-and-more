@@ -611,7 +611,7 @@ def connect_bt():
 def bt_devices():
     import re
     _ansi = re.compile(r'\x1b\[[0-9;]*[mK]|\x1b\[[?][0-9]*[lh]|\r')
-    def _parse_devices(output):
+    def _parse(output):
         devices = []
         for line in output.splitlines():
             line = _ansi.sub('', line).strip()
@@ -619,21 +619,34 @@ def bt_devices():
             if len(parts) == 3 and parts[0] == "Device":
                 devices.append({"mac": parts[1], "name": parts[2]})
         return devices
+    def _macs(output):
+        macs = set()
+        for line in output.splitlines():
+            line = _ansi.sub('', line).strip()
+            parts = line.split(" ", 2)
+            if len(parts) >= 2 and parts[0] == "Device":
+                macs.add(parts[1])
+        return macs
     try:
-        # Try modern bluez syntax first (Pi OS Bookworm / bluez 5.64+)
         result = subprocess.run(
             ["bluetoothctl", "devices", "Paired"],
             capture_output=True, text=True, timeout=5,
         )
-        devices = _parse_devices(result.stdout)
+        devices = _parse(result.stdout)
         if not devices and result.returncode != 0:
-            # Fall back to older syntax
             result = subprocess.run(
                 ["bluetoothctl", "paired-devices"],
                 capture_output=True, text=True, timeout=5,
             )
-            devices = _parse_devices(result.stdout)
-        return jsonify({"ok": True, "devices": devices, "_raw": result.stdout})
+            devices = _parse(result.stdout)
+        conn_result = subprocess.run(
+            ["bluetoothctl", "devices", "Connected"],
+            capture_output=True, text=True, timeout=5,
+        )
+        connected = _macs(conn_result.stdout)
+        for d in devices:
+            d["connected"] = d["mac"] in connected
+        return jsonify({"ok": True, "devices": devices})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "devices": []}), 500
 

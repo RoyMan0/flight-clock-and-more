@@ -87,7 +87,7 @@
                             x-model="btSelectedMac">
                       <option value="">— pick a speaker —</option>
                       <template x-for="d in btDevices" :key="d.mac">
-                        <option :value="d.mac" x-text="d.name"></option>
+                        <option :value="d.mac" x-text="d.name + (d.connected ? ' ✓' : '')"></option>
                       </template>
                     </select>
                     <button class="btn btn-sm btn-primary w-100"

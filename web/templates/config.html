@@ -224,10 +224,14 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
               <div>
                 <span class="text-light" x-text="d.name"></span>
+                <span x-show="d.connected" class="badge bg-success ms-2">Connected</span>
                 <span class="text-muted small ms-2 font-monospace" x-text="d.mac"></span>
               </div>
-              <button class="btn btn-outline-primary btn-sm" @click="connectBtConfig(d.mac, d.name)">
-                <i class="bi bi-bluetooth"></i> Connect
+              <button class="btn btn-sm"
+                      :class="d.connected ? 'btn-outline-secondary' : 'btn-outline-primary'"
+                      @click="connectBtConfig(d.mac, d.name)">
+                <i class="bi bi-bluetooth"></i>
+                <span x-text="d.connected ? 'Reconnect' : 'Connect'"></span>
               </button>
             </div>
           </template>
@@ -1085,6 +1089,7 @@ function configPage() {
         });
         this.btConfigStatus = `Connecting to ${name} — takes up to 30s`;
         this.btConfigStatusOk = true;
+        setTimeout(() => this.loadBtDevices(), 15000);
       } catch (_) {
         this.btConfigStatus = 'Connection request failed.';
       }
