@@ -99,9 +99,17 @@ def main():
     # run_setup_mode() never returns; it os.execv's back into this script
     # with --skip-setup once WiFi is connected, or is killed by systemctl.
     # ------------------------------------------------------------------
-    if not args.no_hardware and not args.skip_setup:
-        from core.setup_mode import is_wifi_connected, setup_requested, run_setup_mode
-        if args.setup or setup_requested() or not is_wifi_connected():
+    if not args.skip_setup:
+        should_enter = False
+        if args.no_hardware:
+            # On Mac/dev: only enter setup mode when explicitly requested (--setup flag)
+            should_enter = args.setup
+        else:
+            # On Pi: enter setup mode when forced, flagged, or no WiFi
+            from core.setup_mode import is_wifi_connected, setup_requested
+            should_enter = args.setup or setup_requested() or not is_wifi_connected()
+        if should_enter:
+            from core.setup_mode import run_setup_mode
             log.info("Entering first-boot setup mode")
             run_setup_mode(cfg, args)   # does not return
 

@@ -258,17 +258,21 @@ def run_setup_mode(cfg, args):
 
     clear_setup_flag()
 
-    # ---- start hotspot (needs root) ---------------------------------
-    hotspot_ok = start_hotspot()
-    if not hotspot_ok:
-        log.warning("[setup] Hotspot failed — setup mode continuing without AP")
-
-    # NM may rename the AP interface; try ap0 first
     ap_iface = "ap0"
-    time.sleep(2)  # give NM a moment to bring the AP interface up
-    captive_ok = start_captive_portal(ap_iface)
-    if not captive_ok:
-        log.warning("[setup] Captive portal failed — users will need to type the IP")
+    if args.no_hardware:
+        # Development mode: skip OS-level network operations
+        log.info("[setup] No-hardware mode — skipping hotspot and captive portal")
+    else:
+        # ---- start hotspot (needs root) ---------------------------------
+        hotspot_ok = start_hotspot()
+        if not hotspot_ok:
+            log.warning("[setup] Hotspot failed — setup mode continuing without AP")
+
+        # NM may rename the AP interface; try ap0 first
+        time.sleep(2)  # give NM a moment to bring the AP interface up
+        captive_ok = start_captive_portal(ap_iface)
+        if not captive_ok:
+            log.warning("[setup] Captive portal failed — users will need to type the IP")
 
     # ---- init display (drops root privileges here in hardware mode) -
     display_cfg = cfg.get("display") or {}
@@ -322,9 +326,15 @@ def run_setup_mode(cfg, args):
     display_thread.join(timeout=2)
 
     # ---- teardown ---------------------------------------------------
-    stop_captive_portal(ap_iface)
-    stop_hotspot()
+    if not args.no_hardware:
+        stop_captive_portal(ap_iface)
+        stop_hotspot()
     display.clear()
+
+    if args.no_hardware:
+        # Development mode: just exit cleanly; caller re-runs manually
+        log.info("[setup] Setup mode complete (no-hardware) — exiting")
+        sys.exit(0)
 
     # ---- restart the process cleanly in normal mode -----------------
     # This avoids the dual-Flask conflict when main() tries to start its
