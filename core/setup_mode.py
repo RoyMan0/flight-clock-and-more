@@ -156,16 +156,15 @@ def run_dns_spoof(stop_event: threading.Event):
 
 
 # ------------------------------------------------------------------
-# Captive portal (iptables only — DNS handled by Python thread above)
+# Captive portal — nftables (always available on Bookworm; iptables not required)
 # ------------------------------------------------------------------
 
-def _iptables(*args) -> tuple[bool, str]:
-    """
-    Run sudo iptables (or iptables-legacy as fallback) with the given args.
-    Returns (success, combined_output).
-    """
-    for cmd in ("iptables", "/usr/sbin/iptables",
-                "iptables-legacy", "/usr/sbin/iptables-legacy"):
+_NFT_TABLE      = "flightclock_nat"
+_NFT_RULES_FILE = "/tmp/flightclock_nft.conf"
+
+
+def _nft(*args) -> tuple[bool, str]:
+    for cmd in ("nft", "/usr/sbin/nft"):
         try:
             r = subprocess.run(
                 ["sudo", cmd] + list(args),
@@ -174,49 +173,58 @@ def _iptables(*args) -> tuple[bool, str]:
             out = (r.stdout + r.stderr).strip()
             if r.returncode == 0:
                 return True, out
-            log.warning(f"[setup] {cmd} rc={r.returncode}: {out}")
+            log.warning(f"[setup] nft rc={r.returncode}: {out}")
         except FileNotFoundError:
             continue
         except Exception as e:
-            log.warning(f"[setup] {cmd} error: {e}")
+            log.warning(f"[setup] nft error: {e}")
     return False, ""
 
 
 def start_captive_portal() -> bool:
     """
-    Add iptables NAT rules:
+    Add nftables NAT rules in their own table (flightclock_nat):
       UDP :53 → _DNS_PORT  (our Python DNS spoof server)
       TCP :80 → 8080       (Flask setup wizard)
+    Uses nft -f to load from a file, avoiding shell-quoting headaches.
     """
-    rules = [
-        ["-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
-        ["-p", "tcp", "--dport", "80", "-j", "REDIRECT", "--to-port", "8080"],
-    ]
-    all_ok = True
-    for rule in rules:
-        ok, out = _iptables("-t", "nat", "-A", "PREROUTING", *rule)
-        if not ok:
-            log.warning(f"[setup] iptables rule failed: {' '.join(rule)} → {out}")
-            all_ok = False
+    rules = (
+        f"table ip {_NFT_TABLE} {{\n"
+        f"    chain prerouting {{\n"
+        f"        type nat hook prerouting priority -100;\n"
+        f"        udp dport 53 redirect to :{_DNS_PORT}\n"
+        f"        tcp dport 80 redirect to :8080\n"
+        f"    }}\n"
+        f"}}\n"
+    )
+    try:
+        with open(_NFT_RULES_FILE, "w") as f:
+            f.write(rules)
+    except Exception as e:
+        log.warning(f"[setup] Could not write nft rules file: {e}")
+        return False
 
-    # Verify rules are visible in the chain
-    ok, listing = _iptables("-t", "nat", "-L", "PREROUTING", "-n", "-v")
+    ok, out = _nft("-f", _NFT_RULES_FILE)
+    if not ok:
+        log.warning(f"[setup] nft -f failed: {out}")
+        return False
+
+    ok, listing = _nft("list", "table", "ip", _NFT_TABLE)
     has_53 = str(_DNS_PORT) in listing
     has_80 = "8080" in listing
     log.info(f"[setup] Captive portal — DNS redirect:{has_53}  HTTP redirect:{has_80}")
     if not has_53 or not has_80:
-        log.warning(f"[setup] PREROUTING listing:\n{listing or '(empty — iptables may be unavailable)'}")
-    return all_ok
+        log.warning(f"[setup] nft table listing:\n{listing or '(empty)'}")
+    return has_53 and has_80
 
 
 def stop_captive_portal():
-    log.info("[setup] Removing captive portal iptables rules")
-    rules = [
-        ["-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
-        ["-p", "tcp", "--dport", "80", "-j", "REDIRECT", "--to-port", "8080"],
-    ]
-    for rule in rules:
-        _iptables("-t", "nat", "-D", "PREROUTING", *rule)
+    log.info("[setup] Removing captive portal nft rules")
+    _nft("delete", "table", "ip", _NFT_TABLE)
+    try:
+        os.remove(_NFT_RULES_FILE)
+    except FileNotFoundError:
+        pass
 
 
 # ------------------------------------------------------------------

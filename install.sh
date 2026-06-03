@@ -153,6 +153,7 @@ ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ${SERVICE_NAME}
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop ${SERVICE_NAME}
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /sbin/reboot
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /sbin/shutdown
+${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nft
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /sbin/iptables
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/sbin/iptables
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/sbin/dnsmasq
