@@ -164,7 +164,7 @@
 
       <!-- WiFi Network -->
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-wifi me-2"></i>WiFi Network</div>
+        <div class="card-header"><i class="bi bi-wifi me-2"></i>WiFi &amp; Bluetooth</div>
         <div class="card-body">
           <div class="mb-2 text-muted small" x-show="currentSsid">
             Currently connected: <strong class="text-light" x-text="currentSsid"></strong>
@@ -206,6 +206,59 @@
           </div>
           <div x-show="wifiStatus" x-text="wifiStatus"
                class="mt-2 small" :class="wifiStatusOk ? 'text-success' : 'text-warning'"></div>
+
+          <!-- Bluetooth section -->
+          <hr class="border-secondary my-3">
+          <h6 class="mb-3"><i class="bi bi-bluetooth me-1"></i>Bluetooth Speakers</h6>
+
+          <!-- Paired devices -->
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Paired Devices</span>
+            <button class="btn btn-outline-secondary btn-sm" @click="loadBtDevices()" :disabled="btLoading">
+              <span x-show="!btLoading"><i class="bi bi-arrow-repeat me-1"></i>Refresh</span>
+              <span x-show="btLoading">Loading…</span>
+            </button>
+          </div>
+          <div x-show="btDevices.length === 0 && !btLoading" class="text-muted small mb-2">No paired devices found.</div>
+          <template x-for="d in btDevices" :key="d.mac">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <span class="text-light" x-text="d.name"></span>
+                <span class="text-muted small ms-2 font-monospace" x-text="d.mac"></span>
+              </div>
+              <button class="btn btn-outline-primary btn-sm" @click="connectBtConfig(d.mac, d.name)">
+                <i class="bi bi-bluetooth"></i> Connect
+              </button>
+            </div>
+          </template>
+
+          <!-- Scan for new devices -->
+          <div class="border-top border-secondary pt-3 mt-2">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="text-muted small">Add New Device</span>
+              <button class="btn btn-outline-secondary btn-sm" @click="scanBt()" :disabled="btScanning">
+                <span x-show="!btScanning"><i class="bi bi-search me-1"></i>Scan (~8s)</span>
+                <span x-show="btScanning"><span class="spinner-border spinner-border-sm me-1"></span>Scanning…</span>
+              </button>
+            </div>
+            <div x-show="btScanning" class="text-muted small">Put the speaker in pairing mode before scanning.</div>
+            <template x-for="d in btScanDevices" :key="d.mac">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                  <span class="text-light" x-text="d.name"></span>
+                  <span class="text-muted small ms-2 font-monospace" x-text="d.mac"></span>
+                </div>
+                <button class="btn btn-outline-success btn-sm" @click="pairBt(d.mac, d.name)">
+                  <i class="bi bi-plus me-1"></i>Pair &amp; Connect
+                </button>
+              </div>
+            </template>
+            <div x-show="btScanDone && btScanDevices.length === 0" class="text-muted small">
+              No new devices found. Make sure the speaker is in pairing mode.
+            </div>
+          </div>
+          <div x-show="btConfigStatus" x-text="btConfigStatus"
+               class="mt-2 small" :class="btConfigStatusOk ? 'text-success' : 'text-warning'"></div>
         </div>
       </div>
 
@@ -822,9 +875,16 @@ function configPage() {
     wifiScanning: false,
     wifiConnecting: false,
     currentSsid: '',
+    btDevices: [],
+    btLoading: false,
+    btScanning: false,
+    btScanDevices: [],
+    btScanDone: false,
+    btConfigStatus: '',
+    btConfigStatusOk: false,
 
     async init() {
-      await this.loadAll();
+      await Promise.all([this.loadAll(), this.loadBtDevices()]);
     },
 
     async loadMetrics() {
@@ -986,6 +1046,63 @@ function configPage() {
         this.wifiStatusOk = false;
       } finally {
         this.wifiScanning = false;
+      }
+    },
+
+    async loadBtDevices() {
+      this.btLoading = true;
+      try {
+        const d = await fetch('/api/system/bt/devices').then(r => r.json());
+        this.btDevices = d.devices || [];
+      } catch (_) {}
+      this.btLoading = false;
+    },
+
+    async scanBt() {
+      this.btScanning = true;
+      this.btScanDevices = [];
+      this.btScanDone = false;
+      this.btConfigStatus = '';
+      try {
+        const d = await fetch('/api/system/bt/scan').then(r => r.json());
+        this.btScanDevices = d.devices || [];
+        this.btScanDone = true;
+      } catch (_) {
+        this.btConfigStatus = 'Scan failed.';
+        this.btConfigStatusOk = false;
+      } finally {
+        this.btScanning = false;
+      }
+    },
+
+    async connectBtConfig(mac, name) {
+      this.btConfigStatus = `Connecting to ${name}…`;
+      this.btConfigStatusOk = false;
+      try {
+        await fetch('/api/system/bt/connect', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({mac}),
+        });
+        this.btConfigStatus = `Connecting to ${name} — takes up to 30s`;
+        this.btConfigStatusOk = true;
+      } catch (_) {
+        this.btConfigStatus = 'Connection request failed.';
+      }
+    },
+
+    async pairBt(mac, name) {
+      this.btConfigStatus = `Pairing with ${name}…`;
+      this.btConfigStatusOk = false;
+      try {
+        await fetch('/api/system/bt/pair', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({mac}),
+        });
+        this.btConfigStatus = `Pairing with ${name} — may take up to 30s. Refreshing list…`;
+        this.btConfigStatusOk = true;
+        setTimeout(() => this.loadBtDevices(), 12000);
+      } catch (_) {
+        this.btConfigStatus = 'Pairing request failed.';
       }
     },
 

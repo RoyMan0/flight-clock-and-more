@@ -607,6 +607,87 @@ def connect_bt():
     return jsonify({"ok": True})
 
 
+@api_bp.get("/system/bt/devices")
+def bt_devices():
+    try:
+        result = subprocess.run(
+            ["bluetoothctl", "paired-devices"],
+            capture_output=True, text=True, timeout=5,
+        )
+        devices = []
+        for line in result.stdout.splitlines():
+            parts = line.strip().split(" ", 2)
+            if len(parts) == 3 and parts[0] == "Device":
+                devices.append({"mac": parts[1], "name": parts[2]})
+        return jsonify({"ok": True, "devices": devices})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "devices": []}), 500
+
+
+@api_bp.post("/system/bt/connect")
+def bt_connect_device():
+    data = request.get_json(force=True)
+    mac = data.get("mac", "").strip()
+    if not mac:
+        return jsonify({"ok": False, "error": "MAC address required"}), 400
+    threading.Thread(
+        target=lambda: subprocess.run(["bluetoothctl", "connect", mac], capture_output=True),
+        daemon=True,
+    ).start()
+    return jsonify({"ok": True})
+
+
+@api_bp.get("/system/bt/scan")
+def bt_scan():
+    try:
+        paired_result = subprocess.run(
+            ["bluetoothctl", "paired-devices"],
+            capture_output=True, text=True, timeout=5,
+        )
+        paired_macs = set()
+        for line in paired_result.stdout.splitlines():
+            parts = line.strip().split(" ", 2)
+            if len(parts) >= 2 and parts[0] == "Device":
+                paired_macs.add(parts[1])
+        try:
+            subprocess.run(["bluetoothctl", "scan", "on"], capture_output=True, timeout=8)
+        except subprocess.TimeoutExpired:
+            pass
+        all_result = subprocess.run(
+            ["bluetoothctl", "devices"],
+            capture_output=True, text=True, timeout=5,
+        )
+        devices = []
+        for line in all_result.stdout.splitlines():
+            parts = line.strip().split(" ", 2)
+            if len(parts) == 3 and parts[0] == "Device":
+                mac, name = parts[1], parts[2]
+                if mac not in paired_macs:
+                    devices.append({"mac": mac, "name": name})
+        return jsonify({"ok": True, "devices": devices})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "devices": []}), 500
+
+
+@api_bp.post("/system/bt/pair")
+def bt_pair():
+    data = request.get_json(force=True)
+    mac = data.get("mac", "").strip()
+    if not mac:
+        return jsonify({"ok": False, "error": "MAC address required"}), 400
+
+    def _pair():
+        for cmd in [
+            ["bluetoothctl", "pair", mac],
+            ["bluetoothctl", "trust", mac],
+            ["bluetoothctl", "connect", mac],
+        ]:
+            subprocess.run(cmd, capture_output=True, timeout=15)
+
+    threading.Thread(target=_pair, daemon=True).start()
+    return jsonify({"ok": True})
+
+
 @api_bp.get("/system/wifi/networks")
 def wifi_networks():
     try:

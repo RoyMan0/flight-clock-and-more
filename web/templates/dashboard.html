@@ -72,11 +72,33 @@
                     @click="checkForUpdates()">
               <i class="bi bi-cloud-download me-1"></i>Check for Updates
             </button>
-            <button class="btn btn-sm btn-outline-secondary w-100"
-                    :disabled="sysActionPending"
-                    @click="systemAction('connect-bt', null)">
-              <i class="bi bi-bluetooth me-1"></i>Connect to BT Speaker
-            </button>
+            <div>
+              <button class="btn btn-sm btn-outline-secondary w-100"
+                      :disabled="sysActionPending"
+                      @click="toggleBtPicker()">
+                <i class="bi bi-bluetooth me-1"></i>Connect to BT Speaker
+              </button>
+              <div x-show="btPickerOpen" x-transition class="mt-2 p-2 border border-secondary rounded">
+                <div x-show="btLoading" class="text-muted small text-center py-1">Loading devices…</div>
+                <div x-show="!btLoading && btDevices.length === 0" class="text-muted small text-center py-1">No paired speakers found.</div>
+                <template x-if="!btLoading && btDevices.length > 0">
+                  <div>
+                    <select class="form-select form-select-sm bg-dark text-light border-secondary mb-2"
+                            x-model="btSelectedMac">
+                      <option value="">— pick a speaker —</option>
+                      <template x-for="d in btDevices" :key="d.mac">
+                        <option :value="d.mac" x-text="d.name"></option>
+                      </template>
+                    </select>
+                    <button class="btn btn-sm btn-primary w-100"
+                            :disabled="!btSelectedMac"
+                            @click="connectBtDevice()">
+                      <i class="bi bi-bluetooth me-1"></i>Connect
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </div>
             <button class="btn btn-sm btn-outline-warning w-100"
                     :disabled="sysActionPending"
                     @click="systemAction('restart-app', 'Restart the application?')">
@@ -150,6 +172,10 @@ function dashboard() {
     currentFlights: [],
     sysActionPending: false,
     sysActionMsg: '',
+    btPickerOpen: false,
+    btDevices: [],
+    btSelectedMac: '',
+    btLoading: false,
     _es: null,
     _pollTimer: null,
 
@@ -186,16 +212,38 @@ function dashboard() {
         .then(d => { if (d.ok) this.activePlugin = pid; });
     },
 
+    async toggleBtPicker() {
+      this.btPickerOpen = !this.btPickerOpen;
+      if (this.btPickerOpen && this.btDevices.length === 0) {
+        this.btLoading = true;
+        try {
+          const d = await fetch('/api/system/bt/devices').then(r => r.json());
+          this.btDevices = d.devices || [];
+          if (this.btDevices.length === 1) this.btSelectedMac = this.btDevices[0].mac;
+        } catch (_) {}
+        this.btLoading = false;
+      }
+    },
+
+    async connectBtDevice() {
+      if (!this.btSelectedMac) return;
+      const device = this.btDevices.find(d => d.mac === this.btSelectedMac);
+      this.btPickerOpen = false;
+      this.sysActionPending = true;
+      this.sysActionMsg = `Connecting to ${device?.name || this.btSelectedMac}…`;
+      try {
+        await fetch('/api/system/bt/connect', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({mac: this.btSelectedMac}),
+        });
+      } catch (_) {}
+      this.sysActionMsg = `Connecting to ${device?.name || this.btSelectedMac} — takes up to 30s`;
+      setTimeout(() => { this.sysActionMsg = ''; this.sysActionPending = false; }, 30000);
+    },
+
     async systemAction(action, confirmMsg) {
       if (confirmMsg && !confirm(confirmMsg)) return;
       this.sysActionPending = true;
-      if (action === 'connect-bt') {
-        this.sysActionMsg = 'Connecting to BT speaker…';
-        try { await fetch('/api/system/connect-bt', {method: 'POST'}); } catch (_) {}
-        this.sysActionMsg = 'Connecting — takes up to 30s';
-        setTimeout(() => { this.sysActionMsg = ''; this.sysActionPending = false; }, 30000);
-        return;
-      }
       this.sysActionMsg = action === 'restart-app' ? 'Restarting…' : action === 'reboot' ? 'Rebooting…' : 'Shutting down…';
       try {
         await fetch(`/api/system/${action}`, {method: 'POST'});
