@@ -9,7 +9,50 @@ import time
 import os
 import sys
 
-from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request
+
+
+def _get_timezones() -> list[str]:
+    """Return sorted list of IANA timezone names."""
+    try:
+        from zoneinfo import available_timezones
+        return sorted(available_timezones())
+    except Exception:
+        pass
+    try:
+        result = subprocess.run(
+            ["timedatectl", "list-timezones"],
+            capture_output=True, text=True, timeout=10,
+        )
+        zones = [z.strip() for z in result.stdout.splitlines() if z.strip()]
+        if zones:
+            return sorted(zones)
+    except Exception:
+        pass
+    return sorted([
+        "UTC",
+        "America/Anchorage","America/Chicago","America/Denver","America/Los_Angeles",
+        "America/New_York","America/Phoenix","America/Honolulu","America/Toronto",
+        "America/Vancouver","America/Mexico_City","America/Sao_Paulo",
+        "Europe/London","Europe/Paris","Europe/Berlin","Europe/Madrid","Europe/Rome",
+        "Europe/Moscow","Europe/Istanbul","Asia/Dubai","Asia/Kolkata","Asia/Singapore",
+        "Asia/Shanghai","Asia/Tokyo","Asia/Seoul","Australia/Sydney","Australia/Perth",
+        "Pacific/Auckland","Pacific/Honolulu","Africa/Cairo","Africa/Johannesburg",
+    ])
+
+
+def _get_current_timezone() -> str:
+    try:
+        result = subprocess.run(
+            ["timedatectl", "show", "--property=Timezone", "--value"],
+            capture_output=True, text=True, timeout=5,
+        )
+        tz = result.stdout.strip()
+        if tz:
+            return tz
+    except Exception:
+        pass
+    return ""
 
 setup_bp = Blueprint("setup", __name__)
 
@@ -92,6 +135,9 @@ def setup_page():
     ft_cfg = plugins_cfg.get("flight_tracker", {})
     flights_cfg = cfg.get("flights") or {}
 
+    # Timezone
+    sys_tz = _get_current_timezone() or location.get("timezone", "America/New_York")
+
     return render_template(
         "setup.html",
         location=location,
@@ -100,6 +146,8 @@ def setup_page():
         plugin_order=plugin_order,
         ft_min_altitude=ft_cfg.get("min_altitude", 8000),
         flights_email=flights_cfg.get("email", ""),
+        timezones=_get_timezones(),
+        current_timezone=sys_tz,
     )
 
 
@@ -227,6 +275,15 @@ def setup_save():
 
     airport = loc.get("journey_code", "").strip().upper()
     cfg.save_config_section("location", "journey_code", value=airport)
+
+    tz = loc.get("timezone", "").strip()
+    if tz:
+        cfg.save_config_section("location", "timezone", value=tz)
+        try:
+            subprocess.run(["sudo", "timedatectl", "set-timezone", tz],
+                           capture_output=True, timeout=10)
+        except Exception:
+            pass
 
     try:
         min_alt = int(loc.get("min_altitude", 8000))

@@ -14,6 +14,7 @@
     "temperature_location": "0.0,0.0",
     "clock_format": "12hr",
     "units": "imperial",
+    "timezone": "America/New_York",
     "journey_code": "",
     "journey_blank_filler": " ? ",
     "search_radius_nm": 30

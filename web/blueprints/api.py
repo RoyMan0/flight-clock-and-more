@@ -233,7 +233,88 @@ def save_system_config():
         if key in data:
             full[key] = data[key]
     cfg.save_config(full)
+
+    # Apply timezone to the OS if it changed
+    tz = (data.get("location") or {}).get("timezone", "").strip()
+    if tz:
+        _apply_system_timezone(tz)
+
     return jsonify({"ok": True})
+
+
+def _apply_system_timezone(tz: str):
+    try:
+        subprocess.run(["sudo", "timedatectl", "set-timezone", tz],
+                       capture_output=True, timeout=10)
+    except Exception:
+        pass  # non-Pi systems (Mac dev) don't have timedatectl
+
+
+@api_bp.get("/system/timezone")
+def get_system_timezone():
+    """Return the current OS timezone."""
+    try:
+        result = subprocess.run(
+            ["timedatectl", "show", "--property=Timezone", "--value"],
+            capture_output=True, text=True, timeout=5,
+        )
+        tz = result.stdout.strip()
+    except Exception:
+        import time as _time
+        tz = ""
+    # Fall back to config value
+    if not tz:
+        cfg = _cfg()
+        tz = (cfg.get("location") or {}).get("timezone", "UTC") if cfg else "UTC"
+    return jsonify({"timezone": tz})
+
+
+def _list_timezones() -> list[str]:
+    """Return sorted list of IANA timezone names."""
+    try:
+        from zoneinfo import available_timezones
+        return sorted(available_timezones())
+    except Exception:
+        pass
+    try:
+        result = subprocess.run(
+            ["timedatectl", "list-timezones"],
+            capture_output=True, text=True, timeout=10,
+        )
+        zones = [z.strip() for z in result.stdout.splitlines() if z.strip()]
+        if zones:
+            return sorted(zones)
+    except Exception:
+        pass
+    # Curated fallback covering most common zones
+    return sorted([
+        "UTC",
+        "America/Anchorage","America/Chicago","America/Denver","America/Detroit",
+        "America/Los_Angeles","America/New_York","America/Phoenix","America/Honolulu",
+        "America/Toronto","America/Vancouver","America/Mexico_City","America/Sao_Paulo",
+        "America/Argentina/Buenos_Aires","America/Bogota","America/Lima",
+        "Europe/London","Europe/Dublin","Europe/Lisbon","Europe/Paris","Europe/Berlin",
+        "Europe/Madrid","Europe/Rome","Europe/Amsterdam","Europe/Brussels",
+        "Europe/Stockholm","Europe/Oslo","Europe/Copenhagen","Europe/Helsinki",
+        "Europe/Warsaw","Europe/Prague","Europe/Vienna","Europe/Zurich",
+        "Europe/Athens","Europe/Istanbul","Europe/Moscow","Europe/Kiev",
+        "Asia/Dubai","Asia/Karachi","Asia/Kolkata","Asia/Dhaka","Asia/Bangkok",
+        "Asia/Singapore","Asia/Hong_Kong","Asia/Shanghai","Asia/Tokyo","Asia/Seoul",
+        "Australia/Sydney","Australia/Melbourne","Australia/Brisbane","Australia/Perth",
+        "Pacific/Auckland","Pacific/Fiji","Pacific/Honolulu",
+        "Africa/Cairo","Africa/Johannesburg","Africa/Lagos","Africa/Nairobi",
+    ])
+
+
+@api_bp.get("/system/timezones")
+def list_timezones():
+    zones = _list_timezones()
+    # Group by first component for the UI
+    grouped: dict[str, list[str]] = {}
+    for z in zones:
+        region = z.split("/")[0] if "/" in z else "Other"
+        grouped.setdefault(region, []).append(z)
+    return jsonify({"zones": zones, "grouped": grouped})
 
 
 @api_bp.get("/config/secrets")

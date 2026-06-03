@@ -305,6 +305,15 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Timezone</label>
+        <select id="loc-timezone">
+          {% for tz in timezones %}
+          <option value="{{ tz }}" {% if tz == current_timezone %}selected{% endif %}>{{ tz }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
       <div class="row2">
         <div class="field">
           <label>Flight search radius (nm)</label>
@@ -604,7 +613,8 @@ function buildReview() {
   const lon    = document.getElementById('loc-lon').value || '—';
   const units  = document.getElementById('loc-units').value;
   const clock  = document.getElementById('loc-clock').value;
-  const radius = document.getElementById('loc-radius').value || '30';
+  const tz      = document.getElementById('loc-timezone').value;
+  const radius  = document.getElementById('loc-radius').value || '30';
   const airport = document.getElementById('loc-airport').value.trim().toUpperCase() || '—';
   const minalt  = document.getElementById('loc-minalt').value || '8000';
   const femail  = document.getElementById('loc-email').value.trim();
@@ -625,7 +635,7 @@ function buildReview() {
   });
 
   document.getElementById('review-card').innerHTML = `
-    <b>Location:</b> ${lat}, ${lon} · ${units} · ${clock}<br>
+    <b>Location:</b> ${lat}, ${lon} · ${units} · ${clock} · ${tz}<br>
     <b>Flight radius:</b> ${radius} nm · <b>Home airport:</b> ${airport} · <b>Min altitude:</b> ${minalt} ft<br>
     <b>Alert email:</b> ${femail || '— none'}<br>
     <b>Weather API:</b> ${tmKey ? '✓ Set' : '— not set'}<br>
@@ -656,6 +666,7 @@ async function saveAndFinish() {
       lon:              parseFloat(document.getElementById('loc-lon').value) || 0,
       units:            document.getElementById('loc-units').value,
       clock_format:     document.getElementById('loc-clock').value,
+      timezone:         document.getElementById('loc-timezone').value,
       search_radius_nm: parseInt(document.getElementById('loc-radius').value) || 30,
       journey_code:     document.getElementById('loc-airport').value.trim().toUpperCase(),
       min_altitude:     parseInt(document.getElementById('loc-minalt').value) || 8000,

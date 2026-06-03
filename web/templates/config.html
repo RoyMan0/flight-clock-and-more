@@ -74,6 +74,15 @@
               </select>
             </div>
             <div class="col-md-4">
+              <label class="form-label">Timezone</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.location.timezone">
+                <option value="" disabled>Loading…</option>
+                <template x-for="z in timezones" :key="z">
+                  <option :value="z" x-text="z"></option>
+                </template>
+              </select>
+            </div>
+            <div class="col-md-4">
               <label class="form-label">Units</label>
               <select class="form-select bg-dark text-light border-secondary"
                       x-model="sysCfg.location.units"
@@ -871,6 +880,7 @@ function configPage() {
     teamsLoading: false,
     teamsData: {},
     teamTab: '',
+    timezones: [],
     wifiNetworks: [],
     wifiSsid: '',
     wifiPassword: '',
@@ -888,7 +898,14 @@ function configPage() {
     btConfigStatusOk: false,
 
     async init() {
-      await Promise.all([this.loadAll(), this.loadBtDevices()]);
+      await Promise.all([this.loadAll(), this.loadBtDevices(), this.loadTimezones()]);
+    },
+
+    async loadTimezones() {
+      try {
+        const d = await fetch('/api/system/timezones').then(r => r.json());
+        this.timezones = d.zones || [];
+      } catch(e) {}
     },
 
     async loadMetrics() {
