@@ -120,13 +120,23 @@ def start_captive_portal() -> bool:
     dnsmasq process, no port-53 conflict.
     Also adds an iptables rule: port 80 → 8080 by destination IP.
     """
+    conf_content = f"address=/#/{HOTSPOT_IP}\n"
     try:
         os.makedirs(_NM_DNSMASQ_DIR, exist_ok=True)
         with open(_NM_CAPTIVE_CONF, "w") as f:
-            f.write(f"address=/#/{HOTSPOT_IP}\n")
+            f.write(conf_content)
         log.info(f"[setup] Captive portal DNS config written to {_NM_CAPTIVE_CONF}")
-    except Exception as e:
-        log.warning(f"[setup] Could not write dnsmasq config: {e}")
+    except (PermissionError, OSError) as e:
+        # Directory not yet chowned — fall back to sudo tee
+        log.warning(f"[setup] Direct write failed ({e}), retrying with sudo tee")
+        try:
+            subprocess.run(
+                ["sudo", "tee", _NM_CAPTIVE_CONF],
+                input=conf_content, capture_output=True, text=True, timeout=5,
+            )
+            log.info(f"[setup] Captive portal DNS config written via sudo")
+        except Exception as e2:
+            log.warning(f"[setup] Could not write dnsmasq config: {e2}")
 
     try:
         subprocess.run(

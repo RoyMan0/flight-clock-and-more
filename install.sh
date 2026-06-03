@@ -157,6 +157,7 @@ ${INSTALL_USER} ALL=(ALL) NOPASSWD: /sbin/iptables
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/sbin/iptables
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/sbin/dnsmasq
 ${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/bin/timedatectl
+${INSTALL_USER} ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/NetworkManager/dnsmasq-shared.d/flightclock-captive.conf
 SUDOERS_EOF
 if visudo -c -f "$SUDOERS_TMP" &>/dev/null; then
     cp "$SUDOERS_TMP" "$SUDOERS_FILE"

@@ -4,9 +4,9 @@ SetupQRPlugin — draws the WiFi setup QR code on the 64×32 LED matrix.
 Layout (version 3 QR, border=0 → 29×29px):
   cols 0–28  : QR code, top-left at (0, 1) — 1px top margin, 2px bottom margin
   cols 31–63 : text panel (2px gap after QR)
-    row  6   : "Join Wi-Fi"
-    row  8   : divider line
-    row 14   : "SSID:" label
+    row  5   : "Join"
+    row 11   : "WIFI"
+    row 13   : divider line
     row 20   : SSID value
     row 26   : "PW:" label
     row 32   : password value
@@ -35,8 +35,8 @@ _BLACK  = (0,   0,   0)
 _QR_X = 0
 _QR_Y = 1   # 1px top margin; QR occupies rows 1–29, 2px blank at bottom
 
-# Text panel: 29px QR + 2px gap
-_TEXT_X = 31
+# Text panel: 29px QR + 0px gap (gives 35px panel, needed for header)
+_TEXT_X = 29
 
 
 class SetupQRPlugin(BasePlugin):
@@ -118,23 +118,25 @@ class SetupQRPlugin(BasePlugin):
             return
 
         g = self._graphics
-        tiny  = self._font_tiny
-        small = self._font_small
+        tiny = self._font_tiny
 
         def _color(rgb):
             return g.Color(*rgb)
 
-        # "Join WIFI" header
-        g.DrawText(canvas, tiny, _TEXT_X, 6, _color(_YELLOW), "Join WIFI")
+        # Render "Join" and "WIFI" separately with a 3px gap so we control
+        # the word spacing (the font's space char is ~5px, too wide).
+        # "Join"=16px + 3px + "WIFI"=16px = 35px, fits the 35px panel.
+        g.DrawText(canvas, tiny, _TEXT_X,      6, _color(_YELLOW), "Join")
+        g.DrawText(canvas, tiny, _TEXT_X + 19, 6, _color(_YELLOW), "WIFI")
 
-        # Divider line
+        # Divider immediately below text (0px gap)
         for x in range(_TEXT_X, 64):
-            canvas.SetPixel(x, 8, *_GREY)
+            canvas.SetPixel(x, 7, *_GREY)
 
         # SSID label + value
-        g.DrawText(canvas, tiny, _TEXT_X, 14, _color(_GREY), "SSID:")
-        g.DrawText(canvas, tiny, _TEXT_X, 20, _color(_CYAN), self._ssid)
+        g.DrawText(canvas, tiny, _TEXT_X, 13, _color(_GREY), "SSID:")
+        g.DrawText(canvas, tiny, _TEXT_X, 19, _color(_CYAN), self._ssid)
 
         # Password label + value
-        g.DrawText(canvas, tiny, _TEXT_X, 26, _color(_GREY), "PW:")
-        g.DrawText(canvas, tiny, _TEXT_X, 32, _color(_CYAN), self._password)
+        g.DrawText(canvas, tiny, _TEXT_X, 25, _color(_GREY), "PW:")
+        g.DrawText(canvas, tiny, _TEXT_X, 31, _color(_CYAN), self._password)
