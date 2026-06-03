@@ -315,8 +315,15 @@ def run_setup_mode(cfg, args):
     log.info(f"[setup] Setup wizard running at http://{HOTSPOT_IP}:8080/setup")
 
     # ---- wait for WiFi connection ------------------------------------
-    log.info("[setup] Waiting for WiFi connection…")
-    connected = wait_for_wifi_connected(stop_event=stop_display)
+    wifi_already_connected = is_wifi_connected()
+    if args.setup and wifi_already_connected:
+        # Forced setup mode with existing WiFi connection — don't exit on the
+        # pre-existing connection; wait for the user to finish the wizard.
+        log.info("[setup] Forced setup mode — waiting for wizard completion")
+        stop_display.wait(timeout=600)
+    else:
+        log.info("[setup] Waiting for WiFi connection…")
+        wait_for_wifi_connected(stop_event=stop_display)
     if connected:
         log.info("[setup] WiFi connected — restarting in normal mode")
     else:
