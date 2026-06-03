@@ -13,6 +13,10 @@ config/config.json
 workdammit.log
 *.log
 
+# Runtime cache and data (updated every run, not source-controlled)
+.cache/
+data/
+
 # Editor / OS
 .DS_Store
 .claude/settings.local.json
