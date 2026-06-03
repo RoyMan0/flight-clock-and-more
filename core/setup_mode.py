@@ -283,7 +283,7 @@ def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None
         qr = qrcode.QRCode(
             error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=1,
-            border=1,
+            border=0,
         )
         qr.add_data(f"WIFI:T:WPA;S:{ssid};P:{password};;")
         qr.make(fit=True)

@@ -1,16 +1,15 @@
 """
 SetupQRPlugin — draws the WiFi setup QR code on the 64×32 LED matrix.
 
-Layout (25×25 QR + right panel):
-  cols 0–24  : QR code (25×25 at 1px/module, border=2, centered vertically)
-  cols 26–63 : text panel
-    row  1   : "Join Wi-Fi"
-    row  9   : SSID value
-    row 17   : password value
-    row 25   : "→ 10.42.0.1"
-
-Falls back to scrolling text if the qrcode library is unavailable or the
-content doesn't fit in a version-1 code.
+Layout (version 3 QR, border=0 → 29×29px):
+  cols 0–28  : QR code, top-left at (0, 1) — 1px top margin, 2px bottom margin
+  cols 31–63 : text panel (2px gap after QR)
+    row  6   : "Join Wi-Fi"
+    row  8   : divider line
+    row 14   : "SSID:" label
+    row 20   : SSID value
+    row 26   : "PW:" label
+    row 32   : password value
 """
 
 import logging
@@ -32,13 +31,12 @@ _CYAN   = (40,  200, 230)
 _GREY   = (160, 160, 160)
 _BLACK  = (0,   0,   0)
 
-# QR placement
-_QR_X    = 0
-_QR_Y    = 3   # top row of QR block (25 rows → 3..27, centred in 32)
-_QR_SIZE = 25  # matches version=1, border=2 → 21+2+2 = 25
+# QR placement — version 3, border=0 → 29×29 modules
+_QR_X = 0
+_QR_Y = 1   # 1px top margin; QR occupies rows 1–29, 2px blank at bottom
 
-# Text panel start column
-_TEXT_X  = 27
+# Text panel: 29px QR + 2px gap
+_TEXT_X = 31
 
 
 class SetupQRPlugin(BasePlugin):
