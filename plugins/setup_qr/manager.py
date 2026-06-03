@@ -124,8 +124,8 @@ class SetupQRPlugin(BasePlugin):
         def _color(rgb):
             return g.Color(*rgb)
 
-        # "Join Wi-Fi" header
-        g.DrawText(canvas, tiny, _TEXT_X, 6, _color(_YELLOW), "Join Wi-Fi")
+        # "Join WIFI" header
+        g.DrawText(canvas, tiny, _TEXT_X, 6, _color(_YELLOW), "Join WIFI")
 
         # Divider line
         for x in range(_TEXT_X, 64):

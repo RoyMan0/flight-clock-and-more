@@ -80,6 +80,11 @@ systemctl disable --now dnsmasq 2>/dev/null || true
 
 success "System packages installed"
 
+# Allow the app user to write captive-portal config into NM's dnsmasq dir
+# NM reads /etc/NetworkManager/dnsmasq-shared.d/ when starting a hotspot.
+mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+chown "${INSTALL_USER}:${INSTALL_USER}" /etc/NetworkManager/dnsmasq-shared.d
+
 # ── Phase 2: Clone / update repo ──────────────────────────────────
 info "Phase 2: Setting up repository…"
 if [[ -d "${REPO_DIR}/.git" ]]; then
