@@ -898,7 +898,11 @@ function configPage() {
     btConfigStatusOk: false,
 
     async init() {
-      await Promise.all([this.loadAll(), this.loadBtDevices(), this.loadTimezones()]);
+      // loadAll must complete first so sysCfg.location.timezone is set
+      // before loadTimezones populates the SELECT options — otherwise the
+      // browser auto-picks the first option (Africa/Abidjan).
+      await Promise.all([this.loadAll(), this.loadBtDevices()]);
+      await this.loadTimezones();
     },
 
     async loadTimezones() {
