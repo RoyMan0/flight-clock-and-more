@@ -236,14 +236,26 @@ def save_system_config():
     for key in ("display", "location", "flights", "web"):
         if key in data:
             full[key] = data[key]
+    old_tz = (cfg.get("location") or {}).get("timezone", "")
     cfg.save_config(full)
 
-    # Apply timezone to the OS if it changed
+    restarting = False
     tz = (data.get("location") or {}).get("timezone", "").strip()
     if tz:
         _apply_system_timezone(tz)
+        if tz != old_tz:
+            # Timezone changed — need a full process restart so datetime.now()
+            # picks up the new /etc/localtime. Schedule it after the response.
+            restarting = True
+            import threading as _th
+            def _delayed_restart():
+                import time as _t
+                _t.sleep(1.5)
+                subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"],
+                               capture_output=True)
+            _th.Thread(target=_delayed_restart, daemon=True).start()
 
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "restarting": restarting})
 
 
 def _read_system_timezone() -> str:

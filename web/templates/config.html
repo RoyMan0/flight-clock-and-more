@@ -165,9 +165,11 @@
               </div>
             </div>
           </div>
-          <button class="btn btn-success btn-sm mt-3" @click="saveSysConfig()">
+          <button class="btn btn-success btn-sm mt-3" @click="saveSysConfig()" :disabled="restarting">
             <i class="bi bi-save me-1"></i>Save System Config
           </button>
+          <span class="ms-3 text-success small" x-show="saved" x-transition>Saved!</span>
+          <span class="ms-3 text-warning small" x-show="restarting" x-transition>Restarting… page will reload</span>
         </div>
       </div>
 
@@ -874,6 +876,7 @@ function configPage() {
     secrets: {},
     backups: [],
     saved: false,
+    restarting: false,
     activeTab: 'config',
     metrics: { airlabs: null, flightaware: null },
     teamBrowserOpen: false,
@@ -1011,17 +1014,32 @@ function configPage() {
     },
 
     async saveSysConfig() {
-      await fetch('/api/config/system', {
+      const r = await fetch('/api/config/system', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(this.sysCfg),
-      });
+      }).then(res => res.json());
       // Also save clock_weather config (forecast_days) and flight_tracker enabled state
       await this.savePluginConfig('clock_weather');
       if ('flight_tracker' in this.pluginConfigs) {
         await this.savePluginConfig('flight_tracker');
       }
-      this.saved = true;
-      setTimeout(() => this.saved = false, 2000);
+      if (r.restarting) {
+        this.saved = false;
+        this.restarting = true;
+        // Poll until the server is back, then reload
+        const poll = async () => {
+          try {
+            await fetch('/api/config/system', { cache: 'no-store' });
+            window.location.reload();
+          } catch {
+            setTimeout(poll, 1500);
+          }
+        };
+        setTimeout(poll, 3000);
+      } else {
+        this.saved = true;
+        setTimeout(() => this.saved = false, 2000);
+      }
     },
 
     async saveSecrets() {
