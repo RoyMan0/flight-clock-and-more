@@ -1,22 +1,18 @@
 """
 setup_mode.py — first-boot WiFi setup orchestration.
 
-When the Pi has no WiFi connection on startup this module:
-  1. Writes a captive-portal DNS config into NM's dnsmasq-shared.d so that
-     NM's own dnsmasq (started with the hotspot) returns HOTSPOT_IP for every
-     DNS query — no separate dnsmasq process needed, no port conflicts.
-  2. Creates a WiFi hotspot via NetworkManager (nmcli).
-  3. Adds an iptables rule to forward port 80 → 8080.
-  4. Runs the display in QR-code mode.
-  5. Waits until a real WiFi client connection appears.
-  6. Tears down cleanly and reconnects to the original WiFi.
-
-Callers: main.py, before DisplayManager drops root privileges.
+Captive portal approach:
+  - A tiny Python UDP socket server listens on _DNS_PORT and returns
+    HOTSPOT_IP for every DNS query (no dnsmasq, no NM dependency).
+  - iptables redirects port 53 UDP → _DNS_PORT and port 80 TCP → 8080.
+  - Works regardless of NM's DNS backend (systemd-resolved, dnsmasq, etc).
 """
 
 import logging
 import os
+import socket
 import subprocess
+import struct
 import threading
 import time
 
@@ -30,11 +26,7 @@ HOTSPOT_PASSWORD = "setup123"
 HOTSPOT_IP       = "10.42.0.1"
 HOTSPOT_IFACE    = "wlan0"
 
-# NM reads extra dnsmasq config from this directory for shared connections.
-# We write our captive-portal spoofing config here before starting the hotspot.
-_NM_DNSMASQ_DIR  = "/etc/NetworkManager/dnsmasq-shared.d"
-_NM_CAPTIVE_CONF = os.path.join(_NM_DNSMASQ_DIR, "flightclock-captive.conf")
-
+_DNS_PORT   = 5300   # our DNS spoof server (iptables redirects :53 here)
 _SETUP_FLAG = "/tmp/flightclock-setup-requested"
 _hotspot_connection_name = "Hotspot"
 
@@ -44,10 +36,7 @@ _hotspot_connection_name = "Hotspot"
 # ------------------------------------------------------------------
 
 def is_wifi_client_connected() -> bool:
-    """
-    Return True only if connected in client (infra) mode.
-    Excludes the FltClk hotspot itself which NM also reports as 'connected'.
-    """
+    """Return True only if connected in client (infra) mode, not AP/hotspot."""
     try:
         result = subprocess.run(
             ["nmcli", "-t", "-f", "ACTIVE,MODE", "dev", "wifi"],
@@ -55,8 +44,7 @@ def is_wifi_client_connected() -> bool:
         )
         for line in result.stdout.splitlines():
             if line.startswith("yes:"):
-                mode = line[4:].strip().lower()
-                if mode == "infra":
+                if line[4:].strip().lower() == "infra":
                     return True
         return False
     except Exception:
@@ -68,7 +56,6 @@ def is_wifi_connected() -> bool:
 
 
 def get_current_wifi_ssid() -> str:
-    """Return the SSID of the active client WiFi connection, or ''."""
     try:
         result = subprocess.run(
             ["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"],
@@ -110,63 +97,111 @@ def request_setup():
 
 
 # ------------------------------------------------------------------
-# Captive portal
+# Python DNS spoof server
+# ------------------------------------------------------------------
+
+def _build_dns_response(data: bytes, ip_bytes: bytes) -> bytes | None:
+    """
+    Build a minimal DNS A response that returns ip_bytes for any query.
+    Handles A queries; returns NXDOMAIN for anything else gracefully.
+    """
+    if len(data) < 12:
+        return None
+    txid    = data[:2]
+    flags   = b'\x84\x00'          # QR=1, AA=1, RCODE=0
+    qdcount = data[4:6]
+    header  = txid + flags + qdcount + b'\x00\x01\x00\x00\x00\x00'
+    question = data[12:]            # copy question section verbatim
+    answer = (
+        b'\xc0\x0c'                # name pointer to offset 12
+        + b'\x00\x01'             # type A
+        + b'\x00\x01'             # class IN
+        + b'\x00\x00\x00\x00'    # TTL 0 (no caching)
+        + b'\x00\x04'             # rdlength 4
+        + ip_bytes
+    )
+    return header + question + answer
+
+
+def run_dns_spoof(stop_event: threading.Event):
+    """
+    UDP server that listens on _DNS_PORT and returns HOTSPOT_IP for every
+    DNS query.  iptables redirects port 53 here so clients never see the
+    real internet — triggering the captive-portal popup.
+    """
+    ip_bytes = socket.inet_aton(HOTSPOT_IP)
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("", _DNS_PORT))
+        sock.settimeout(1.0)
+        log.info(f"[setup] DNS spoof server on port {_DNS_PORT}")
+        while not stop_event.is_set():
+            try:
+                data, addr = sock.recvfrom(512)
+                response = _build_dns_response(data, ip_bytes)
+                if response:
+                    sock.sendto(response, addr)
+            except socket.timeout:
+                continue
+            except Exception:
+                continue
+    except Exception as e:
+        log.warning(f"[setup] DNS server error: {e}")
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+# ------------------------------------------------------------------
+# Captive portal (iptables only — DNS handled by Python thread above)
 # ------------------------------------------------------------------
 
 def start_captive_portal() -> bool:
     """
-    Write the DNS spoof config into NM's dnsmasq-shared.d BEFORE the hotspot
-    starts.  NM's own dnsmasq will pick it up automatically — no separate
-    dnsmasq process, no port-53 conflict.
-    Also adds an iptables rule: port 80 → 8080 by destination IP.
+    Add iptables rules:
+      UDP :53  → _DNS_PORT  (our Python DNS spoof server)
+      TCP :80  → 8080       (Flask setup wizard)
     """
-    conf_content = f"address=/#/{HOTSPOT_IP}\n"
-    try:
-        os.makedirs(_NM_DNSMASQ_DIR, exist_ok=True)
-        with open(_NM_CAPTIVE_CONF, "w") as f:
-            f.write(conf_content)
-        log.info(f"[setup] Captive portal DNS config written to {_NM_CAPTIVE_CONF}")
-    except (PermissionError, OSError) as e:
-        # Directory not yet chowned — fall back to sudo tee
-        log.warning(f"[setup] Direct write failed ({e}), retrying with sudo tee")
+    rules = [
+        ["-p", "udp", "--dport", "53",
+         "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
+        ["-p", "tcp", "--dport", "80",
+         "-j", "REDIRECT", "--to-port", "8080"],
+    ]
+    ok = True
+    for rule in rules:
         try:
             subprocess.run(
-                ["sudo", "tee", _NM_CAPTIVE_CONF],
-                input=conf_content, capture_output=True, text=True, timeout=5,
+                ["sudo", "iptables", "-t", "nat", "-A", "PREROUTING"] + rule,
+                capture_output=True, timeout=5,
             )
-            log.info(f"[setup] Captive portal DNS config written via sudo")
-        except Exception as e2:
-            log.warning(f"[setup] Could not write dnsmasq config: {e2}")
-
-    try:
-        subprocess.run(
-            ["sudo", "iptables", "-t", "nat", "-A", "PREROUTING",
-             "-d", HOTSPOT_IP, "-p", "tcp", "--dport", "80",
-             "-j", "REDIRECT", "--to-port", "8080"],
-            capture_output=True, timeout=5,
-        )
-        log.info("[setup] iptables: port 80 → 8080 redirect active")
-        return True
-    except Exception as e:
-        log.warning(f"[setup] iptables failed: {e}")
-        return False
+        except Exception as e:
+            log.warning(f"[setup] iptables add failed: {e}")
+            ok = False
+    if ok:
+        log.info("[setup] Captive portal iptables rules active")
+    return ok
 
 
 def stop_captive_portal():
-    log.info("[setup] Stopping captive portal")
-    try:
-        os.remove(_NM_CAPTIVE_CONF)
-    except FileNotFoundError:
-        pass
-    try:
-        subprocess.run(
-            ["sudo", "iptables", "-t", "nat", "-D", "PREROUTING",
-             "-d", HOTSPOT_IP, "-p", "tcp", "--dport", "80",
-             "-j", "REDIRECT", "--to-port", "8080"],
-            capture_output=True, timeout=5,
-        )
-    except Exception as e:
-        log.warning(f"[setup] iptables remove error: {e}")
+    log.info("[setup] Removing captive portal iptables rules")
+    rules = [
+        ["-p", "udp", "--dport", "53",
+         "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
+        ["-p", "tcp", "--dport", "80",
+         "-j", "REDIRECT", "--to-port", "8080"],
+    ]
+    for rule in rules:
+        try:
+            subprocess.run(
+                ["sudo", "iptables", "-t", "nat", "-D", "PREROUTING"] + rule,
+                capture_output=True, timeout=5,
+            )
+        except Exception as e:
+            log.warning(f"[setup] iptables remove error: {e}")
 
 
 # ------------------------------------------------------------------
@@ -229,10 +264,6 @@ def wait_for_wifi_connected(
 # ------------------------------------------------------------------
 
 def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None:
-    """
-    Return a 2-D boolean matrix for a WIFI: QR code.
-    border=0 keeps the matrix tight so it fits the 64×32 display.
-    """
     try:
         import qrcode
         import qrcode.constants
@@ -261,11 +292,8 @@ def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None
 
 def run_setup_mode(cfg, args, forced: bool = False):
     """
-    Full setup-mode flow. Never returns normally.
-
-    `forced` = True when explicitly requested (--setup flag or API endpoint):
-    keeps the wizard open even if WiFi is already connected, and waits for
-    the user to click Save & Start.
+    Full setup-mode flow.  Never returns normally — either killed by
+    systemctl restart (from wizard) or os.execv with --skip-setup.
     """
     import os as _os
     import sys
@@ -278,7 +306,6 @@ def run_setup_mode(cfg, args, forced: bool = False):
     if args.no_hardware:
         log.info("[setup] No-hardware mode — skipping network operations")
     else:
-        # Write captive portal config BEFORE starting hotspot so NM picks it up
         start_captive_portal()
         hotspot_ok = start_hotspot()
         if not hotspot_ok:
@@ -293,13 +320,23 @@ def run_setup_mode(cfg, args, forced: bool = False):
 
     stop_display = threading.Event()
 
+    # DNS spoof server (no-op in software mode — no real hotspot)
+    if not args.no_hardware:
+        dns_thread = threading.Thread(
+            target=run_dns_spoof, args=(stop_display,),
+            daemon=True, name="setup-dns",
+        )
+        dns_thread.start()
+
     def _display_loop():
         while not stop_display.is_set():
             qr_plugin.draw()
             display.swap()
             time.sleep(0.1)
 
-    display_thread = threading.Thread(target=_display_loop, daemon=True, name="setup-display")
+    display_thread = threading.Thread(
+        target=_display_loop, daemon=True, name="setup-display"
+    )
     display_thread.start()
 
     from web.app import create_app
