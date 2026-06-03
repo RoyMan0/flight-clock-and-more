@@ -149,7 +149,9 @@ class PluginManager:
             log.error(f"[plugins] Draw error ({self._active_id}): {e}")
 
         if not drew:
+            log.info(f"[plugins] {self._active_id}.draw() returned False — advancing")
             self._advance_rotation()
+            return  # skip swap; next frame the new plugin will draw
 
         self.display.swap()
 
@@ -181,7 +183,9 @@ class PluginManager:
             if candidate is None or candidate.has_content():
                 self._switch_to(candidate_id)
                 return
+            log.info(f"[plugins] Skipping {candidate_id} — has_content() returned False")
         # All plugins skipped — stay on current without switching
+        log.warning("[plugins] All plugins skipped (no content); staying on current")
 
     # ------------------------------------------------------------------
     # Brightness schedule
