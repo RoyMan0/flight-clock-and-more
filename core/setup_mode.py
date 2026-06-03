@@ -7,8 +7,8 @@ When the Pi has no WiFi connection on startup this module:
   3. Adds an iptables rule to forward port 80 → 8080 so phones' captive-portal
      detection auto-opens the setup wizard in the browser
   4. Runs the display in QR-code mode so users can scan to join the hotspot
-  5. Waits (blocking) until NetworkManager reports a real WiFi connection
-  6. Tears everything down cleanly before returning
+  5. Waits (blocking) until NetworkManager reports a real WiFi client connection
+  6. Tears everything down cleanly and reconnects original WiFi before returning
 
 Callers: main.py, before DisplayManager drops root privileges.
 """
@@ -17,7 +17,6 @@ import logging
 import os
 import signal
 import subprocess
-import tempfile
 import threading
 import time
 
@@ -35,27 +34,69 @@ _DNSMASQ_CONF = "/tmp/flightclock-dnsmasq.conf"
 _DNSMASQ_PID  = "/tmp/flightclock-dnsmasq.pid"
 _SETUP_FLAG   = "/tmp/flightclock-setup-requested"
 
-_hotspot_connection_name = "Hotspot"   # NM connection name assigned by nmcli
+_hotspot_connection_name = "Hotspot"
 
 
 # ------------------------------------------------------------------
 # WiFi state helpers
 # ------------------------------------------------------------------
 
-def is_wifi_connected() -> bool:
-    """Return True if NetworkManager reports any active internet connection."""
+def is_wifi_client_connected() -> bool:
+    """
+    Return True only if connected to a WiFi network in client (infra) mode.
+    Explicitly excludes hotspot/AP mode so the FltClk AP doesn't count.
+    """
     try:
         result = subprocess.run(
-            ["nmcli", "-t", "-f", "STATE", "general"],
+            ["nmcli", "-t", "-f", "ACTIVE,MODE", "dev", "wifi"],
             capture_output=True, text=True, timeout=10,
         )
-        return "connected" in result.stdout.lower()
+        for line in result.stdout.splitlines():
+            if line.startswith("yes:"):
+                mode = line[4:].strip().lower()
+                if mode == "infra":   # infrastructure = client mode
+                    return True
+        return False
     except Exception:
         return False
 
 
+# Keep the old name as an alias so external callers aren't broken
+def is_wifi_connected() -> bool:
+    return is_wifi_client_connected()
+
+
+def get_current_wifi_ssid() -> str:
+    """Return the SSID of the currently active client WiFi connection, or ''."""
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("yes:"):
+                return line[4:].replace("\\:", ":")
+    except Exception:
+        pass
+    return ""
+
+
+def reconnect_wifi(ssid: str):
+    """Tell NM to bring up a previously-known connection by name."""
+    if not ssid:
+        return
+    log.info(f"[setup] Reconnecting to '{ssid}'…")
+    try:
+        subprocess.run(
+            ["sudo", "nmcli", "con", "up", ssid],
+            capture_output=True, timeout=20,
+        )
+    except Exception as e:
+        log.warning(f"[setup] Reconnect failed: {e}")
+
+
 def setup_requested() -> bool:
-    """Return True if a flag file was written by the API endpoint."""
+    """Return True if the flag file was written by the API endpoint."""
     return os.path.exists(_SETUP_FLAG)
 
 
@@ -116,11 +157,6 @@ def stop_hotspot():
 # ------------------------------------------------------------------
 
 def start_captive_portal(ap_interface: str = "ap0") -> bool:
-    """
-    Write a dnsmasq config that spoofs all DNS to HOTSPOT_IP, then add an
-    iptables rule to forward port 80 → 8080 so phone browsers hit Flask.
-    Returns True if both succeeded.
-    """
     conf = (
         f"interface={ap_interface}\n"
         "bind-interfaces\n"
@@ -132,20 +168,15 @@ def start_captive_portal(ap_interface: str = "ap0") -> bool:
     try:
         with open(_DNSMASQ_CONF, "w") as f:
             f.write(conf)
-
         subprocess.run(
-            ["sudo", "dnsmasq",
-             "-C", _DNSMASQ_CONF,
+            ["sudo", "dnsmasq", "-C", _DNSMASQ_CONF,
              f"--pid-file={_DNSMASQ_PID}"],
             capture_output=True, timeout=10,
         )
-
         subprocess.run(
-            [
-                "sudo", "iptables", "-t", "nat", "-A", "PREROUTING",
-                "-i", ap_interface, "-p", "tcp", "--dport", "80",
-                "-j", "REDIRECT", "--to-port", "8080",
-            ],
+            ["sudo", "iptables", "-t", "nat", "-A", "PREROUTING",
+             "-i", ap_interface, "-p", "tcp", "--dport", "80",
+             "-j", "REDIRECT", "--to-port", "8080"],
             capture_output=True, timeout=5,
         )
         log.info("[setup] Captive portal active (dnsmasq + iptables)")
@@ -171,19 +202,15 @@ def stop_captive_portal(ap_interface: str = "ap0"):
                 pass
     except Exception as e:
         log.warning(f"[setup] dnsmasq stop error: {e}")
-
     try:
         subprocess.run(
-            [
-                "sudo", "iptables", "-t", "nat", "-D", "PREROUTING",
-                "-i", ap_interface, "-p", "tcp", "--dport", "80",
-                "-j", "REDIRECT", "--to-port", "8080",
-            ],
+            ["sudo", "iptables", "-t", "nat", "-D", "PREROUTING",
+             "-i", ap_interface, "-p", "tcp", "--dport", "80",
+             "-j", "REDIRECT", "--to-port", "8080"],
             capture_output=True, timeout=5,
         )
     except Exception as e:
         log.warning(f"[setup] iptables remove error: {e}")
-
     try:
         os.remove(_DNSMASQ_CONF)
     except FileNotFoundError:
@@ -199,15 +226,12 @@ def wait_for_wifi_connected(
     timeout: float = 600.0,
     stop_event: threading.Event | None = None,
 ) -> bool:
-    """
-    Block until NM reports a real WiFi connection or timeout expires.
-    Returns True if connected, False if timed out.
-    """
+    """Block until a client WiFi connection is active or timeout/stop_event fires."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if stop_event and stop_event.is_set():
             return False
-        if is_wifi_connected():
+        if is_wifi_client_connected():
             return True
         time.sleep(poll_interval)
     return False
@@ -218,10 +242,6 @@ def wait_for_wifi_connected(
 # ------------------------------------------------------------------
 
 def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None:
-    """
-    Return a 2-D boolean matrix (True = dark module) for a WIFI: QR code.
-    Returns None if the qrcode library is unavailable or content overflows.
-    """
     try:
         import qrcode
         import qrcode.constants
@@ -232,7 +252,7 @@ def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None
             border=2,
         )
         qr.add_data(f"WIFI:T:WPA;S:{ssid};P:{password};;")
-        qr.make(fit=False)   # raises DataOverflowError if too large for version 1
+        qr.make(fit=False)
         return qr.get_matrix()
     except Exception as e:
         log.warning(f"[setup] QR generation failed: {e}")
@@ -243,14 +263,15 @@ def generate_wifi_qr_matrix(ssid: str, password: str) -> list[list[bool]] | None
 # Top-level orchestration
 # ------------------------------------------------------------------
 
-def run_setup_mode(cfg, args):
+def run_setup_mode(cfg, args, forced: bool = False):
     """
-    Full setup-mode flow.  Called from main.py BEFORE DisplayManager drops
-    root privileges.
+    Full setup-mode flow. Called from main.py BEFORE DisplayManager drops
+    root privileges.  Never returns normally.
 
-    This function never returns normally — it either:
-    - Is killed by systemctl restart (triggered from the setup wizard "Save & Start")
-    - Calls os.execv to restart the process with --skip-setup once WiFi is detected
+    `forced` is True when setup was explicitly requested (--setup flag or API
+    endpoint) rather than triggered by absent WiFi.  In forced mode we keep
+    showing the wizard even if WiFi is already connected, and we reconnect to
+    the original network on exit rather than waiting for a new connection.
     """
     import os
     import sys
@@ -259,27 +280,26 @@ def run_setup_mode(cfg, args):
     clear_setup_flag()
 
     ap_iface = "ap0"
+
+    # Remember the original WiFi so we can reconnect after teardown
+    original_ssid = get_current_wifi_ssid() if not args.no_hardware else ""
+
     if args.no_hardware:
-        # Development mode: skip OS-level network operations
         log.info("[setup] No-hardware mode — skipping hotspot and captive portal")
     else:
-        # ---- start hotspot (needs root) ---------------------------------
         hotspot_ok = start_hotspot()
         if not hotspot_ok:
-            log.warning("[setup] Hotspot failed — setup mode continuing without AP")
-
-        # NM may rename the AP interface; try ap0 first
-        time.sleep(2)  # give NM a moment to bring the AP interface up
+            log.warning("[setup] Hotspot failed — continuing without AP")
+        time.sleep(2)
         captive_ok = start_captive_portal(ap_iface)
         if not captive_ok:
             log.warning("[setup] Captive portal failed — users will need to type the IP")
 
-    # ---- init display (drops root privileges here in hardware mode) -
+    # Display init — drops root privileges here in hardware mode
     display_cfg = cfg.get("display") or {}
     display = DisplayManager(display_cfg, software_mode=args.no_hardware)
     log.info(f"[setup] Display initialised ({'software' if args.no_hardware else 'hardware'} mode)")
 
-    # ---- show QR plugin on display ----------------------------------
     from plugins.setup_qr.manager import SetupQRPlugin
     qr_plugin = SetupQRPlugin(display, {}, {})
 
@@ -294,7 +314,6 @@ def run_setup_mode(cfg, args):
     display_thread = threading.Thread(target=_display_loop, daemon=True, name="setup-display")
     display_thread.start()
 
-    # ---- start Flask in setup mode ----------------------------------
     from web.app import create_app
     from web.blueprints.setup import set_stop_event
     set_stop_event(stop_display)
@@ -312,40 +331,35 @@ def run_setup_mode(cfg, args):
         name="setup-web",
     )
     web_thread.start()
-    log.info(f"[setup] Setup wizard running at http://{HOTSPOT_IP}:8080/setup")
+    log.info(f"[setup] Setup wizard at http://{HOTSPOT_IP}:8080/setup")
 
-    # ---- wait for WiFi connection ------------------------------------
-    wifi_already_connected = is_wifi_connected()
-    if args.setup and wifi_already_connected:
-        # Forced setup mode with existing WiFi connection — don't exit on the
-        # pre-existing connection; wait for the user to finish the wizard.
-        log.info("[setup] Forced setup mode — waiting for wizard completion")
+    # ---- wait ----------------------------------------------------------
+    if forced and not args.no_hardware:
+        # Explicitly requested: stay in setup until user clicks Save & Start.
+        # The /setup/finish endpoint will set stop_display OR restart via systemctl.
+        log.info("[setup] Forced setup — waiting for wizard completion")
         stop_display.wait(timeout=600)
     else:
-        log.info("[setup] Waiting for WiFi connection…")
+        log.info("[setup] Waiting for WiFi client connection…")
         wait_for_wifi_connected(stop_event=stop_display)
-    if connected:
-        log.info("[setup] WiFi connected — restarting in normal mode")
-    else:
-        log.warning("[setup] Setup timed out — restarting in normal mode")
 
+    # ---- teardown ------------------------------------------------------
     stop_display.set()
     display_thread.join(timeout=2)
 
-    # ---- teardown ---------------------------------------------------
     if not args.no_hardware:
         stop_captive_portal(ap_iface)
         stop_hotspot()
+        # Give NM a moment then explicitly reconnect original network
+        time.sleep(2)
+        reconnect_wifi(original_ssid)
+
     display.clear()
 
     if args.no_hardware:
-        # Development mode: just exit cleanly; caller re-runs manually
         log.info("[setup] Setup mode complete (no-hardware) — exiting")
         sys.exit(0)
 
-    # ---- restart the process cleanly in normal mode -----------------
-    # This avoids the dual-Flask conflict when main() tries to start its
-    # own web server on the same port after we return.
     new_argv = [a for a in sys.argv if a not in ("--setup",)]
     if "--skip-setup" not in new_argv:
         new_argv.append("--skip-setup")

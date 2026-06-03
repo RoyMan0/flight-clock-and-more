@@ -101,17 +101,18 @@ def main():
     # ------------------------------------------------------------------
     if not args.skip_setup:
         should_enter = False
+        forced = False
         if args.no_hardware:
-            # On Mac/dev: only enter setup mode when explicitly requested (--setup flag)
-            should_enter = args.setup
+            should_enter = forced = args.setup
         else:
-            # On Pi: enter setup mode when forced, flagged, or no WiFi
-            from core.setup_mode import is_wifi_connected, setup_requested
-            should_enter = args.setup or setup_requested() or not is_wifi_connected()
+            from core.setup_mode import is_wifi_client_connected, setup_requested
+            explicitly = args.setup or setup_requested()
+            should_enter = explicitly or not is_wifi_client_connected()
+            forced = explicitly
         if should_enter:
             from core.setup_mode import run_setup_mode
-            log.info("Entering first-boot setup mode")
-            run_setup_mode(cfg, args)   # does not return
+            log.info("Entering first-boot setup mode%s", " (forced)" if forced else "")
+            run_setup_mode(cfg, args, forced=forced)   # does not return
 
     # ------------------------------------------------------------------
     # Display (hardware init — drops root privileges here)
