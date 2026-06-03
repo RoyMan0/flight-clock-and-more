@@ -215,17 +215,9 @@ def get_system_config():
     if cfg is None:
         return jsonify({}), 503
     location = dict(cfg.get("location") or {})
-    # If timezone isn't in config.json yet, fill in the current OS timezone
-    # so the UI never shows an empty/wrong value.
+    # If timezone isn't in config.json yet, fill in the current OS timezone.
     if not location.get("timezone"):
-        try:
-            r = subprocess.run(
-                ["timedatectl", "show", "--property=Timezone", "--value"],
-                capture_output=True, text=True, timeout=5,
-            )
-            location["timezone"] = r.stdout.strip() or "UTC"
-        except Exception:
-            location["timezone"] = "UTC"
+        location["timezone"] = _read_system_timezone()
     return jsonify({
         "display": cfg.get("display") or {},
         "location": location,
@@ -254,27 +246,53 @@ def save_system_config():
     return jsonify({"ok": True})
 
 
-def _apply_system_timezone(tz: str):
+def _read_system_timezone() -> str:
+    """Read the OS timezone without requiring any subprocess."""
+    # /etc/timezone is the canonical source on Debian/Pi OS (plain text file)
     try:
-        subprocess.run(["sudo", "timedatectl", "set-timezone", tz],
-                       capture_output=True, timeout=10)
+        with open("/etc/timezone") as f:
+            tz = f.read().strip()
+            if tz:
+                return tz
     except Exception:
-        pass  # non-Pi systems (Mac dev) don't have timedatectl
+        pass
+    # Fallback: /etc/localtime symlink → /usr/share/zoneinfo/America/Denver
+    try:
+        import os as _os
+        link = _os.readlink("/etc/localtime")
+        idx = link.find("/zoneinfo/")
+        if idx >= 0:
+            return link[idx + 10:]
+    except Exception:
+        pass
+    # Last resort: timedatectl
+    try:
+        r = subprocess.run(
+            ["timedatectl", "show", "--property=Timezone", "--value"],
+            capture_output=True, text=True, timeout=5,
+        )
+        tz = r.stdout.strip()
+        if tz:
+            return tz
+    except Exception:
+        pass
+    return "UTC"
+
+
+def _apply_system_timezone(tz: str):
+    r = subprocess.run(
+        ["sudo", "timedatectl", "set-timezone", tz],
+        capture_output=True, text=True, timeout=10,
+    )
+    if r.returncode != 0:
+        log.warning(f"[tz] timedatectl failed (rc={r.returncode}): {r.stderr.strip()}")
 
 
 @api_bp.get("/system/timezone")
 def get_system_timezone():
     """Return the current OS timezone."""
-    try:
-        result = subprocess.run(
-            ["timedatectl", "show", "--property=Timezone", "--value"],
-            capture_output=True, text=True, timeout=5,
-        )
-        tz = result.stdout.strip()
-    except Exception:
-        import time as _time
-        tz = ""
-    # Fall back to config value
+    tz = _read_system_timezone()
+    # Also check config in case it overrides the OS
     if not tz:
         cfg = _cfg()
         tz = (cfg.get("location") or {}).get("timezone", "UTC") if cfg else "UTC"

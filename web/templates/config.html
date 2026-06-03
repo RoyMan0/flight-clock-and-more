@@ -910,7 +910,6 @@ function configPage() {
         const d = await fetch('/api/system/timezones').then(r => r.json());
         this.timezones = d.zones || [];
       } catch(e) {
-        // API failed — show a minimal hardcoded list so the field isn't broken
         this.timezones = [
           'UTC','America/New_York','America/Chicago','America/Denver',
           'America/Los_Angeles','America/Anchorage','Pacific/Honolulu',
@@ -920,6 +919,16 @@ function configPage() {
           'Asia/Singapore','Asia/Tokyo','Asia/Seoul',
           'Australia/Sydney','Pacific/Auckland',
         ];
+      }
+      // Alpine x-model on a SELECT with dynamic x-for options can fail to
+      // select the right value when options render. Bounce the model value
+      // after the next DOM tick to force the SELECT to sync.
+      const saved = this.sysCfg?.location?.timezone;
+      if (saved) {
+        await this.$nextTick();
+        this.sysCfg.location.timezone = '';
+        await this.$nextTick();
+        this.sysCfg.location.timezone = saved;
       }
     },
 

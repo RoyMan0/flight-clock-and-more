@@ -159,61 +159,64 @@ def run_dns_spoof(stop_event: threading.Event):
 # Captive portal (iptables only — DNS handled by Python thread above)
 # ------------------------------------------------------------------
 
-def start_captive_portal() -> bool:
+def _iptables(*args) -> tuple[bool, str]:
     """
-    Add iptables rules:
-      UDP :53  → _DNS_PORT  (our Python DNS spoof server)
-      TCP :80  → 8080       (Flask setup wizard)
+    Run sudo iptables (or iptables-legacy as fallback) with the given args.
+    Returns (success, combined_output).
     """
-    rules = [
-        ["-p", "udp", "--dport", "53",
-         "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
-        ["-p", "tcp", "--dport", "80",
-         "-j", "REDIRECT", "--to-port", "8080"],
-    ]
-    ok = True
-    for rule in rules:
+    for cmd in ("iptables", "/usr/sbin/iptables",
+                "iptables-legacy", "/usr/sbin/iptables-legacy"):
         try:
-            subprocess.run(
-                ["sudo", "iptables", "-t", "nat", "-A", "PREROUTING"] + rule,
-                capture_output=True, timeout=5,
-            )
-        except Exception as e:
-            log.warning(f"[setup] iptables add failed: {e}")
-            ok = False
-    if ok:
-        # Confirm rules are visible in the chain
-        try:
-            check = subprocess.run(
-                ["sudo", "iptables", "-t", "nat", "-L", "PREROUTING", "-n"],
+            r = subprocess.run(
+                ["sudo", cmd] + list(args),
                 capture_output=True, text=True, timeout=5,
             )
-            has_53  = "5300" in check.stdout
-            has_80  = "8080" in check.stdout
-            log.info(f"[setup] Captive portal rules active — DNS:{has_53} HTTP:{has_80}")
-            if not has_53 or not has_80:
-                log.warning(f"[setup] Rule check failed:\n{check.stdout}")
-        except Exception:
-            log.info("[setup] Captive portal iptables rules active")
-    return ok
+            out = (r.stdout + r.stderr).strip()
+            if r.returncode == 0:
+                return True, out
+            log.warning(f"[setup] {cmd} rc={r.returncode}: {out}")
+        except FileNotFoundError:
+            continue
+        except Exception as e:
+            log.warning(f"[setup] {cmd} error: {e}")
+    return False, ""
+
+
+def start_captive_portal() -> bool:
+    """
+    Add iptables NAT rules:
+      UDP :53 → _DNS_PORT  (our Python DNS spoof server)
+      TCP :80 → 8080       (Flask setup wizard)
+    """
+    rules = [
+        ["-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
+        ["-p", "tcp", "--dport", "80", "-j", "REDIRECT", "--to-port", "8080"],
+    ]
+    all_ok = True
+    for rule in rules:
+        ok, out = _iptables("-t", "nat", "-A", "PREROUTING", *rule)
+        if not ok:
+            log.warning(f"[setup] iptables rule failed: {' '.join(rule)} → {out}")
+            all_ok = False
+
+    # Verify rules are visible in the chain
+    ok, listing = _iptables("-t", "nat", "-L", "PREROUTING", "-n", "-v")
+    has_53 = str(_DNS_PORT) in listing
+    has_80 = "8080" in listing
+    log.info(f"[setup] Captive portal — DNS redirect:{has_53}  HTTP redirect:{has_80}")
+    if not has_53 or not has_80:
+        log.warning(f"[setup] PREROUTING listing:\n{listing or '(empty — iptables may be unavailable)'}")
+    return all_ok
 
 
 def stop_captive_portal():
     log.info("[setup] Removing captive portal iptables rules")
     rules = [
-        ["-p", "udp", "--dport", "53",
-         "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
-        ["-p", "tcp", "--dport", "80",
-         "-j", "REDIRECT", "--to-port", "8080"],
+        ["-p", "udp", "--dport", "53", "-j", "REDIRECT", "--to-port", str(_DNS_PORT)],
+        ["-p", "tcp", "--dport", "80", "-j", "REDIRECT", "--to-port", "8080"],
     ]
     for rule in rules:
-        try:
-            subprocess.run(
-                ["sudo", "iptables", "-t", "nat", "-D", "PREROUTING"] + rule,
-                capture_output=True, timeout=5,
-            )
-        except Exception as e:
-            log.warning(f"[setup] iptables remove error: {e}")
+        _iptables("-t", "nat", "-D", "PREROUTING", *rule)
 
 
 # ------------------------------------------------------------------
