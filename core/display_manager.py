@@ -52,7 +52,7 @@ class DisplayManager:
         options.pwm_bits = config.get("pwm_bits", 11)
         options.brightness = self._brightness
         options.pwm_lsb_nanoseconds = config.get("pwm_lsb_nanoseconds", 130)
-        options.led_rgb_sequence = "RBG"
+        options.led_rgb_sequence = config.get("led_rgb_sequence", "RBG")
         options.pixel_mapper_config = ""
         options.show_refresh_rate = 0
         options.gpio_slowdown = config.get("gpio_slowdown", 2)

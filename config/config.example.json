@@ -6,7 +6,8 @@
     "night_start": "18:00",
     "night_end": "07:00",
     "gpio_slowdown": 2,
-    "hat_pwm_enabled": false
+    "hat_pwm_enabled": false,
+    "led_rgb_sequence": "RBG"
   },
   "location": {
     "zone_home": {

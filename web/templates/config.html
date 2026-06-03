@@ -66,14 +66,14 @@
         <div class="card-header"><i class="bi bi-gear me-2"></i>System Settings</div>
         <div class="card-body">
           <div class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">Clock Format</label>
               <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.location.clock_format">
                 <option value="12hr">12-hour</option>
                 <option value="24hr">24-hour</option>
               </select>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">Units</label>
               <select class="form-select bg-dark text-light border-secondary"
                       x-model="sysCfg.location.units"
@@ -81,6 +81,30 @@
                 <option value="imperial">Imperial (°F, mi, mph)</option>
                 <option value="metric">Metric (°C, km, km/h)</option>
               </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">LED Pixel Order</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.display.led_rgb_sequence">
+                <option value="RBG">RBG (default for most panels)</option>
+                <option value="RGB">RGB</option>
+                <option value="BGR">BGR</option>
+                <option value="BRG">BRG</option>
+                <option value="GRB">GRB</option>
+                <option value="GBR">GBR</option>
+              </select>
+              <div class="text-muted" style="font-size:.7rem;margin-top:2px">Change if colors look wrong (requires restart)</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">GPIO Slowdown</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.display.gpio_slowdown" min="0" max="5">
+              <div class="text-muted" style="font-size:.7rem;margin-top:2px">1–4; increase if display flickers (requires restart)</div>
+            </div>
+            <div class="col-md-4 d-flex align-items-center pt-4">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="sysCfg.display.hat_pwm_enabled">
+                <label class="form-check-label">HAT PWM Mode</label>
+              </div>
             </div>
             <div class="col-md-4">
               <label class="form-label">Day Brightness</label>
@@ -214,6 +238,17 @@
               <label class="form-label">Min Altitude (ft)</label>
               <input type="number" class="form-control bg-dark text-light border-secondary"
                      x-model="pluginConfigs.flight_tracker.min_altitude" min="0" step="500">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Max Altitude (ft)</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.flight_tracker.max_altitude" min="0" step="1000">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Max API Lookups</label>
+              <input type="number" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.flight_tracker.max_flight_lookup" min="1" max="20">
+              <div class="text-muted" style="font-size:.7rem;margin-top:2px">Schedule lookups per overhead scan</div>
             </div>
             <div class="col-md-4">
               <label class="form-label">Search Radius (nm)</label>
