@@ -835,8 +835,17 @@ class Overhead:
                 fr24_list = _fr24_area(zone)
                 if fr24_list:
                     if aircraft_list is not None:
-                        # Only add FR24 aircraft with no adsb.lol match within 2 nm
+                        # Only add FR24 aircraft not already covered by adsb.lol.
+                        # Check callsign first — FR24 cache is 90s old so position-only
+                        # dedup fails for fast-moving aircraft (11+ nm at 450 kts).
+                        existing_cs = {
+                            (a.get("flight") or "").strip().upper()
+                            for a in aircraft_list
+                        }
                         for fr_ac in fr24_list:
+                            cs = (fr_ac.get("flight") or "").strip().upper()
+                            if cs and cs in existing_cs:
+                                continue
                             fr_lat = fr_ac.get("lat")
                             fr_lon = fr_ac.get("lon")
                             if fr_lat is None or fr_lon is None:
@@ -849,6 +858,7 @@ class Overhead:
                             )
                             if not nearby:
                                 aircraft_list.append(fr_ac)
+                                existing_cs.add(cs)
                                 log.debug(f"[overhead] FR24 supplement: {fr_ac.get('flight','?')}")
                     else:
                         # adsb.lol failed — use FR24 as fallback

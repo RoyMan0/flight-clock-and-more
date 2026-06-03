@@ -19,6 +19,10 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
+# Suppress noisy third-party loggers
+logging.getLogger("werkzeug").setLevel(logging.WARNING)  # Flask access log
+logging.getLogger("httpx").setLevel(logging.WARNING)     # FR24 HTTP request logs
+logging.getLogger("fr24").setLevel(logging.WARNING)      # FR24 anonymous access message
 log = logging.getLogger(__name__)
 
 

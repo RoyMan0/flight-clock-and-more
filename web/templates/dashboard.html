@@ -151,14 +151,17 @@ function dashboard() {
     sysActionPending: false,
     sysActionMsg: '',
     _es: null,
+    _pollTimer: null,
 
     init() {
+      if (this._pollTimer) return;  // prevent double-init from Alpine re-renders
       this.startSSE();
       this.loadCurrentFlights();
-      setInterval(() => { this.loadCurrentFlights(); }, 5000);
+      this._pollTimer = setInterval(() => { this.loadCurrentFlights(); }, 5000);
     },
 
     startSSE() {
+      if (this._es) { this._es.close(); this._es = null; }
       this._es = new EventSource('/api/stream/status');
       this._es.onmessage = (e) => {
         const d = JSON.parse(e.data);
