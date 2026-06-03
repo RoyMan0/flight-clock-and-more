@@ -943,13 +943,7 @@ function configPage() {
       if (!this.sysCfg.location.units) {
         this.sysCfg.location.units = this.sysCfg.location.distance_units || 'imperial';
       }
-      // Timezone: if not in config.json yet, pull current OS timezone
-      if (!this.sysCfg.location.timezone) {
-        try {
-          const tzr = await fetch('/api/system/timezone').then(r => r.json());
-          this.sysCfg.location.timezone = tzr.timezone || 'UTC';
-        } catch(e) {}
-      }
+      // timezone is always populated by get_system_config (falls back to OS tz)
       // Ensure array fields exist for key management UI
       if (!Array.isArray(sec.airlabs_api_keys)) sec.airlabs_api_keys = [];
       if (!Array.isArray(sec.flightaware_api_keys)) sec.flightaware_api_keys = [];

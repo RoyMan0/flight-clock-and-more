@@ -214,9 +214,21 @@ def get_system_config():
     cfg = _cfg()
     if cfg is None:
         return jsonify({}), 503
+    location = dict(cfg.get("location") or {})
+    # If timezone isn't in config.json yet, fill in the current OS timezone
+    # so the UI never shows an empty/wrong value.
+    if not location.get("timezone"):
+        try:
+            r = subprocess.run(
+                ["timedatectl", "show", "--property=Timezone", "--value"],
+                capture_output=True, text=True, timeout=5,
+            )
+            location["timezone"] = r.stdout.strip() or "UTC"
+        except Exception:
+            location["timezone"] = "UTC"
     return jsonify({
         "display": cfg.get("display") or {},
-        "location": cfg.get("location") or {},
+        "location": location,
         "flights": cfg.get("flights") or {},
         "web": cfg.get("web") or {},
     })
