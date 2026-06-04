@@ -154,7 +154,8 @@
                 <template x-for="[key, label] in [
                   ['owm_precip','OWM Precip'],['owm_wind','OWM Wind'],
                   ['nws_alerts','NWS Alerts'],['faa_delays','FAA Delays'],
-                  ['iss_passes','ISS Passes'],['iss_fullscreen','ISS Fullscreen'],['sun_countdown','Sunrise/Sunset']]" :key="key">
+                  ['iss_passes','ISS Passes'],['iss_fullscreen','ISS Fullscreen'],['sun_countdown','Sunrise/Sunset'],
+                  ['astro_events','Astronomical Events']]" :key="key">
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox"
                            :id="'alert-'+key"

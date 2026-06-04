@@ -17,6 +17,7 @@ _ALERT_COLOURS = {
     "grey":   colours.GREY,
     "white":  colours.WHITE,
     "blue":   colours.LIGHT_BLUE,
+    "purple": colours.LIGHT_PURPLE,
 }
 
 _SUN_WINDOW_SECONDS = 1800  # 30 minutes
@@ -107,6 +108,21 @@ class AlertsScene(object):
                 )
             except Exception as e:
                 logger.debug(f"[Alerts] Sun countdown error: {e}")
+
+        if alerts_cfg.get("astro_events"):
+            try:
+                from utilities.eclipses import get_eclipse_alerts
+                for a in get_eclipse_alerts():
+                    items.append((a["text"], _ALERT_COLOURS.get(a["color"], colours.LIGHT_PURPLE)))
+            except Exception as e:
+                logger.debug(f"[Alerts] Eclipse error: {e}")
+            try:
+                from utilities.meteor_showers import get_meteor_shower_alert
+                ma = get_meteor_shower_alert()
+                if ma:
+                    items.append((ma["text"], _ALERT_COLOURS.get(ma["color"], colours.CYAN)))
+            except Exception as e:
+                logger.debug(f"[Alerts] Meteor shower error: {e}")
 
         return items
 

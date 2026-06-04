@@ -32,7 +32,8 @@
         "faa_delays":    false,
         "iss_passes":    false,
         "iss_fullscreen": false,
-        "sun_countdown": false
+        "sun_countdown": false,
+        "astro_events":  false
       }
     },
     "flight_tracker": {
