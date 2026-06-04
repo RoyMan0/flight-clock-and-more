@@ -943,6 +943,7 @@ class Overhead:
                 db_origin = route.get("origin", "")
                 db_dest   = route.get("destination", "")
 
+                _route_source = "AirLabs"
                 if al_origin and al_dest:
                     origin      = al_origin
                     destination = al_dest
@@ -972,11 +973,13 @@ class Overhead:
                     origin_lon  = route.get("origin_lon")
                     dest_lat    = route.get("dest_lat")
                     dest_lon    = route.get("dest_lon")
+                    _route_source = "adsbdb" if (origin or destination) else None
                     # FR24 position data includes route as last-resort source
                     if not origin and not destination and _fr24_origin and _fr24_dest:
                         origin      = _fr24_origin
                         destination = _fr24_dest
                         origin_lat = origin_lon = dest_lat = dest_lon = None
+                        _route_source = "FR24"
                         log.info(f"[overhead] FR24 route for {callsign}: {origin}→{destination} (unverified)")
                     if not origin or not destination:
                         log.warning(
@@ -992,21 +995,41 @@ class Overhead:
                 if destination and not dest_lat:
                     dest_lat, dest_lon = self._get_airport_coords(destination)
 
-                # Sanity-check AirLabs route — flight numbers can rotate to
-                # different city pairs daily and the 24h cache can serve stale
-                # data.  If the plane is nowhere near the reported airports,
-                # discard and fall back to adsbdb (which was already checked).
-                if al_origin and al_dest and not _route_makes_sense(
-                        plane_lat, plane_lon, origin_lat, origin_lon, dest_lat, dest_lon):
-                    log.debug(f"[overhead] AirLabs route {callsign} "
-                              f"({al_origin}→{al_dest}) failed sanity check "
-                              f"— falling back to adsbdb")
-                    origin      = db_origin
-                    destination = db_dest
-                    origin_lat  = route.get("origin_lat")
-                    origin_lon  = route.get("origin_lon")
-                    dest_lat    = route.get("dest_lat")
-                    dest_lon    = route.get("dest_lon")
+                # Sanity-check the final route against aircraft position.
+                # Both AirLabs and adsbdb can carry stale data for charter/
+                # rotating flight numbers. If AirLabs fails, try adsbdb.
+                # If adsbdb also fails (or was the only source), discard.
+                if origin and destination and origin_lat and dest_lat:
+                    if not _route_makes_sense(
+                            plane_lat, plane_lon, origin_lat, origin_lon, dest_lat, dest_lon):
+                        if al_origin and al_dest and (db_origin or db_dest):
+                            log.warning(f"[overhead] {callsign}: AirLabs "
+                                        f"{origin}→{destination} failed sanity check — trying adsbdb")
+                            origin      = db_origin
+                            destination = db_dest
+                            _route_source = "adsbdb"
+                            origin_lat  = route.get("origin_lat")
+                            origin_lon  = route.get("origin_lon")
+                            dest_lat    = route.get("dest_lat")
+                            dest_lon    = route.get("dest_lon")
+                            if origin and not origin_lat:
+                                origin_lat, origin_lon = self._get_airport_coords(origin)
+                            if destination and not dest_lat:
+                                dest_lat, dest_lon = self._get_airport_coords(destination)
+                        else:
+                            log.warning(f"[overhead] {callsign}: {_route_source} "
+                                        f"{origin}→{destination} failed sanity check — discarding")
+                            origin = destination = ""
+                            origin_lat = origin_lon = dest_lat = dest_lon = None
+
+                # Second pass: if we fell back to adsbdb above, check that too
+                if origin and destination and origin_lat and dest_lat:
+                    if not _route_makes_sense(
+                            plane_lat, plane_lon, origin_lat, origin_lon, dest_lat, dest_lon):
+                        log.warning(f"[overhead] {callsign}: adsbdb "
+                                    f"{origin}→{destination} also failed sanity check — discarding")
+                        origin = destination = ""
+                        origin_lat = origin_lon = dest_lat = dest_lon = None
 
                 # Discard route if origin == destination — any source can
                 # return this for positioning/turnaround flights, and it
