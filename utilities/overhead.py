@@ -251,6 +251,18 @@ def _get_reset_days(secrets: dict, key: str, count: int) -> list[int]:
     return [int(days[i]) if i < len(days) and days[i] else 1 for i in range(count)]
 
 
+def _days_until_reset(reset_day: int) -> int:
+    """Days until the next billing reset for a key that resets on reset_day each month."""
+    today = datetime.now()
+    if today.day < reset_day:
+        next_reset = today.replace(day=reset_day)
+    elif today.month == 12:
+        next_reset = today.replace(year=today.year + 1, month=1, day=reset_day)
+    else:
+        next_reset = today.replace(month=today.month + 1, day=reset_day)
+    return max(0, (next_reset.date() - today.date()).days)
+
+
 def _billing_period(reset_day: int) -> str:
     """Return the billing period identifier for a key that resets on reset_day each month.
     E.g. reset_day=4, today=May 7 → '2026-05'; today=May 2 → '2026-04'."""
@@ -317,7 +329,8 @@ def _fa_record_call(key: str, reset_day: int = 1, cost_per_call: float = FA_COST
 
 
 def _fa_get_active_key(keys: list[str], budget: float, reset_days: list[int] = None) -> Optional[str]:
-    """Return the first FlightAware key still under budget, or None."""
+    """Return the FlightAware key under budget whose reset date is soonest.
+    Using the key closest to its reset first preserves freshly-reset keys."""
     if not keys:
         return None
     if reset_days is None:
@@ -325,6 +338,7 @@ def _fa_get_active_key(keys: list[str], budget: float, reset_days: list[int] = N
     usage = _fa_load_usage()
     key_data = usage["keys"]
     legacy = key_data.get("legacy", {})
+    candidates = []
     for i, key in enumerate(keys):
         reset_day = reset_days[i] if i < len(reset_days) else 1
         period = _billing_period(reset_day)
@@ -333,8 +347,11 @@ def _fa_get_active_key(keys: list[str], budget: float, reset_days: list[int] = N
             _, leg_cost = _fa_key_calls(legacy, period)
             cost += leg_cost
         if cost < budget:
-            return key
-    return None
+            candidates.append((_days_until_reset(reset_day), key))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
 
 
 def get_fa_metrics(keys: list[str], budget: float, reset_days: list[int] = None) -> dict:
@@ -418,7 +435,8 @@ def _al_record_call(key: str, reset_day: int = 1):
 
 
 def _al_get_active_key(keys: list[str], reset_days: list[int] = None) -> Optional[str]:
-    """Return the first AirLabs key under the monthly limit, or None."""
+    """Return the AirLabs key with calls remaining whose reset date is soonest.
+    Using the key closest to its reset first preserves freshly-reset keys."""
     if not keys:
         return None
     if reset_days is None:
@@ -426,6 +444,7 @@ def _al_get_active_key(keys: list[str], reset_days: list[int] = None) -> Optiona
     usage = _al_load_usage()
     key_data = usage["keys"]
     legacy = key_data.get("legacy", {})
+    candidates = []
     for i, key in enumerate(keys):
         reset_day = reset_days[i] if i < len(reset_days) else 1
         period = _billing_period(reset_day)
@@ -433,9 +452,12 @@ def _al_get_active_key(keys: list[str], reset_days: list[int] = None) -> Optiona
         if i == 0:
             calls += _al_key_calls(legacy, period)
         if calls < AIRLABS_MONTHLY_LIMIT:
-            return key
-    log.warning("[overhead] All AirLabs keys exhausted for this billing period")
-    return None
+            candidates.append((_days_until_reset(reset_day), key))
+    if not candidates:
+        log.warning("[overhead] All AirLabs keys exhausted for this billing period")
+        return None
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
 
 
 def _al_available(keys: list[str], reset_days: list[int] = None) -> bool:
