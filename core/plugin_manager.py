@@ -112,8 +112,8 @@ class PluginManager:
         ):
             if self._active_id != "flight_tracker":
                 self._switch_to("flight_tracker")
-            self._flight_plugin.draw()
-            self.display.swap()
+            if self._flight_plugin.draw():
+                self.display.swap()
             return
 
         # --- Return from flight tracker when sky is clear ---
@@ -124,6 +124,11 @@ class PluginManager:
                 self._advance_rotation()
             else:
                 self._switch_to(candidate_id)
+            # If _advance_rotation couldn't find any plugin with content,
+            # _active_id is still "flight_tracker". Don't draw it from the
+            # normal path — just wait for the next frame.
+            if self._active_id == "flight_tracker":
+                return
 
         # --- Check if it's time to advance rotation ---
         active = self._active_plugin()

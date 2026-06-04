@@ -774,7 +774,8 @@ class Overhead:
 
     @property
     def data_is_empty(self) -> bool:
-        return len(self._data) == 0
+        with self._lock:
+            return len(self._data) == 0
 
     # ------------------------------------------------------------------
     # Main fetch
