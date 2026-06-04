@@ -977,7 +977,7 @@ class Overhead:
                         origin      = _fr24_origin
                         destination = _fr24_dest
                         origin_lat = origin_lon = dest_lat = dest_lon = None
-                        log.debug(f"[overhead] FR24 route for {callsign}: {origin}→{destination}")
+                        log.info(f"[overhead] FR24 route for {callsign}: {origin}→{destination} (unverified)")
                     if not origin or not destination:
                         log.warning(
                             f"[overhead] {callsign}: no route "
@@ -1225,6 +1225,7 @@ class Overhead:
                     _al_record_call(airlabs_key, al_reset_days[al_keys.index(airlabs_key)])
                     r = resp.json().get("response") or {}
                     if not r:
+                        log.debug(f"[overhead] AirLabs {callsign}: no data for params {list(params.values())[0]}")
                         continue
 
                     sched_dep = r.get("dep_time_ts")
