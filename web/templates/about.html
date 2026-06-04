@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+{% block title %}About – LED Matrix{% endblock %}
+
+{% block head %}
+<style>
+  .about-section .card-header { cursor: pointer; user-select: none; }
+  .about-section .card-header:hover { background: #252830; }
+  .color-dot {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 6px;
+    border: 1px solid rgba(255,255,255,.15);
+    flex-shrink: 0;
+  }
+  .color-row { display: flex; align-items: center; gap: 6px; }
+  .about-table th { color: #aaa; font-weight: 500; font-size: .85rem; }
+  .about-table td { font-size: .9rem; vertical-align: middle; }
+  .about-table { --bs-table-bg: transparent; --bs-table-striped-bg: rgba(255,255,255,.025); }
+  .section-icon { font-size: 1.4rem; color: #7df9aa; }
+  .phase-bar {
+    display: inline-block;
+    width: 80px; height: 10px;
+    border-radius: 5px;
+    vertical-align: middle;
+  }
+  .stat-chip {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: .8rem;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,.15);
+  }
+  .alert-example {
+    font-family: monospace;
+    font-size: .85rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .subsection-title {
+    font-size: .95rem;
+    font-weight: 600;
+    color: #7df9aa;
+    border-bottom: 1px solid #2a2d35;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+    margin-top: 18px;
+  }
+  .subsection-title:first-child { margin-top: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <h4 class="fw-bold mb-0"><i class="bi bi-info-circle me-2" style="color:#7df9aa"></i>About</h4>
+    <p class="text-muted small mb-0">How the display works and what everything means</p>
+  </div>
+</div>
+
+<!-- Overview -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row align-items-center g-3">
+      <div class="col-auto">
+        <i class="bi bi-grid-3x3-gap-fill" style="font-size:2.5rem;color:#7df9aa"></i>
+      </div>
+      <div class="col">
+        <h5 class="mb-1 fw-bold">LED Matrix Display</h5>
+        <p class="mb-1 text-muted" style="max-width:700px">
+          A Raspberry Pi drives a 64×32 pixel RGB LED matrix that continuously rotates through
+          configured plugins — clock &amp; weather, overhead flights, stocks, sports, and more.
+          Each plugin occupies the full display for a configurable duration before cycling to the next.
+        </p>
+        <p class="mb-0 text-muted" style="max-width:700px">
+          Use the <a href="/config" class="text-decoration-none" style="color:#7df9aa">Config</a> page
+          to set plugin order and durations, enter API keys, and tune all settings.
+          The <a href="/display" class="text-decoration-none" style="color:#7df9aa">Display</a> page
+          lets you jump to any plugin on demand.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Accordion -->
+<div class="accordion about-section" id="aboutAccordion">
+
+  <!-- ── Clock & Weather ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secWeather" aria-expanded="true">
+      <i class="bi bi-cloud-sun section-icon"></i>
+      <span class="fw-bold fs-5">Clock &amp; Weather</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secWeather" class="collapse show" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+
+        <!-- Clock -->
+        <div class="subsection-title"><i class="bi bi-clock me-2"></i>Clock</div>
+        <p class="text-muted small mb-2">Displayed top-left. Color changes with the actual sunrise/sunset times for your location.</p>
+        <div class="d-flex flex-wrap gap-3 mb-3">
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(254,167,39)"></span>
+            <span><strong>Orange</strong> — daytime (sunrise → sunset)</span>
+          </div>
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(40,183,246)"></span>
+            <span><strong>Blue</strong> — nighttime (sunset → sunrise)</span>
+          </div>
+        </div>
+        <p class="text-muted small">Format is 12-hour or 24-hour, configurable on the Config page. When alerts are active the clock shifts to a smaller font to make room.</p>
+
+        <!-- Temperature -->
+        <div class="subsection-title"><i class="bi bi-thermometer-half me-2"></i>Temperature</div>
+        <p class="text-muted small mb-2">Displayed top-right. The <strong>color encodes humidity</strong>, not temperature itself.</p>
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(255,255,255)"></span>
+            <span>0% humidity — white</span>
+          </div>
+          <div style="flex:1;max-width:160px;height:12px;border-radius:6px;background:linear-gradient(to right,rgb(255,255,255),rgb(12,70,230));border:1px solid rgba(255,255,255,.15)"></div>
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(12,70,230)"></span>
+            <span>100% humidity — dark blue</span>
+          </div>
+        </div>
+        <p class="text-muted small">Shows <span style="color:red;font-weight:600">ERR</span> in red if the weather API is unavailable.</p>
+
+        <!-- Date & Moon Phase -->
+        <div class="subsection-title"><i class="bi bi-moon-stars me-2"></i>Date &amp; Moon Phase</div>
+        <p class="text-muted small mb-2">The date (e.g., "Jun 04") is displayed top-right below the temperature. Its <strong>text gradient reflects the current moon phase</strong>.</p>
+        <table class="table about-table table-sm table-striped mb-3">
+          <thead><tr><th>Phase</th><th>Gradient</th><th>Visual</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>New Moon</td>
+              <td>Dark purple → Dark purple</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(60,0,80),rgb(60,0,80))"></span></td>
+            </tr>
+            <tr>
+              <td>Waxing Crescent</td>
+              <td>Dark purple → White</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(60,0,80),rgb(255,255,255))"></span></td>
+            </tr>
+            <tr>
+              <td>First Quarter</td>
+              <td>Dark purple → White</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(60,0,80),rgb(255,255,255))"></span></td>
+            </tr>
+            <tr>
+              <td>Waxing Gibbous</td>
+              <td>Dark mid-purple → White</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(199,146,212),rgb(255,255,255))"></span></td>
+            </tr>
+            <tr>
+              <td>Full Moon</td>
+              <td>Grey → Grey</td>
+              <td><span class="phase-bar" style="background:rgb(192,192,192)"></span></td>
+            </tr>
+            <tr>
+              <td>Waning Gibbous</td>
+              <td>White → Dark mid-purple</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(255,255,255),rgb(199,146,212))"></span></td>
+            </tr>
+            <tr>
+              <td>Last Quarter</td>
+              <td>White → Dark purple</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(255,255,255),rgb(60,0,80))"></span></td>
+            </tr>
+            <tr>
+              <td>Waning Crescent</td>
+              <td>Dark mid-purple → Dark purple</td>
+              <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(199,146,212),rgb(60,0,80))"></span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Forecast -->
+        <div class="subsection-title"><i class="bi bi-calendar3 me-2"></i>3-Day Forecast</div>
+        <p class="text-muted small mb-2">Fills the lower half of the display with tomorrow and the next two days.</p>
+        <div class="d-flex flex-wrap gap-3 mb-3">
+          <div class="color-row"><span class="color-dot" style="background:rgb(236,65,123)"></span><span>Day name — pink</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(255,113,66)"></span><span>High temperature — orange</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(66,164,244)"></span><span>Low temperature — blue</span></div>
+        </div>
+        <p class="text-muted small">Each day also shows a small weather icon sourced from Tomorrow.io forecast codes.</p>
+
+        <!-- Alert Bar -->
+        <div class="subsection-title"><i class="bi bi-exclamation-triangle me-2"></i>Alert Bar</div>
+        <p class="text-muted small mb-2">
+          Occupies the top-left corner. When multiple alerts are active they rotate every 3–4 seconds.
+          Alerts are dismissed automatically when conditions clear.
+        </p>
+
+        <p class="fw-semibold mb-1 small" style="color:#ccc">NWS Weather Alerts</p>
+        <table class="table about-table table-sm table-striped mb-3">
+          <thead><tr><th>Color</th><th>Severity</th><th>Examples</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(239,82,81)"></span>Red</div></td>
+              <td>Life-threatening</td>
+              <td class="text-muted small">Tornado Warning, Hurricane Warning, Flash Flood Warning, Extreme Wind Warning</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(255,141,53)"></span>Orange</div></td>
+              <td>Significant</td>
+              <td class="text-muted small">High Wind Warning, Blizzard Warning, Ice Storm Warning, Excessive Heat Warning</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(0,210,210)"></span>Cyan</div></td>
+              <td>Advisory</td>
+              <td class="text-muted small">Wind Advisory, Dense Fog Advisory, Rip Current Statement, Small Craft Advisory</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(254,239,88)"></span>Yellow</div></td>
+              <td>Air quality</td>
+              <td class="text-muted small">Air Quality Alert, Air Quality Action Day</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(188,189,188)"></span>Grey</div></td>
+              <td>Watch (lower urgency)</td>
+              <td class="text-muted small">Tornado Watch, Severe Thunderstorm Watch, Winter Storm Watch, Hurricane Watch</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="fw-semibold mb-1 small" style="color:#ccc">Other Alerts</p>
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Alert</th><th>Color</th><th>Details</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Rain / Snow / Sleet</td>
+              <td>
+                <div class="color-row mb-1"><span class="color-dot" style="background:rgb(40,183,246)"></span>Blue — starting</div>
+                <div class="color-row"><span class="color-dot" style="background:rgb(254,239,88)"></span>Yellow — stopping</div>
+              </td>
+              <td class="text-muted small">
+                <span class="alert-example" style="background:rgba(40,183,246,.15);color:rgb(40,183,246)">Rain 12m</span> precip expected in 12 min &nbsp;|&nbsp;
+                <span class="alert-example" style="background:rgba(254,239,88,.15);color:rgb(254,239,88)">Stop 8m</span> current precip clears in 8 min.
+                Triggers at ≥ 0.3 mm/h.
+              </td>
+            </tr>
+            <tr>
+              <td>Wind</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(0,210,210)"></span>Cyan</div></td>
+              <td class="text-muted small">
+                <span class="alert-example" style="background:rgba(0,210,210,.15);color:rgb(0,210,210)">Wind 24</span>
+                shown when sustained speed or gust ≥ 20 mph. Speed displayed in mph or kph based on your units setting.
+              </td>
+            </tr>
+            <tr>
+              <td>Airport Delays</td>
+              <td>
+                <div class="color-row mb-1"><span class="color-dot" style="background:rgb(239,82,81)"></span>Red</div>
+                <div class="color-row"><span class="color-dot" style="background:rgb(255,141,53)"></span>Orange</div>
+              </td>
+              <td class="text-muted small">
+                Red for ground stops and airport closures.
+                Orange for arrival or departure delays. FAA data, polled every 5 minutes.
+              </td>
+            </tr>
+            <tr>
+              <td>Sunrise / Sunset</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(254,167,39)"></span>Orange</div></td>
+              <td class="text-muted small">
+                <span class="alert-example" style="background:rgba(254,167,39,.15);color:rgb(254,167,39)">Rise 18m</span> or
+                <span class="alert-example" style="background:rgba(254,167,39,.15);color:rgb(254,167,39)">Sun 7m</span>
+                shown within 30 minutes of sunrise or sunset.
+              </td>
+            </tr>
+            <tr>
+              <td>ISS Pass</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(255,255,255)"></span>White</div></td>
+              <td class="text-muted small">
+                <span class="alert-example" style="background:rgba(255,255,255,.1);color:#fff">ISS 5m</span>
+                when a pass is &lt; 10 minutes away. Triggers a full-screen takeover showing
+                direction (e.g., <em>NW&gt;SE 45°</em>), a live progress bar, and a MM:SS countdown.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Overhead Flights ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secOverhead">
+      <i class="bi bi-radar section-icon"></i>
+      <span class="fw-bold fs-5">Overhead Flights</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secOverhead" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Tracks the nearest aircraft flying overhead within a configurable radius (default 25 nm),
+          filtered to altitudes between 8,000 and 100,000 ft. Up to 5 flights are tracked simultaneously
+          and displayed in rotation. Updates every 60 seconds.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-arrow-left-right me-2"></i>Journey View</div>
+        <p class="text-muted small mb-2">Shows the flight's route context.</p>
+        <ul class="text-muted small mb-3">
+          <li><strong>Origin &amp; Destination</strong> — 3-letter IATA airport codes</li>
+          <li><strong>Progress arrow</strong> — visual bar showing the aircraft's position between origin and destination</li>
+          <li><strong>Distance</strong> — miles or km to each airport (configurable)</li>
+          <li><strong>Flight number</strong> — airline callsign with numeric portion highlighted separately</li>
+        </ul>
+
+        <div class="subsection-title"><i class="bi bi-info-square me-2"></i>Plane Details View</div>
+        <p class="text-muted small mb-2">Shows the aircraft's technical details.</p>
+        <ul class="text-muted small mb-3">
+          <li><strong>Aircraft type</strong> — ICAO designation (e.g., B787, A320)</li>
+          <li><strong>Registration</strong> — tail number</li>
+          <li><strong>Altitude</strong> — displayed as FL (flight level) at ≥ 18,000 ft (e.g., FL350); feet or meters below that</li>
+          <li><strong>Ground speed</strong> — in knots</li>
+        </ul>
+
+        <div class="subsection-title"><i class="bi bi-hourglass-split me-2"></i>Delay Color Coding</div>
+        <p class="text-muted small mb-2">
+          Airport and airline delay data colors the flight display. Departure and arrival delays use
+          similar thresholds (arrival is slightly stricter — green cutoff is 15 min instead of 20).
+        </p>
+        <table class="table about-table table-sm table-striped mb-3">
+          <thead><tr><th>Color</th><th>Departure delay</th><th>Arrival delay</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(103,186,106)"></span>Green</div></td>
+              <td>≤ 20 min (on time)</td>
+              <td>≤ 15 min (on time)</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(254,239,88)"></span>Yellow</div></td>
+              <td>20–40 min</td>
+              <td>15–30 min</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(255,141,53)"></span>Orange</div></td>
+              <td>40–60 min</td>
+              <td>30–60 min</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(239,82,81)"></span>Red</div></td>
+              <td>1–4 hours</td>
+              <td>1–4 hours</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(170,70,188)"></span>Purple</div></td>
+              <td>4–8 hours</td>
+              <td>4–8 hours</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(92,107,192)"></span>Dark Blue</div></td>
+              <td>8+ hours</td>
+              <td>8+ hours</td>
+            </tr>
+            <tr>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(188,189,188)"></span>Grey</div></td>
+              <td colspan="2">Delay unknown / no data</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="subsection-title"><i class="bi bi-map me-2"></i>Radar Mode</div>
+        <p class="text-muted small">Optional full-screen radar view showing all tracked aircraft overhead plotted on a map within the configured search radius.</p>
+        <p class="text-muted small mb-0"><strong>Data sources:</strong> adsb.lol (primary), FlightRadar24, OpenSky Network (fallback). Route and schedule data from adsbdb, AirLabs, FlightStats, and FlightAware.</p>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Specific Flight Tracker ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secSpecific">
+      <i class="bi bi-airplane-engines section-icon"></i>
+      <span class="fw-bold fs-5">Specific Flight Tracker</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secSpecific" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Tracks a single pre-configured flight by callsign from gate to gate. Polls every 5 minutes
+          before takeoff, then every 60 seconds while airborne.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-arrow-right me-2"></i>Progress Bar</div>
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div class="color-row"><span class="color-dot" style="background:rgb(103,186,106)"></span><span>Green — distance flown</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(239,82,81)"></span><span>Red — distance remaining</span></div>
+          <div class="color-row"><span class="color-dot" style="background:#fff"></span><span>White triangle — current position</span></div>
+        </div>
+
+        <div class="subsection-title"><i class="bi bi-list-ul me-2"></i>Scrolling Stats</div>
+        <p class="text-muted small mb-2">A row of statistics scrolls across the bottom of the display.</p>
+        <table class="table about-table table-sm table-striped mb-3">
+          <thead><tr><th>Stat</th><th>Color</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Time remaining</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(254,239,88)"></span>Yellow</div></td>
+              <td class="text-muted small">Hours:minutes to destination</td>
+            </tr>
+            <tr>
+              <td>Distance remaining</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(236,65,123)"></span>Pink</div></td>
+              <td class="text-muted small">Miles or kilometers</td>
+            </tr>
+            <tr>
+              <td>Aircraft type</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(66,164,244)"></span>Blue</div></td>
+              <td class="text-muted small">ICAO type code (e.g., B77W)</td>
+            </tr>
+            <tr>
+              <td>Registration</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(170,70,188)"></span>Purple</div></td>
+              <td class="text-muted small">Tail number</td>
+            </tr>
+            <tr>
+              <td>Altitude</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(255,141,53)"></span>Orange</div></td>
+              <td class="text-muted small">FL at ≥ 18,000 ft; feet or meters below</td>
+            </tr>
+            <tr>
+              <td>Vertical speed</td>
+              <td>
+                <div class="color-row mb-1"><span class="color-dot" style="background:rgb(103,186,106)"></span><code style="color:rgb(103,186,106)">^</code> Green — climbing</div>
+                <div class="color-row"><span class="color-dot" style="background:rgb(239,82,81)"></span><code style="color:rgb(239,82,81)">v</code> Red — descending</div>
+              </td>
+              <td class="text-muted small">Arrow shown when climb/descent rate exceeds ±150 fpm</td>
+            </tr>
+            <tr>
+              <td>Ground speed</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(255,141,53)"></span>Orange</div></td>
+              <td class="text-muted small">Knots</td>
+            </tr>
+            <tr>
+              <td>Nearest city</td>
+              <td><div class="color-row"><span class="color-dot" style="background:#fff"></span>White</div></td>
+              <td class="text-muted small">Closest populated place</td>
+            </tr>
+            <tr>
+              <td>Point of interest</td>
+              <td><div class="color-row"><span class="color-dot" style="background:rgb(64,195,183)"></span>Teal</div></td>
+              <td class="text-muted small">Nearby national park or landmark</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="subsection-title"><i class="bi bi-hourglass-split me-2"></i>Delay Color Coding</div>
+        <p class="text-muted small">Same color scale as Overhead Flights — see that section for the full table.</p>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Stocks ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secStocks">
+      <i class="bi bi-graph-up section-icon"></i>
+      <span class="fw-bold fs-5">Stocks</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secStocks" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          A scrolling dual-row ticker. ETFs run along the top half; individual stocks run along the bottom half.
+          Each block shows the ticker symbol, current price, and today's percentage change.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-palette me-2"></i>Color Coding</div>
+        <div class="d-flex flex-wrap gap-4 mb-3">
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(0,220,0)"></span>
+            <span><strong>Green</strong> — price up today</span>
+          </div>
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(220,0,0)"></span>
+            <span><strong>Red</strong> — price down today</span>
+          </div>
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(160,160,160)"></span>
+            <span><strong>Grey</strong> — flat (0% change)</span>
+          </div>
+        </div>
+        <p class="text-muted small mb-1"><strong>Price formatting:</strong> prices ≥ $100 show no decimal places (e.g., $123); prices &lt; $100 show two decimals (e.g., $45.67).</p>
+        <p class="text-muted small mb-0"><strong>Data sources:</strong> Charles Schwab API when brokerage credentials are configured; Yahoo Finance as a public fallback.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sports ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secSports">
+      <i class="bi bi-trophy section-icon"></i>
+      <span class="fw-bold fs-5">Sports</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secSports" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Shows live scores, upcoming games, and final results. Displays team logos, abbreviations, and scores.
+          Each game is shown for a configurable number of seconds before cycling to the next.
+          A sound alert plays when a game goes live or the score changes.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-collection me-2"></i>Supported Leagues</div>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">NFL</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">College Football</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">NBA</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">College Basketball</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">MLB</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">NHL</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">Soccer (MLS, EPL &amp; more)</span>
+        </div>
+
+        <div class="subsection-title"><i class="bi bi-circle-fill me-2"></i>Game Status Colors</div>
+        <div class="d-flex flex-wrap gap-4 mb-3">
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(255,80,0)"></span>
+            <span><strong>Orange</strong> — live game</span>
+          </div>
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(120,120,120)"></span>
+            <span><strong>Grey</strong> — final / completed</span>
+          </div>
+          <div class="color-row">
+            <span class="color-dot" style="background:rgb(100,180,255)"></span>
+            <span><strong>Light Blue</strong> — upcoming / scheduled</span>
+          </div>
+        </div>
+
+        <div class="subsection-title"><i class="bi bi-clock-history me-2"></i>Sport-Specific Status Formats</div>
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Sport</th><th>Example</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Baseball</td>
+              <td><code>T5 S1-B2 O2</code></td>
+              <td class="text-muted small">Top of the 5th inning, 1 strike, 2 balls, 2 outs. <code>&lt;</code> or <code>&gt;</code> shows batting team.</td>
+            </tr>
+            <tr>
+              <td>Football</td>
+              <td><code>Q4 2:14 4&amp;1</code></td>
+              <td class="text-muted small">4th quarter, 2:14 on clock, 4th down &amp; 1 yard. <code>&lt;</code> or <code>&gt;</code> shows possession.</td>
+            </tr>
+            <tr>
+              <td>Basketball (NBA)</td>
+              <td><code>Q1 5:32</code></td>
+              <td class="text-muted small">1st quarter, 5:32 remaining. <code>OT</code> for overtime.</td>
+            </tr>
+            <tr>
+              <td>Basketball (College)</td>
+              <td><code>H2 5:32</code></td>
+              <td class="text-muted small">2nd half, 5:32 remaining. <code>OT</code> for overtime.</td>
+            </tr>
+            <tr>
+              <td>Hockey</td>
+              <td><code>P2</code> / <code>OT</code> / <code>SO</code></td>
+              <td class="text-muted small">Period number, overtime, or shootout.</td>
+            </tr>
+            <tr>
+              <td>Soccer</td>
+              <td><code>1st 45+2</code></td>
+              <td class="text-muted small">First half, 45 minutes + 2 of stoppage time. <code>PKS</code> for penalty shootout.</td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── World Daylight Map ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secDaylight">
+      <i class="bi bi-globe-americas section-icon"></i>
+      <span class="fw-bold fs-5">World Daylight Map</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secDaylight" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-2">
+          Renders the current day/night terminator line across a world map, updated in real time.
+          The sun and moon are drawn at their actual positions on the globe.
+          The moon icon reflects the current lunar phase — matching the phase shown on the clock screen's date gradient.
+          No external API is required; all astronomy calculations run locally on the Pi.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /accordion -->
+{% endblock %}
