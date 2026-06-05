@@ -1216,7 +1216,7 @@ class Overhead:
         if cached and now < cached["expires"]:
             d = cached["data"]
             if not (d.get("al_origin") and d.get("al_destination")):
-                log.warning(
+                log.debug(
                     f"[overhead] Schedule cache hit for {callsign}: no route "
                     f"(expires in {int(cached['expires'] - now)}s)"
                 )

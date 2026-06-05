@@ -27,11 +27,11 @@ class FlightLogoScene:
         if icao in ("", "N/A"):
             icao = DEFAULT_IMAGE
 
-        # Open the file
+        # Open the file; convert to RGBA immediately to avoid Pillow palette+transparency warnings
         try:
-            image = Image.open(f"logos/{icao}.png")
+            image = Image.open(f"logos/{icao}.png").convert("RGBA")
         except FileNotFoundError:
-            image = Image.open(f"logos/{DEFAULT_IMAGE}.png")
+            image = Image.open(f"logos/{DEFAULT_IMAGE}.png").convert("RGBA")
 
 
         # Make image fit our screen.
