@@ -164,32 +164,50 @@ def _wrap_title(title: str, bdf: dict) -> list:
 
 
 def _parse_event_dt(dt_str: str) -> Optional[datetime]:
+    """Parse the ISO string from the datetime-local input as naive local time."""
     try:
-        dt = datetime.fromisoformat(dt_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
-        return dt
+        return datetime.fromisoformat(dt_str)
     except Exception:
         return None
 
 
-def _format_countdown(remaining_secs: float):
-    """Return (line1, line2) — line2 is empty string for single-line."""
+def _format_countdown(remaining_secs: float, event_dt: Optional[datetime] = None):
+    """Return (line1, line2) — line2 is empty string for single-line.
+
+    Uses calendar-day comparison when event_dt is provided so an event
+    later today always shows TODAY, not a raw day count.
+    """
     total = int(max(0, remaining_secs))
-    d = total // 86400
     h = (total % 86400) // 3600
     m = (total % 3600) // 60
     s = total % 60
-    if d > 0:
-        return (f"{d} DAYS", f"{h:02d}:{m:02d}:{s:02d}")
-    return (f"{h:02d}:{m:02d}:{s:02d}", "")
+    time_str = f"{h:02d}:{m:02d}:{s:02d}"
+
+    if event_dt is not None:
+        today = datetime.now().date()
+        days_diff = (event_dt.date() - today).days
+        if days_diff <= 0:
+            return ("TODAY", time_str)
+        elif days_diff == 1:
+            return ("1 DAY", time_str)
+        else:
+            return (f"{days_diff} DAYS", time_str)
+
+    # Fallback when event_dt not provided
+    d = total // 86400
+    if d == 1:
+        return ("1 DAY", time_str)
+    elif d > 1:
+        return (f"{d} DAYS", time_str)
+    return (time_str, "")
 
 
 # ------------------------------------------------------------------
 # Frame renderer
 # ------------------------------------------------------------------
 
-def _render_frame(title: str, remaining_secs: float, flash_frame: int) -> Image.Image:
+def _render_frame(title: str, remaining_secs: float, flash_frame: int,
+                   event_dt: Optional[datetime] = None) -> Image.Image:
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), COLOR_BLACK)
     draw = ImageDraw.Draw(img)
 
@@ -197,22 +215,24 @@ def _render_frame(title: str, remaining_secs: float, flash_frame: int) -> Image.
     bdf, cell_h = _choose_title_font(title)
     lines = _wrap_title(title, bdf)
 
+    TOP_PAD = 1
+
     # Two-line title uses 4x6 with extra height
     if len(lines) == 2:
         title_h = 6 + 1 + 6  # line1 + 1px gap + line2
     else:
         title_h = cell_h
 
-    sep_y   = title_h + 1
+    sep_y   = TOP_PAD + title_h + 1
     count_y = sep_y + 1
     count_h = MATRIX_H - count_y
 
     # --- Draw title ---
     if len(lines) == 2:
-        _bdf_draw(img, _center_x(lines[0], bdf), 0, lines[0], bdf, COLOR_TITLE)
-        _bdf_draw(img, _center_x(lines[1], bdf), 7, lines[1], bdf, COLOR_TITLE)
+        _bdf_draw(img, _center_x(lines[0], bdf), TOP_PAD,     lines[0], bdf, COLOR_TITLE)
+        _bdf_draw(img, _center_x(lines[1], bdf), TOP_PAD + 7, lines[1], bdf, COLOR_TITLE)
     else:
-        _bdf_draw(img, _center_x(lines[0], bdf), 0, lines[0], bdf, COLOR_TITLE)
+        _bdf_draw(img, _center_x(lines[0], bdf), TOP_PAD, lines[0], bdf, COLOR_TITLE)
 
     # --- Purple separator ---
     draw.line([(0, sep_y), (MATRIX_W - 1, sep_y)], fill=COLOR_SEP)
@@ -231,7 +251,7 @@ def _render_frame(title: str, remaining_secs: float, flash_frame: int) -> Image.
         ny = count_y + max(0, (count_h - now_h) // 2)
         _bdf_draw(img, nx, ny, "NOW!", now_font, color)
     else:
-        line1, line2 = _format_countdown(remaining_secs)
+        line1, line2 = _format_countdown(remaining_secs, event_dt)
         if line2:
             # Two-line countdown: "N DAYS" + "HH:MM:SS" using 5x7
             font = _BDF_5x7
@@ -290,7 +310,8 @@ class EventCountdownPlugin(BasePlugin):
         if event_dt is None:
             return False
 
-        remaining = (event_dt - datetime.now().astimezone()).total_seconds()
+        now = datetime.now() if event_dt.tzinfo is None else datetime.now().astimezone()
+        remaining = (event_dt - now).total_seconds()
 
         if remaining <= 0:
             phase = (self._flash_frame // _NOW_FRAMES_PER_COLOR) % len(_NOW_COLORS)
@@ -300,7 +321,7 @@ class EventCountdownPlugin(BasePlugin):
             key = (int(remaining), -1)
 
         if key != self._render_key:
-            self._cached_frame = _render_frame(title, remaining, self._flash_frame)
+            self._cached_frame = _render_frame(title, remaining, self._flash_frame, event_dt)
             self._render_key = key
 
         if self._cached_frame is not None:

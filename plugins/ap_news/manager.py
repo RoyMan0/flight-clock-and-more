@@ -136,23 +136,33 @@ def _push_pil_to_canvas(img: Image.Image, display_manager):
 # RSS fetching and caching
 # ------------------------------------------------------------------
 
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RSS reader)"}
+
+
 def _fetch_headlines(enabled_feeds: dict) -> list:
+    active = [k for k, v in enabled_feeds.items() if v]
+    log.info(f"[ap_news] Fetching enabled feeds: {active}")
+    if not active:
+        return []
     headlines = []
-    for key, url in _FEEDS.items():
-        if not enabled_feeds.get(key, False):
+    for key in active:
+        url = _FEEDS.get(key)
+        if not url:
             continue
         try:
-            r = requests.get(url, timeout=(5, 15))
+            r = requests.get(url, headers=_HEADERS, timeout=(5, 15))
             r.raise_for_status()
             root = ET.fromstring(r.content)
-            for item in root.findall("channel/item"):
+            items = root.findall("channel/item")
+            count = 0
+            for item in items:
                 t = item.findtext("title", "").strip()
                 if t:
                     headlines.append(t)
-            log.debug(f"[ap_news] Fetched {key}: {len(root.findall('channel/item'))} items")
+                    count += 1
+            log.info(f"[ap_news] {key}: {count} headlines")
         except Exception as e:
             log.warning(f"[ap_news] Feed '{key}' failed: {e}")
-    # Deduplicate preserving order
     return list(dict.fromkeys(headlines))
 
 
@@ -258,6 +268,9 @@ class APNewsPlugin(BasePlugin):
 
     def update(self):
         feeds = self.config.get("feeds", {})
+        if not feeds:
+            log.warning("[ap_news] No 'feeds' in config — defaulting to top_news")
+            feeds = {"top_news": True}
         headlines = _fetch_headlines(feeds)
         if headlines:
             _save_cache(headlines)
