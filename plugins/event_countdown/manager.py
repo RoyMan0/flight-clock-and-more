@@ -289,6 +289,7 @@ class EventCountdownPlugin(BasePlugin):
         self._render_key = None
         self._cached_frame: Optional[Image.Image] = None
         self._flash_frame: int = 0
+        self._tz_warned: bool = False
 
     def reset(self):
         self._render_key = None
@@ -319,9 +320,12 @@ class EventCountdownPlugin(BasePlugin):
             return False
 
         if event_dt.tzinfo is None:
-            log.warning("[countdown] event_datetime has no timezone — re-save it in the config UI to fix timezone issues")
+            if not self._tz_warned:
+                log.warning("[countdown] event_datetime has no timezone — open Config page and click Save to fix")
+                self._tz_warned = True
             now = datetime.now()
         else:
+            self._tz_warned = False
             now = datetime.now(timezone.utc)
         remaining = (event_dt - now).total_seconds()
 

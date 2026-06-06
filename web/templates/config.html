@@ -727,7 +727,12 @@
               </p>
             </div>
           </div>
-          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('event_countdown')">
+          <button class="btn btn-success btn-sm mt-3" @click="() => {
+            const dt = pluginConfigs.event_countdown?.event_datetime;
+            if (dt && !dt.endsWith('Z') && !dt.includes('+'))
+              pluginConfigs.event_countdown.event_datetime = new Date(dt).toISOString();
+            savePluginConfig('event_countdown');
+          }">
             <i class="bi bi-save me-1"></i>Save
           </button>
         </div>
@@ -1043,6 +1048,11 @@ function configPage() {
       if (!cfgs.clock_weather) cfgs.clock_weather = {};
       if (!cfgs.clock_weather.alerts) cfgs.clock_weather.alerts = {};
       this.pluginConfigs = cfgs;
+      // Migrate legacy naive event_datetime to UTC ISO so timezone is always correct
+      const ecDt = this.pluginConfigs.event_countdown?.event_datetime;
+      if (ecDt && !ecDt.endsWith('Z') && !ecDt.includes('+')) {
+        this.pluginConfigs.event_countdown.event_datetime = new Date(ecDt).toISOString();
+      }
       this.sysCfg = sys;
       // Seed units from legacy field if new field absent (backward compat)
       if (!this.sysCfg.location.units) {
