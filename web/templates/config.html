@@ -713,8 +713,10 @@
             <div class="col-md-6">
               <label class="form-label">Event Date &amp; Time</label>
               <input type="datetime-local" class="form-control bg-dark text-light border-secondary"
-                     :value="pluginConfigs.event_countdown.event_datetime?.slice(0,16) || ''"
-                     @change="pluginConfigs.event_countdown.event_datetime = $event.target.value">
+                     :value="pluginConfigs.event_countdown.event_datetime
+                       ? (() => { const d = new Date(pluginConfigs.event_countdown.event_datetime); return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16); })()
+                       : ''"
+                     @change="pluginConfigs.event_countdown.event_datetime = $event.target.value ? new Date($event.target.value).toISOString() : ''">
               <div class="form-text text-muted">Uses your local timezone. Leave blank to disable.</div>
             </div>
             <div class="col-12" x-show="pluginConfigs.event_countdown.event_title && pluginConfigs.event_countdown.event_datetime">

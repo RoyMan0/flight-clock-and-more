@@ -10,7 +10,8 @@ Layout (all positions dynamic based on chosen title font height):
 
 import logging
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from typing import Optional
 
 from PIL import Image, ImageDraw
@@ -164,9 +165,14 @@ def _wrap_title(title: str, bdf: dict) -> list:
 
 
 def _parse_event_dt(dt_str: str) -> Optional[datetime]:
-    """Parse the ISO string from the datetime-local input as naive local time."""
+    """Parse ISO datetime string.
+
+    New format: UTC ISO from browser (e.g. '2026-06-06T00:30:00.000Z')
+    Legacy format: naive local string (e.g. '2026-06-05T18:30')
+    """
     try:
-        return datetime.fromisoformat(dt_str)
+        s = re.sub(r'\.\d+', '', dt_str).replace('Z', '+00:00')
+        return datetime.fromisoformat(s)
     except Exception:
         return None
 
@@ -185,7 +191,9 @@ def _format_countdown(remaining_secs: float, event_dt: Optional[datetime] = None
 
     if event_dt is not None:
         today = datetime.now().date()
-        days_diff = (event_dt.date() - today).days
+        # If event_dt is UTC-aware, convert to local before comparing calendar dates
+        event_local_date = event_dt.astimezone().date() if event_dt.tzinfo else event_dt.date()
+        days_diff = (event_local_date - today).days
         if days_diff <= 0:
             return ("TODAY", time_str)
         elif days_diff == 1:
@@ -310,7 +318,11 @@ class EventCountdownPlugin(BasePlugin):
         if event_dt is None:
             return False
 
-        now = datetime.now() if event_dt.tzinfo is None else datetime.now().astimezone()
+        if event_dt.tzinfo is None:
+            log.warning("[countdown] event_datetime has no timezone — re-save it in the config UI to fix timezone issues")
+            now = datetime.now()
+        else:
+            now = datetime.now(timezone.utc)
         remaining = (event_dt - now).total_seconds()
 
         if remaining <= 0:
