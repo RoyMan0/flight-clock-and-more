@@ -32,8 +32,11 @@ SEP_Y     = 7      # row 7: red separator
 CONTENT_Y = 8      # rows 8-31: scrolling area
 CONTENT_H = 24     # MATRIX_H - CONTENT_Y
 
-LINE_H       = 7   # 6px text + 1px gap
-MIN_STRIP_H  = 256
+FONT_H            = 6   # pixel height of a character cell
+INNER_LINE_GAP    = 1   # px between wrapped lines of the same headline
+HEADLINE_GAP      = 4   # px between separate headlines
+MAX_TEXT_W        = 62  # leave 1px margin each side of the 64px strip
+MIN_STRIP_H       = 256
 
 # Colors
 COLOR_BANNER_BG  = (255, 255, 255)
@@ -203,25 +206,43 @@ def _load_cache() -> list:
 # Rendering helpers
 # ------------------------------------------------------------------
 
-def _truncate(text: str, bdf: dict, max_w: int = 62) -> str:
-    if _bdf_width(text, bdf) <= max_w:
-        return text
-    ellipsis = "…"
-    while text and _bdf_width(text + ellipsis, bdf) > max_w:
-        text = text[:-1]
-    return text + ellipsis
+def _wrap_text(text: str, bdf: dict) -> list:
+    """Word-wrap text into lines that each fit within MAX_TEXT_W pixels."""
+    if _bdf_width(text, bdf) <= MAX_TEXT_W:
+        return [text]
+    words = text.split()
+    lines = []
+    current = ""
+    for word in words:
+        candidate = (current + " " + word).strip() if current else word
+        if _bdf_width(candidate, bdf) <= MAX_TEXT_W:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            # Single word wider than MAX_TEXT_W: hard-trim it
+            if _bdf_width(word, bdf) > MAX_TEXT_W:
+                while word and _bdf_width(word, bdf) > MAX_TEXT_W:
+                    word = word[:-1]
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [text]
+
+
+def _headline_height(lines: list) -> int:
+    """Pixel height consumed by a wrapped headline (text + inter-headline gap)."""
+    n = len(lines)
+    return n * FONT_H + (n - 1) * INNER_LINE_GAP + HEADLINE_GAP
 
 
 def _build_vertical_strip(headlines: list, bdf: dict) -> Image.Image:
-    # Ensure there's at least one headline
     if not headlines:
         headlines = ["No headlines"]
 
-    # Truncate each headline to fit 62px (leave 1px margin each side)
-    truncated = [_truncate(h, bdf) for h in headlines]
+    wrapped = [_wrap_text(h, bdf) for h in headlines]
 
-    # Two blank lines of padding between last and first entry (seamless wrap)
-    single_pass_h = len(truncated) * LINE_H + LINE_H * 2
+    single_pass_h = sum(_headline_height(lines) for lines in wrapped)
 
     reps = 1
     while single_pass_h * reps < MIN_STRIP_H:
@@ -232,10 +253,11 @@ def _build_vertical_strip(headlines: list, bdf: dict) -> Image.Image:
 
     y = 0
     for _ in range(reps):
-        for text in truncated:
-            _bdf_draw(img, 1, y, text, bdf, COLOR_TEXT)
-            y += LINE_H
-        y += LINE_H * 2  # blank padding between passes
+        for lines in wrapped:
+            for i, line in enumerate(lines):
+                _bdf_draw(img, 1, y, line, bdf, COLOR_TEXT)
+                # Advance: 1px inner gap between wrapped lines, 4px gap after last line
+                y += FONT_H + (INNER_LINE_GAP if i < len(lines) - 1 else HEADLINE_GAP)
 
     return img
 
