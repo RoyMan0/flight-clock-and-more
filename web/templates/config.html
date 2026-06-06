@@ -647,6 +647,90 @@
         </div>
       </div>
 
+      <!-- AP Breaking News Config -->
+      <div class="card mb-4" x-show="'ap_news' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-newspaper me-2"></i>AP Breaking News</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.ap_news.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label d-flex justify-content-between">
+                <span>Scroll Speed</span>
+                <span class="text-muted small" x-text="pluginConfigs.ap_news.scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="1" max="5"
+                     x-model="pluginConfigs.ap_news.scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>Slow</span><span>Fast</span>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Active Feeds</label>
+              <div class="row g-1">
+                <template x-for="[feed, enabled] in Object.entries(pluginConfigs.ap_news?.feeds || {})" :key="feed">
+                  <div class="col-6 col-md-4">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox"
+                             :checked="enabled"
+                             @change="pluginConfigs.ap_news.feeds[feed] = $event.target.checked">
+                      <label class="form-check-label"
+                             x-text="feed.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())"></label>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('ap_news')">
+            <i class="bi bi-save me-1"></i>Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Event Countdown Config -->
+      <div class="card mb-4" x-show="'event_countdown' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-hourglass-split me-2"></i>Event Countdown</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.event_countdown.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Event Title</label>
+              <input type="text" class="form-control bg-dark text-light border-secondary"
+                     x-model="pluginConfigs.event_countdown.event_title"
+                     placeholder="e.g. New Year's Eve">
+              <div class="form-text text-muted">Shorter title = larger font on display.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Event Date &amp; Time</label>
+              <input type="datetime-local" class="form-control bg-dark text-light border-secondary"
+                     :value="pluginConfigs.event_countdown.event_datetime?.slice(0,16) || ''"
+                     @change="pluginConfigs.event_countdown.event_datetime = $event.target.value">
+              <div class="form-text text-muted">Uses your local timezone. Leave blank to disable.</div>
+            </div>
+            <div class="col-12" x-show="pluginConfigs.event_countdown.event_title && pluginConfigs.event_countdown.event_datetime">
+              <p class="text-muted small mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Counts down to <strong x-text="pluginConfigs.event_countdown.event_title"></strong>,
+                then flashes "NOW!" in cycling colors.
+              </p>
+            </div>
+          </div>
+          <button class="btn btn-success btn-sm mt-3" @click="savePluginConfig('event_countdown')">
+            <i class="bi bi-save me-1"></i>Save
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -872,6 +956,8 @@ function configPage() {
       snow_report:             { resorts: [] },
       sports:                  { favorite_teams: [], show_all_leagues: [], leagues: {} },
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
+      ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
+      event_countdown:         { event_title: '', event_datetime: '' },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     secrets: {},

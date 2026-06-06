@@ -63,7 +63,7 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = create_app = None
     try:
         from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
     except Exception as e:
@@ -84,6 +84,14 @@ def main():
         from plugins.world_daylight.manager import WorldDaylightPlugin
     except Exception as e:
         log.warning(f"World daylight plugin failed to import: {e}")
+    try:
+        from plugins.ap_news.manager import APNewsPlugin
+    except Exception as e:
+        log.warning(f"AP news plugin failed to import: {e}")
+    try:
+        from plugins.event_countdown.manager import EventCountdownPlugin
+    except Exception as e:
+        log.warning(f"Event countdown plugin failed to import: {e}")
     try:
         from web.app import create_app
     except Exception as e:
@@ -175,6 +183,22 @@ def main():
             ))
         except Exception as e:
             log.warning(f"World daylight plugin failed to load: {e}")
+
+    if APNewsPlugin:
+        try:
+            pm.register("ap_news", APNewsPlugin(
+                display, cfg.get_plugin_config("ap_news"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"AP news plugin failed to load: {e}")
+
+    if EventCountdownPlugin:
+        try:
+            pm.register("event_countdown", EventCountdownPlugin(
+                display, cfg.get_plugin_config("event_countdown"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"Event countdown plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)
