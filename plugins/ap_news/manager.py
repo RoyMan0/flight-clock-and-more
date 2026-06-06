@@ -1,10 +1,13 @@
 """
-APNewsPlugin — vertical-scrolling AP breaking news ticker on the 64×32 matrix.
+APNewsPlugin — vertical-scrolling breaking news ticker on the 64×32 matrix.
 
 Layout:
-  Rows 0–6:  White banner "AP BREAKING NEWS" (black text, 4x6.bdf)
+  Rows 0–6:  White banner "BREAKING NEWS" (black text, 4x6.bdf)
   Row  7:    1px red separator
   Rows 8–31: Headlines scrolling bottom-to-top
+
+Uses Google News RSS (news.google.com) which is publicly accessible and
+includes AP wire stories. rsshub.app was blocked (403) for automated clients.
 """
 
 import json
@@ -39,15 +42,15 @@ COLOR_SEP        = (220, 0, 0)
 COLOR_TEXT       = (255, 255, 255)
 
 _FEEDS = {
-    "top_news":     "https://rsshub.app/apnews/topics/apf-topnews",
-    "technology":   "https://rsshub.app/apnews/topics/technology",
-    "world_news":   "https://rsshub.app/apnews/topics/world-news",
-    "politics":     "https://rsshub.app/apnews/topics/politics",
-    "sports":       "https://rsshub.app/apnews/topics/sports",
-    "entertainment":"https://rsshub.app/apnews/topics/entertainment",
-    "business":     "https://rsshub.app/apnews/topics/business",
-    "science":      "https://rsshub.app/apnews/topics/science",
-    "us_news":      "https://rsshub.app/apnews/topics/us-news",
+    "top_news":     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+    "technology":   "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-US&gl=US&ceid=US:en",
+    "world_news":   "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en",
+    "politics":     "https://news.google.com/rss/headlines/section/topic/POLITICS?hl=en-US&gl=US&ceid=US:en",
+    "sports":       "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=en-US&gl=US&ceid=US:en",
+    "entertainment":"https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-US&gl=US&ceid=US:en",
+    "business":     "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en",
+    "science":      "https://news.google.com/rss/headlines/section/topic/SCIENCE?hl=en-US&gl=US&ceid=US:en",
+    "us_news":      "https://news.google.com/rss/headlines/section/geo/US?hl=en-US&gl=US&ceid=US:en",
 }
 
 _BASE_DIR   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -119,7 +122,7 @@ def _bdf_draw(img: Image.Image, x: int, y: int, text: str,
 
 
 _BDF = _parse_bdf(os.path.join(_FONTS_DIR, "4x6.bdf"))
-_HEADER_TEXT = "AP BREAKING NEWS"
+_HEADER_TEXT = "BREAKING NEWS"
 
 
 def _push_pil_to_canvas(img: Image.Image, display_manager):
@@ -136,7 +139,18 @@ def _push_pil_to_canvas(img: Image.Image, display_manager):
 # RSS fetching and caching
 # ------------------------------------------------------------------
 
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RSS reader)"}
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+}
+
+
+def _clean_title(title: str) -> str:
+    """Strip the ' - Source Name' suffix Google News appends to every headline."""
+    idx = title.rfind(" - ")
+    if idx > 20:  # leave short titles intact (avoid stripping legitimate dashes)
+        title = title[:idx]
+    return title.strip()
 
 
 def _fetch_headlines(enabled_feeds: dict) -> list:
@@ -156,7 +170,7 @@ def _fetch_headlines(enabled_feeds: dict) -> list:
             items = root.findall("channel/item")
             count = 0
             for item in items:
-                t = item.findtext("title", "").strip()
+                t = _clean_title(item.findtext("title", "").strip())
                 if t:
                     headlines.append(t)
                     count += 1
