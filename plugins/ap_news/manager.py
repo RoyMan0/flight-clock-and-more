@@ -34,7 +34,7 @@ CONTENT_H = 24     # MATRIX_H - CONTENT_Y
 
 FONT_H            = 6   # pixel height of a character cell
 INNER_LINE_GAP    = 1   # px between wrapped lines of the same headline
-HEADLINE_GAP      = 4   # px between separate headlines
+HEADLINE_GAP      = 5   # px between separate headlines
 MAX_TEXT_W        = 62  # leave 1px margin each side of the 64px strip
 MIN_STRIP_H       = 256
 
