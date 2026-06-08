@@ -42,6 +42,14 @@ MIN_STRIP_H       = 256
 COLOR_BANNER_BG  = (255, 255, 255)
 COLOR_BANNER_TXT = (0, 0, 0)
 COLOR_SEP        = (220, 0, 0)
+COLOR_DIVIDER    = (65, 65, 65)   # faint grey for headline separator
+
+# Headline divider: centered dashed line, ~2/3 screen width, inside the HEADLINE_GAP
+_DIV_W      = 42                          # ~2/3 of 64px
+_DIV_X      = (MATRIX_W - _DIV_W) // 2   # centered: x=11
+_DIV_DASH   = 3                           # pixels on
+_DIV_SPACE  = 2                           # pixels off
+_DIV_OFFSET = 2                           # px below last text line (centres in 5px gap)
 COLOR_TEXT       = (255, 255, 255)
 
 _FEEDS = {
@@ -230,6 +238,20 @@ def _wrap_text(text: str, bdf: dict) -> list:
     return lines or [text]
 
 
+def _draw_divider(img: Image.Image, y: int) -> None:
+    """Draw a faint dashed horizontal line at row y, centered, ~2/3 screen width."""
+    if y < 0 or y >= img.height:
+        return
+    px = img.load()
+    x = _DIV_X
+    end = _DIV_X + _DIV_W
+    while x < end:
+        for d in range(_DIV_DASH):
+            if x + d < end:
+                px[x + d, y] = COLOR_DIVIDER
+        x += _DIV_DASH + _DIV_SPACE
+
+
 def _headline_height(lines: list) -> int:
     """Pixel height consumed by a wrapped headline (text + inter-headline gap)."""
     n = len(lines)
@@ -256,8 +278,11 @@ def _build_vertical_strip(headlines: list, bdf: dict) -> Image.Image:
         for lines in wrapped:
             for i, line in enumerate(lines):
                 _bdf_draw(img, 1, y, line, bdf, COLOR_TEXT)
-                # Advance: 1px inner gap between wrapped lines, 4px gap after last line
-                y += FONT_H + (INNER_LINE_GAP if i < len(lines) - 1 else HEADLINE_GAP)
+                if i < len(lines) - 1:
+                    y += FONT_H + INNER_LINE_GAP
+                else:
+                    _draw_divider(img, y + FONT_H + _DIV_OFFSET)
+                    y += FONT_H + HEADLINE_GAP
 
     return img
 
