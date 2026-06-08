@@ -14,7 +14,7 @@
               <button class="btn btn-outline-success"
                       :class="{'btn-success text-dark': p.id === active}"
                       @click="forcePlugin(p.id)"
-                      x-text="p.id.replace('_',' ')">
+                      x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports'}[p.id] || p.id.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' '))">
               </button>
             </template>
           </div>

@@ -203,7 +203,8 @@ function dashboard() {
     },
 
     pluginLabel(pid) {
-      return pid.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const names = {ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports'};
+      return names[pid] || pid.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     },
 
     forcePlugin(pid) {
