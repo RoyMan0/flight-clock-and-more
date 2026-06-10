@@ -11,12 +11,24 @@ import sys
 import argparse
 import logging
 import threading
+from logging.handlers import RotatingFileHandler
+
+_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+_LOG_FILE   = "workdammit.log"
+_LOG_MAX_BYTES  = 10 * 1024 * 1024   # 10 MB per file
+_LOG_BACKUPS    = 2                   # keep current + 2 rotated copies (~30 MB max)
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format=_LOG_FORMAT,
     handlers=[
         logging.StreamHandler(),
+        RotatingFileHandler(
+            _LOG_FILE,
+            maxBytes=_LOG_MAX_BYTES,
+            backupCount=_LOG_BACKUPS,
+            encoding="utf-8",
+        ),
     ],
 )
 # Suppress noisy third-party loggers
