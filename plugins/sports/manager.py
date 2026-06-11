@@ -255,10 +255,19 @@ class SportsPlugin(BasePlugin):
 
         soccer_cfg = leagues_cfg.get("soccer", {})
         if soccer_cfg.get("enabled", False):
-            for sub in soccer_cfg.get("sub_leagues", []):
-                games.extend(_fetch_league(
-                    _soccer_url(sub["id"]), sub.get("name", sub["id"]), dates, "soccer"
-                ))
+            soccer_leagues = soccer_cfg.get("leagues", {})
+            if soccer_leagues:
+                for league_id, lcfg in soccer_leagues.items():
+                    if lcfg.get("enabled", False):
+                        games.extend(_fetch_league(
+                            _soccer_url(league_id), lcfg.get("name", league_id), dates, "soccer"
+                        ))
+            else:
+                # Legacy sub_leagues array format
+                for sub in soccer_cfg.get("sub_leagues", []):
+                    games.extend(_fetch_league(
+                        _soccer_url(sub["id"]), sub.get("name", sub["id"]), dates, "soccer"
+                    ))
 
         # Filter upcoming if disabled
         if not self.config.get("show_upcoming", False):

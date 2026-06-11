@@ -513,7 +513,7 @@
             <label class="form-check-label fw-semibold">Enabled</label>
           </div>
           <div class="row g-2">
-            <template x-for="[lid, lcfg] in Object.entries(pluginConfigs.sports?.leagues || {})" :key="lid">
+            <template x-for="[lid, lcfg] in Object.entries(pluginConfigs.sports?.leagues || {}).filter(([k]) => k !== 'soccer')" :key="lid">
               <div class="col-md-4">
                 <div class="form-check form-switch">
                   <input class="form-check-input" type="checkbox" x-model="lcfg.enabled">
@@ -521,6 +521,22 @@
                 </div>
               </div>
             </template>
+          </div>
+          <div class="mt-2" x-show="pluginConfigs.sports?.leagues?.soccer">
+            <div class="form-check form-switch mb-1">
+              <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.leagues.soccer.enabled">
+              <label class="form-check-label fw-semibold">Soccer</label>
+            </div>
+            <div x-show="pluginConfigs.sports.leagues.soccer.enabled" class="ms-3 row g-1 mt-0">
+              <template x-for="[sid, scfg] in Object.entries(pluginConfigs.sports?.leagues?.soccer?.leagues || {})" :key="sid">
+                <div class="col-6 col-md-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" x-model="scfg.enabled">
+                    <label class="form-check-label small" x-text="scfg.name || sid"></label>
+                  </div>
+                </div>
+              </template>
+            </div>
           </div>
           <div class="mt-3">
             <label class="form-label">Seconds per Game</label>

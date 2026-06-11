@@ -82,13 +82,20 @@
         "nhl": {"enabled": false, "name": "NHL"},
         "soccer": {
           "enabled": false,
-          "sub_leagues": [
-            {"id": "eng.1", "name": "EPL"},
-            {"id": "eng.2", "name": "Championship"},
-            {"id": "ger.1", "name": "Bundesliga"},
-            {"id": "usa.1", "name": "MLS"},
-            {"id": "uefa.champions", "name": "UCL"}
-          ]
+          "leagues": {
+            "fifa.world":       {"enabled": false, "name": "World Cup"},
+            "eng.1":            {"enabled": false, "name": "EPL"},
+            "eng.2":            {"enabled": false, "name": "Championship"},
+            "esp.1":            {"enabled": false, "name": "La Liga"},
+            "fra.1":            {"enabled": false, "name": "Ligue 1"},
+            "ger.1":            {"enabled": false, "name": "Bundesliga"},
+            "ita.1":            {"enabled": false, "name": "Serie A"},
+            "usa.1":            {"enabled": false, "name": "MLS"},
+            "uefa.champions":   {"enabled": false, "name": "UCL"},
+            "uefa.europa":      {"enabled": false, "name": "Europa League"},
+            "conmebol.copa":    {"enabled": false, "name": "Copa América"},
+            "concacaf.gold":    {"enabled": false, "name": "Gold Cup"}
+          }
         },
         "college_football": {"enabled": false, "name": "NCAAF"},
         "college_basketball": {"enabled": false, "name": "NCAAB"}
