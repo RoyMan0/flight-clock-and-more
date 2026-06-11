@@ -515,6 +515,15 @@ def _mlb_status(game: dict) -> str:
 _FOOTBALL_LEAGUES    = {"nfl", "college_football"}
 _TIMED_SPORT_LEAGUES = {"nba", "college_basketball", "nhl"}
 
+# Full config name → short LED display label (max ~7 chars at 4px each ≈ 28px)
+_LEAGUE_DISPLAY = {
+    "World Cup":    "WC",
+    "Championship": "Cshp",
+    "Copa América": "C AM",
+    "Copa America": "C AM",
+    "Europa League": "Europa",
+}
+
 
 def _timed_status(game: dict) -> str:
     """Period + clock for NBA, NCAAB, and NHL."""
@@ -631,7 +640,8 @@ def _render_game(game: dict) -> Image.Image:
         status_str = _pre_status(game)
 
     # ── Header: BDF pixel text on clean black, y=1 (centered in HEADER_H zone)
-    _bdf_draw(img, 1, 1, game["league"][:7], _BDF, COL_HEADER)
+    league_label = _LEAGUE_DISPLAY.get(game["league"], game["league"][:7])
+    _bdf_draw(img, 1, 1, league_label, _BDF, COL_HEADER)
 
     if is_final:
         # Draw "FINAL" and "M/D" separately with a 1px gap, both right-aligned as a unit
