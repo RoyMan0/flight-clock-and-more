@@ -451,11 +451,17 @@ def sports_teams():
         ("NCAAB",     f"{ESPN}/basketball/mens-college-basketball/teams",     True),
         ("MLS",          f"{ESPN}/soccer/usa.1/teams",                          False),
         ("EPL",          f"{ESPN}/soccer/eng.1/teams",                          False),
+        ("FA Cup",       f"{ESPN}/soccer/eng.fa/teams",                         False),
         ("Championship", f"{ESPN}/soccer/eng.2/teams",                          False),
         ("Bundesliga",   f"{ESPN}/soccer/ger.1/teams",                          False),
         ("UCL",          f"{ESPN}/soccer/uefa.champions/teams",                 False),
+        ("Europa League",f"{ESPN}/soccer/uefa.europa/teams",                    False),
         ("La Liga",      f"{ESPN}/soccer/esp.1/teams",                          False),
+        ("Ligue 1",      f"{ESPN}/soccer/fra.1/teams",                          False),
+        ("Serie A",      f"{ESPN}/soccer/ita.1/teams",                          False),
         ("World Cup",    f"{ESPNW}/soccer/fifa.world/teams",                    False),
+        ("Copa América", f"{ESPNW}/soccer/conmebol.copa/teams",                 False),
+        ("Gold Cup",     f"{ESPNW}/soccer/concacaf.gold/teams",                 False),
     ]
     PAGE_SIZE = 200
 
