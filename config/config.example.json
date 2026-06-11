@@ -86,6 +86,7 @@
             "fifa.world":       {"enabled": false, "name": "World Cup"},
             "eng.1":            {"enabled": false, "name": "EPL"},
             "eng.2":            {"enabled": false, "name": "Championship"},
+            "eng.fa":           {"enabled": false, "name": "FA Cup"},
             "esp.1":            {"enabled": false, "name": "La Liga"},
             "fra.1":            {"enabled": false, "name": "Ligue 1"},
             "ger.1":            {"enabled": false, "name": "Bundesliga"},
