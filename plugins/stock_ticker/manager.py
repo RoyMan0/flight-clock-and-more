@@ -135,7 +135,7 @@ class StockTickerPlugin(BasePlugin):
         self._stock_offset = 0.0
 
     def update(self):
-        """Fetch positions from Schwab API, or Yahoo Finance if Schwab is not configured."""
+        """Fetch positions from Schwab API, falling back to Yahoo Finance for manual symbols if Schwab fails or is unconfigured."""
         app_key        = self.secrets.get("schwab_app_key", "")
         app_secret     = self.secrets.get("schwab_app_secret", "")
         token_path     = self.secrets.get("schwab_token_path", "")
@@ -146,6 +146,9 @@ class StockTickerPlugin(BasePlugin):
 
         cfg_etfs   = self.config.get("etf_symbols", [])
         cfg_stocks = self.config.get("stock_symbols", [])
+
+        etfs:   list = []
+        stocks: list = []
 
         if app_key and app_secret and token_path and account_hashes:
             from plugins.stock_ticker.schwab_client import get_positions
@@ -159,19 +162,17 @@ class StockTickerPlugin(BasePlugin):
                 etfs = [p for p in etfs if p["symbol"] in cfg_etfs]
             if cfg_stocks:
                 stocks = [p for p in stocks if p["symbol"] in cfg_stocks]
-        elif cfg_etfs or cfg_stocks:
+
+        # Fall back to Yahoo when Schwab returned nothing and manual symbols are configured
+        # (covers both: Schwab not set up, and Schwab token expired/failed)
+        if not etfs and not stocks and (cfg_etfs or cfg_stocks):
             from plugins.stock_ticker.yahoo_client import get_quotes
             all_symbols = list(cfg_etfs) + list(cfg_stocks)
             quotes = get_quotes(all_symbols)
-            # Trust Yahoo's instrumentType for ETF detection, but honour the
-            # config buckets as a fallback for symbols Yahoo misclassifies.
             cfg_etf_set = set(s.upper() for s in cfg_etfs)
             etfs   = [q for q in quotes if q["symbol"] in cfg_etf_set]
             stocks = [q for q in quotes if q["symbol"] not in cfg_etf_set]
-            log.debug(f"[stock] Yahoo Finance: {len(etfs)} ETFs, {len(stocks)} stocks")
-        else:
-            etfs   = []
-            stocks = []
+            log.debug(f"[stock] Yahoo Finance fallback: {len(etfs)} ETFs, {len(stocks)} stocks")
 
         with self._data_lock:
             self._etfs        = etfs
