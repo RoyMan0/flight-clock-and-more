@@ -261,17 +261,33 @@ function dashboard() {
       this.sysActionPending = true;
       this.sysActionMsg = 'Checking for updates…';
       try {
+        const check = await fetch('/api/system/check-updates').then(r => r.json());
+        if (!check.ok) {
+          this.sysActionMsg = '';
+          this.sysActionPending = false;
+          alert('Update check failed. Is the Pi connected to the internet?');
+          return;
+        }
+        if (!check.has_updates) {
+          this.sysActionMsg = '';
+          this.sysActionPending = false;
+          alert('Already up to date — no updates available.');
+          return;
+        }
+        const n = check.count;
+        this.sysActionMsg = '';
+        this.sysActionPending = false;
+        const go = confirm(`${n} update${n !== 1 ? 's' : ''} available. Install and restart the app?`);
+        if (!go) return;
+        this.sysActionPending = true;
+        this.sysActionMsg = 'Installing updates…';
         const d = await fetch('/api/system/update', {method: 'POST'}).then(r => r.json());
         if (!d.ok) {
           this.sysActionMsg = 'Update failed: ' + d.output;
           this.sysActionPending = false;
-        } else if (d.updated) {
-          this.sysActionMsg = 'Updates found — restarting…';
-          setTimeout(() => { window.location.reload(); }, 6000);
         } else {
-          this.sysActionMsg = 'Already up to date.';
-          this.sysActionPending = false;
-          setTimeout(() => { this.sysActionMsg = ''; }, 4000);
+          this.sysActionMsg = 'Updates installed — restarting…';
+          setTimeout(() => { window.location.reload(); }, 6000);
         }
       } catch (_) {
         this.sysActionMsg = 'Update check failed.';

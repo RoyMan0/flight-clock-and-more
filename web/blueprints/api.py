@@ -955,6 +955,20 @@ def enter_setup_mode():
     return jsonify({"ok": True})
 
 
+@api_bp.get("/system/check-updates")
+def check_updates():
+    try:
+        subprocess.run(["git", "fetch"], cwd=BASE_DIR, capture_output=True, timeout=15)
+        result = subprocess.run(
+            ["git", "rev-list", "HEAD..@{u}", "--count"],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=10,
+        )
+        count = int(result.stdout.strip() or "0")
+        return jsonify({"ok": True, "has_updates": count > 0, "count": count})
+    except Exception as e:
+        return jsonify({"ok": False, "has_updates": False, "error": str(e)}), 500
+
+
 @api_bp.post("/system/update")
 def update_app():
     try:
