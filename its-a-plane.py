@@ -7,7 +7,7 @@ if __name__ == "__main__":
     # Get directory of this script (its-a-plane.py)
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Build path to web/app.py
+    # Build a path to web/app.py
     app_path = os.path.join(base_dir, "web", "app.py")
 
     # Start Flask server in background
