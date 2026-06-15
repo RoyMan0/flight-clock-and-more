@@ -6,6 +6,8 @@
     "night_start": "18:00",
     "night_end": "07:00",
     "gpio_slowdown": 2,
+    "pwm_bits": 11,
+    "pwm_lsb_nanoseconds": 130,
     "hat_pwm_enabled": false,
     "led_rgb_sequence": "RBG"
   },
@@ -17,12 +19,18 @@
     "timezone": "America/New_York",
     "journey_code": "",
     "journey_blank_filler": " ? ",
-    "search_radius_nm": 30
+    "search_radius_nm": 30,
+    "zone_home": {
+      "tl_x": 0.0,
+      "tl_y": 0.0,
+      "br_x": 0.0,
+      "br_y": 0.0
+    }
   },
-  "plugin_order": ["clock_weather"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown"],
   "plugins": {
     "clock_weather": {
-      "enabled": true,
+      "enabled": false,
       "display_duration": 30,
       "forecast_days": 3,
       "alerts": {
@@ -37,16 +45,20 @@
       }
     },
     "flight_tracker": {
-      "enabled": false,
+      "enabled": true,
+      "display_duration": 30,
       "min_altitude": 8000,
       "max_altitude": 100000,
       "max_flight_lookup": 5,
+      "radar_mode": false,
       "show_additional_details": false
     },
     "specific_flight_tracker": {
       "enabled": false,
       "display_duration": 30,
       "tracked_callsigns": [],
+      "show_additional_details": true,
+      "show_nearby_locations": true,
       "update_interval": 180
     },
     "stock_ticker": {
@@ -102,6 +114,37 @@
         "college_basketball": {"enabled": false, "name": "NCAAB"}
       },
       "update_interval": 30
+    },
+    "world_daylight": {
+      "enabled": false,
+      "display_duration": 30,
+      "update_interval": 300,
+      "show_time": true,
+      "show_date": true,
+      "show_temp": true
+    },
+    "ap_news": {
+      "enabled": false,
+      "display_duration": 60,
+      "scroll_speed": 1,
+      "update_interval": 300,
+      "feeds": {
+        "top_news": true,
+        "technology": false,
+        "world_news": false,
+        "politics": false,
+        "sports": false,
+        "entertainment": false,
+        "business": false,
+        "science": false,
+        "us_news": false
+      }
+    },
+    "event_countdown": {
+      "enabled": false,
+      "display_duration": 30,
+      "event_title": "",
+      "event_datetime": ""
     }
   },
   "web": {
