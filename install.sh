@@ -186,15 +186,26 @@ else
     warn "Service template not found at $TEMPLATE — skipping"
 fi
 
-# ── Phase 8: File permissions ─────────────────────────────────────
-info "Phase 8: Setting file permissions…"
+# ── Phase 8: Journal log limits ──────────────────────────────────
+info "Phase 8: Configuring journald log limits…"
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/its-a-plane.conf << 'JOURNAL_EOF'
+[Journal]
+SystemMaxUse=50M
+MaxRetentionSec=1month
+JOURNAL_EOF
+systemctl restart systemd-journald 2>/dev/null || true
+success "Journal capped at 50 MB / 1 month"
+
+# ── Phase 9: File permissions ─────────────────────────────────────
+info "Phase 9: Setting file permissions…"
 chown -R "${INSTALL_USER}:${INSTALL_USER}" "$REPO_DIR"
 chmod +x "${REPO_DIR}/main.py" 2>/dev/null || true
 success "Permissions set"
 
-# ── Phase 9: Optional interactive config ──────────────────────────
+# ── Phase 10: Optional interactive config ─────────────────────────
 echo
-echo -e "${BOLD}Phase 9: Initial configuration (Enter to skip — configure via web UI later)${RESET}"
+echo -e "${BOLD}Phase 10: Initial configuration (Enter to skip — configure via web UI later)${RESET}"
 echo
 
 read -rp "  Home latitude  (e.g. 40.7128, blank to skip): " INPUT_LAT
