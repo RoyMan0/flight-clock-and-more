@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Dark background with rounded corners -->
+  <rect width="32" height="32" rx="5" fill="#0d0d0f"/>
+  <!-- Outer grid border -->
+  <rect x="2" y="2" width="28" height="28" fill="none" stroke="#7df9aa" stroke-width="1.2" rx="1.5"/>
+  <!-- Inner vertical dividers -->
+  <line x1="11.33" y1="2" x2="11.33" y2="30" stroke="#7df9aa" stroke-width="1"/>
+  <line x1="20.67" y1="2" x2="20.67" y2="30" stroke="#7df9aa" stroke-width="1"/>
+  <!-- Inner horizontal dividers -->
+  <line x1="2" y1="11.33" x2="30" y2="11.33" stroke="#7df9aa" stroke-width="1"/>
+  <line x1="2" y1="20.67" x2="30" y2="20.67" stroke="#7df9aa" stroke-width="1"/>
+</svg>
