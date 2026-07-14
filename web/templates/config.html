@@ -29,7 +29,7 @@
         <div class="card-body p-0">
           <ul class="list-group list-group-flush" id="rotation-list">
             <template x-for="(pid, idx) in pluginOrder" :key="pid">
-              <li class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-3">
+              <li x-show="pid !== 'snow_report'" class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-3">
                 <div class="d-flex flex-column gap-1">
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveUp(idx)" :disabled="idx===0">▲</button>
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveDown(idx)" :disabled="idx===pluginOrder.length-1">▼</button>
@@ -468,8 +468,8 @@
         </div>
       </div>
 
-      <!-- Snow Report Config -->
-      <div class="card mb-4" x-show="'snow_report' in pluginConfigs">
+      <!-- Snow Report Config (hidden until fixed) -->
+      <div class="card mb-4" x-show="false">
         <div class="card-header"><i class="bi bi-snow me-2"></i>Snow Report</div>
         <div class="card-body">
           <div class="form-check form-switch mb-3">
