@@ -606,7 +606,8 @@ def flight_history_summary():
             if airline:
                 airline_counts[airline] = airline_counts.get(airline, 0) + 1
             else:
-                airline_counts["Unknown"] = airline_counts.get("Unknown", 0) + 1
+                bucket = "Private/GA" if (flight.get("airline") or "").strip() else "Unknown"
+                airline_counts[bucket] = airline_counts.get(bucket, 0) + 1
 
             ac_type = (flight.get("aircraft_type") or "").strip()
             if ac_type:
@@ -693,7 +694,8 @@ def flight_history_day(date):
         if airline:
             airline_counts[airline] = airline_counts.get(airline, 0) + 1
         else:
-            airline_counts["Unknown"] = airline_counts.get("Unknown", 0) + 1
+            bucket = "Private/GA" if (flight.get("airline") or "").strip() else "Unknown"
+            airline_counts[bucket] = airline_counts.get(bucket, 0) + 1
 
         ac_type = (flight.get("aircraft_type") or "").strip()
         if ac_type:
