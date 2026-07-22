@@ -147,13 +147,13 @@ class AlertsScene(object):
                 self._has_active_alerts = False
             # If list content changed, clear the alert row and restart rotation
             if self._active_alerts != prev_alerts:
-                self.draw_square(0, 6, 40, 12, colours.BLACK)
+                self.draw_square(0, 5, 40, 11, colours.BLACK)
                 self._alert_cycle_counter = 0
             self._alert_last_fetch = now
 
         # Detect mode change (alerts appeared or disappeared)
         if self._has_active_alerts != self._prev_had_alerts:
-            self.draw_square(0, 0, 40, 12, colours.BLACK)
+            self.draw_square(0, 0, 40, 11, colours.BLACK)
             self._redraw_time = True
             self._redraw_temp = True
             self._prev_had_alerts = self._has_active_alerts
@@ -171,9 +171,9 @@ class AlertsScene(object):
         if self._alert_cycle_counter > 0:
             prev_slot = ((self._alert_cycle_counter - 1) // cycle_secs) % n
             if slot != prev_slot:
-                self.draw_square(0, 6, 40, 12, colours.BLACK)
+                self.draw_square(0, 5, 40, 11, colours.BLACK)
 
         self._alert_cycle_counter += 1
 
         text, color = self._active_alerts[slot]
-        graphics.DrawText(self.canvas, fonts.extrasmall, 1, 11, color, text)
+        graphics.DrawText(self.canvas, fonts.extrasmall, 1, 10, color, text)
