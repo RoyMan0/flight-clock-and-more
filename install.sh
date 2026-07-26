@@ -37,7 +37,7 @@ INSTALL_UID=$(id -u "$INSTALL_USER")
 
 # Allow overrides via environment or flags
 REPO_DIR="${REPO_DIR:-${INSTALL_HOME}/its-a-plane-python}"
-REPO_URL="${REPO_URL:-https://github.com/RoyMan0/its-a-plane-python.git}"
+REPO_URL="${REPO_URL:-https://github.com/RoyMan0/flight-clock-and-more.git}"
 VENV="${VENV:-${INSTALL_HOME}/venv}"
 SERVICE_NAME="its-a-plane"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
