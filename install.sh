@@ -90,6 +90,10 @@ info "Phase 2: Setting up repository…"
 if [[ -d "${REPO_DIR}/.git" ]]; then
     info "  Repo already present — pulling latest…"
     sudo -u "$INSTALL_USER" git -C "$REPO_DIR" pull --ff-only || warn "  git pull failed (local changes?)"
+elif [[ -d "$REPO_DIR" ]]; then
+    warn "  $REPO_DIR exists but is not a git repo — backing it up and cloning fresh…"
+    mv "$REPO_DIR" "${REPO_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+    sudo -u "$INSTALL_USER" git clone "$REPO_URL" "$REPO_DIR"
 else
     info "  Cloning $REPO_URL …"
     sudo -u "$INSTALL_USER" git clone "$REPO_URL" "$REPO_DIR"
