@@ -67,6 +67,8 @@ apt-get install -y -q \
     python3-dev \
     build-essential \
     libglib2.0-dev \
+    cmake \
+    ninja-build \
     network-manager \
     dnsmasq \
     iptables \
@@ -126,8 +128,10 @@ else
     info "  rpi-rgb-led-matrix already cloned — pulling…"
     sudo -u "$INSTALL_USER" git -C "$MATRIX_SRC" pull --ff-only --quiet || true
 fi
-info "  Building Python binding (this takes ~1–2 minutes on a Pi)…"
-if "${VENV}/bin/pip" install "${MATRIX_SRC}"; then
+info "  Installing build dependencies for rgbmatrix…"
+sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython
+info "  Building Python binding (this takes ~2–3 minutes on a Pi)…"
+if "${VENV}/bin/pip" install --no-build-isolation "${MATRIX_SRC}"; then
     success "rgbmatrix installed"
 else
     warn "rgbmatrix build failed — you can still run with --no-hardware, or retry later"
@@ -204,6 +208,8 @@ success "Journal capped at 50 MB / 1 month"
 # ── Phase 9: File permissions ─────────────────────────────────────
 info "Phase 9: Setting file permissions…"
 chown -R "${INSTALL_USER}:${INSTALL_USER}" "$REPO_DIR"
+chown -R "${INSTALL_USER}:${INSTALL_USER}" "$VENV"
+chown -R "${INSTALL_USER}:${INSTALL_USER}" "$MATRIX_SRC" 2>/dev/null || true
 chmod +x "${REPO_DIR}/main.py" 2>/dev/null || true
 success "Permissions set"
 
