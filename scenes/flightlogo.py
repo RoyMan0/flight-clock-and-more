@@ -31,7 +31,10 @@ class FlightLogoScene:
         try:
             image = Image.open(f"logos/{icao}.png").convert("RGBA")
         except FileNotFoundError:
-            image = Image.open(f"logos/{DEFAULT_IMAGE}.png").convert("RGBA")
+            try:
+                image = Image.open(f"logos/{DEFAULT_IMAGE}.png").convert("RGBA")
+            except FileNotFoundError:
+                return  # No logo available, skip drawing
 
 
         # Make image fit our screen.
