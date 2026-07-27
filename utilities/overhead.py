@@ -816,11 +816,11 @@ class Overhead:
         home = loc.get("location_home", [39.725715, -105.203208])
         home_lat, home_lon = home[0], home[1]
         units        = loc.get("units", loc.get("distance_units", "imperial"))
-        min_alt      = ft_cfg.get("min_altitude",    8000)
-        max_alt      = ft_cfg.get("max_altitude",    MAX_ALTITUDE)
-        max_lookup   = ft_cfg.get("max_flight_lookup", 5)
-        max_closest  = flights_cfg.get("max_closest",  5)
-        max_farthest = flights_cfg.get("max_farthest", 5)
+        min_alt      = int(ft_cfg.get("min_altitude",    8000))
+        max_alt      = int(ft_cfg.get("max_altitude",    MAX_ALTITUDE))
+        max_lookup   = int(ft_cfg.get("max_flight_lookup", 5))
+        max_closest  = int(flights_cfg.get("max_closest",  5))
+        max_farthest = int(flights_cfg.get("max_farthest", 5))
         journey_code = loc.get("journey_code", "")
 
         radius_nm = loc.get("search_radius_nm") or 25
