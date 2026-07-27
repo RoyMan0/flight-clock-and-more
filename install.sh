@@ -127,7 +127,7 @@ else
     sudo -u "$INSTALL_USER" git -C "$MATRIX_SRC" pull --ff-only --quiet || true
 fi
 info "  Building Python binding (this takes ~1–2 minutes on a Pi)…"
-if sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install "${MATRIX_SRC}/bindings/python"; then
+if "${VENV}/bin/pip" install "${MATRIX_SRC}"; then
     success "rgbmatrix installed"
 else
     warn "rgbmatrix build failed — you can still run with --no-hardware, or retry later"
