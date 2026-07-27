@@ -814,7 +814,7 @@ class Overhead:
         flights_cfg = cfg.get("flights") or {}
 
         home = loc.get("location_home", [39.725715, -105.203208])
-        home_lat, home_lon = home[0], home[1]
+        home_lat, home_lon = float(home[0]), float(home[1])
         units        = loc.get("units", loc.get("distance_units", "imperial"))
         min_alt      = int(ft_cfg.get("min_altitude",    8000))
         max_alt      = int(ft_cfg.get("max_altitude",    MAX_ALTITUDE))
@@ -903,9 +903,10 @@ class Overhead:
                     continue
                 if not (min_alt < alt < max_alt):
                     continue
-                lat = ac.get("lat")
-                lon = ac.get("lon")
-                if lat is None or lon is None:
+                try:
+                    lat = float(ac.get("lat"))
+                    lon = float(ac.get("lon"))
+                except (TypeError, ValueError):
                     continue
                 dist = haversine(lat, lon, home_lat, home_lon, units)
                 candidates.append((dist, ac))
