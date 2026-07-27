@@ -121,8 +121,34 @@ class DaysForecastScene(object):
                             r, g, b = pixels[px, py]
                             self.canvas.SetPixel(px + icon_x, py + ICON_POSITION, r, g, b)
                 except FileNotFoundError:
-                    # If icon is missing, the script continues without crashing
-                    pass
+                    # Fallback: draw a small colored square by weather category
+                    wc = int(icon) if str(icon).isdigit() else 0
+                    if wc == 1000:
+                        fb = (255, 210, 0)    # clear — yellow
+                    elif 1100 <= wc <= 1102:
+                        fb = (200, 200, 80)   # partly cloudy — yellow-grey
+                    elif wc == 1001:
+                        fb = (140, 140, 140)  # cloudy — grey
+                    elif 2000 <= wc <= 2100:
+                        fb = (180, 180, 180)  # fog — light grey
+                    elif 4000 <= wc <= 4201:
+                        fb = (60, 120, 255)   # rain — blue
+                    elif 5000 <= wc <= 5101:
+                        fb = (180, 220, 255)  # snow — light blue
+                    elif 6000 <= wc <= 6201:
+                        fb = (100, 150, 255)  # freezing rain — blue-white
+                    elif 7000 <= wc <= 7102:
+                        fb = (160, 100, 220)  # ice pellets — purple
+                    elif wc == 8000:
+                        fb = (220, 140, 0)    # thunderstorm — amber
+                    else:
+                        fb = (100, 100, 100)  # unknown — grey
+                    sq = 6
+                    sx = icon_x + (ICON_SIZE - sq) // 2
+                    sy = ICON_POSITION + (ICON_SIZE - sq) // 2
+                    for py in range(sq):
+                        for px in range(sq):
+                            self.canvas.SetPixel(px + sx, py + sy, *fb)
 
                 # Draw temperatures
                 graphics.DrawText(self.canvas, TEXT_FONT, max_temp_x, TEMP_POSITION, MAX_T_COLOUR, max_temp)
