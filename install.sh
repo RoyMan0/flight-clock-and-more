@@ -225,8 +225,8 @@ SEC_JSON="${CFG_DIR}/secrets.json"
 
 if [[ -n "$INPUT_LAT" && -n "$INPUT_LON" ]]; then
     info "  Writing location…"
-    LAT="$INPUT_LAT" LON="$INPUT_LON" \
-    sudo -u "$INSTALL_USER" "${VENV}/bin/python3" - "$CFG_JSON" <<'PYEOF'
+    sudo -u "$INSTALL_USER" env LAT="$INPUT_LAT" LON="$INPUT_LON" \
+    "${VENV}/bin/python3" - "$CFG_JSON" <<'PYEOF'
 import json, os, sys
 path = sys.argv[1]
 lat = float(os.environ['LAT'])
@@ -242,8 +242,8 @@ fi
 
 if [[ -n "$INPUT_TM" || -n "$INPUT_AL" || -n "$INPUT_FA" ]]; then
     info "  Writing API keys…"
-    TM="$INPUT_TM" AL="$INPUT_AL" FA="$INPUT_FA" \
-    sudo -u "$INSTALL_USER" "${VENV}/bin/python3" - "$SEC_JSON" <<'PYEOF'
+    sudo -u "$INSTALL_USER" env TM="$INPUT_TM" AL="$INPUT_AL" FA="$INPUT_FA" \
+    "${VENV}/bin/python3" - "$SEC_JSON" <<'PYEOF'
 import json, os, sys
 path = sys.argv[1]
 with open(path) as f:
