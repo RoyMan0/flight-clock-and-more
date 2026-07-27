@@ -118,16 +118,16 @@ success "Python environment ready"
 
 # ── Phase 4: rgbmatrix C extension ───────────────────────────────
 info "Phase 4: Building rgbmatrix LED library…"
-MATRIX_SRC="/tmp/rpi-rgb-led-matrix"
+MATRIX_SRC="${INSTALL_HOME}/rpi-rgb-led-matrix"
 if [[ ! -d "$MATRIX_SRC" ]]; then
     info "  Cloning rpi-rgb-led-matrix…"
-    git clone --quiet https://github.com/hzeller/rpi-rgb-led-matrix.git "$MATRIX_SRC"
+    sudo -u "$INSTALL_USER" git clone --quiet https://github.com/hzeller/rpi-rgb-led-matrix.git "$MATRIX_SRC"
 else
     info "  rpi-rgb-led-matrix already cloned — pulling…"
-    git -C "$MATRIX_SRC" pull --ff-only --quiet || true
+    sudo -u "$INSTALL_USER" git -C "$MATRIX_SRC" pull --ff-only --quiet || true
 fi
 info "  Building Python binding (this takes ~1–2 minutes on a Pi)…"
-if sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet -e "${MATRIX_SRC}/bindings/python"; then
+if sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install "${MATRIX_SRC}/bindings/python"; then
     success "rgbmatrix installed"
 else
     warn "rgbmatrix build failed — you can still run with --no-hardware, or retry later"
