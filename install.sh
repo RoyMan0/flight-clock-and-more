@@ -151,6 +151,183 @@ fi
 chown -R "${INSTALL_USER}:${INSTALL_USER}" "${CFG_DIR}"
 success "Config files ready"
 
+# ── Phase 5b: Migrate settings from old installation ─────────────
+MIGRATED_JSON="/tmp/flightclock_migrated.json"
+rm -f "$MIGRATED_JSON"
+
+# Find the most recent backup of the old (non-git) installation
+BACKUP_DIR=""
+if compgen -G "${REPO_DIR}.bak."* > /dev/null 2>&1; then
+    BACKUP_DIR=$(ls -dt "${REPO_DIR}.bak."* 2>/dev/null | head -1)
+fi
+
+if [[ -n "$BACKUP_DIR" ]]; then
+    info "Phase 5b: Old installation found at $BACKUP_DIR — migrating settings…"
+    "${VENV}/bin/python3" - "$BACKUP_DIR" "${CFG_DIR}/config.json" "${CFG_DIR}/secrets.json" "$MIGRATED_JSON" <<'PYEOF'
+import json, os, sys
+
+backup_dir = sys.argv[1]
+cfg_path   = sys.argv[2]
+sec_path   = sys.argv[3]
+out_path   = sys.argv[4]
+
+def load_json(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_json(path, data):
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+cfg     = load_json(cfg_path)
+sec     = load_json(sec_path)
+summary = {}
+
+# ── Old format: config.py with bare Python variable assignments ───
+old_config_py = os.path.join(backup_dir, 'config.py')
+if os.path.exists(old_config_py):
+    print(f"  Detected old-format config.py")
+    try:
+        ns = {}
+        with open(old_config_py, encoding='utf-8') as f:
+            exec(f.read(), {"__builtins__": {}}, ns)
+
+        loc  = cfg.setdefault('location', {})
+        disp = cfg.setdefault('display', {})
+        flt  = cfg.setdefault('flights', {})
+        ft   = cfg.setdefault('plugins', {}).setdefault('flight_tracker', {})
+        cw   = cfg['plugins'].setdefault('clock_weather', {})
+
+        if 'LOCATION_HOME' in ns:
+            loc['location_home'] = list(ns['LOCATION_HOME'])
+            summary['location'] = True
+            print(f"    Location: {list(ns['LOCATION_HOME'])}")
+        if 'TEMPERATURE_LOCATION' in ns:
+            loc['temperature_location'] = str(ns['TEMPERATURE_LOCATION'])
+        if 'ZONE_HOME' in ns:
+            loc['zone_home'] = dict(ns['ZONE_HOME'])
+        if 'TEMPERATURE_UNITS' in ns:
+            loc['units'] = 'imperial' if ns['TEMPERATURE_UNITS'] == 'imperial' else 'metric'
+        if 'CLOCK_FORMAT' in ns:
+            loc['clock_format'] = str(ns['CLOCK_FORMAT'])
+            summary['clock_format'] = str(ns['CLOCK_FORMAT'])
+            print(f"    Clock: {ns['CLOCK_FORMAT']}")
+        if 'JOURNEY_CODE_SELECTED' in ns:
+            loc['journey_code'] = str(ns['JOURNEY_CODE_SELECTED'])
+        if 'JOURNEY_BLANK_FILLER' in ns:
+            loc['journey_blank_filler'] = str(ns['JOURNEY_BLANK_FILLER'])
+
+        if 'BRIGHTNESS' in ns:
+            disp['brightness'] = int(ns['BRIGHTNESS'])
+            summary['brightness'] = int(ns['BRIGHTNESS'])
+            print(f"    Brightness: {ns['BRIGHTNESS']}")
+        if 'BRIGHTNESS_NIGHT' in ns:
+            disp['brightness_night'] = int(ns['BRIGHTNESS_NIGHT'])
+        if 'NIGHT_BRIGHTNESS' in ns:
+            disp['night_brightness'] = bool(ns['NIGHT_BRIGHTNESS'])
+        if 'NIGHT_START' in ns:
+            disp['night_start'] = str(ns['NIGHT_START'])
+        if 'NIGHT_END' in ns:
+            disp['night_end'] = str(ns['NIGHT_END'])
+        if 'GPIO_SLOWDOWN' in ns:
+            disp['gpio_slowdown'] = int(ns['GPIO_SLOWDOWN'])
+        if 'HAT_PWM_ENABLED' in ns:
+            disp['hat_pwm_enabled'] = bool(ns['HAT_PWM_ENABLED'])
+        if 'FORECAST_DAYS' in ns:
+            cw['forecast_days']   = int(ns['FORECAST_DAYS'])
+
+        if 'MIN_ALTITUDE' in ns:
+            ft['min_altitude'] = int(ns['MIN_ALTITUDE'])
+            summary['min_altitude'] = int(ns['MIN_ALTITUDE'])
+            print(f"    Min altitude: {ns['MIN_ALTITUDE']} ft")
+        if 'MAX_FARTHEST' in ns:
+            flt['max_farthest'] = int(ns['MAX_FARTHEST'])
+        if 'MAX_CLOSEST' in ns:
+            flt['max_closest'] = int(ns['MAX_CLOSEST'])
+        if 'EMAIL' in ns and ns['EMAIL']:
+            flt['email'] = str(ns['EMAIL'])
+            summary['email'] = str(ns['EMAIL'])
+            print(f"    Email: {ns['EMAIL']}")
+
+        for key, dest in [('TOMORROW_API_KEY', 'tomorrow_api_key'),
+                          ('AIRLABS_API_KEY',  None),
+                          ('FLIGHTAWARE_API_KEY', None)]:
+            val = ns.get(key, '')
+            if val:
+                if key == 'TOMORROW_API_KEY':
+                    sec['tomorrow_api_key'] = str(val)
+                    summary['tomorrow_api_key'] = True
+                    print(f"    Tomorrow.io API key: found")
+                elif key == 'AIRLABS_API_KEY':
+                    sec.setdefault('airlabs_api_keys', [str(val)])
+                    summary['airlabs_api_key'] = True
+                    print(f"    AirLabs API key: found")
+                elif key == 'FLIGHTAWARE_API_KEY':
+                    sec.setdefault('flightaware_api_keys', [str(val)])
+                    summary['flightaware_api_key'] = True
+                    print(f"    FlightAware API key: found")
+        # list variants
+        if ns.get('AIRLABS_API_KEYS') and not summary.get('airlabs_api_key'):
+            sec['airlabs_api_keys'] = list(ns['AIRLABS_API_KEYS'])
+            summary['airlabs_api_key'] = True
+            print(f"    AirLabs API key: found")
+        if ns.get('FLIGHTAWARE_API_KEYS') and not summary.get('flightaware_api_key'):
+            sec['flightaware_api_keys'] = list(ns['FLIGHTAWARE_API_KEYS'])
+            summary['flightaware_api_key'] = True
+            print(f"    FlightAware API key: found")
+
+    except Exception as e:
+        print(f"  Warning: could not parse config.py: {e}", file=sys.stderr)
+
+# ── New format: config/config.json + config/secrets.json ─────────
+old_cfg_json = os.path.join(backup_dir, 'config', 'config.json')
+old_sec_json = os.path.join(backup_dir, 'config', 'secrets.json')
+
+if os.path.exists(old_cfg_json) and not os.path.exists(old_config_py):
+    print(f"  Detected new-format config/config.json")
+    old_cfg = load_json(old_cfg_json)
+    for section in ('location', 'display', 'flights'):
+        if old_cfg.get(section):
+            cfg.setdefault(section, {}).update(old_cfg[section])
+            summary[section] = True
+            print(f"    Copied [{section}] settings")
+
+if os.path.exists(old_sec_json):
+    print(f"  Detected config/secrets.json")
+    old_sec = load_json(old_sec_json)
+    if old_sec.get('tomorrow_api_key'):
+        sec['tomorrow_api_key'] = old_sec['tomorrow_api_key']
+        summary['tomorrow_api_key'] = True
+        print(f"    Tomorrow.io API key: found")
+    if old_sec.get('airlabs_api_keys'):
+        sec['airlabs_api_keys'] = old_sec['airlabs_api_keys']
+        summary['airlabs_api_key'] = True
+        print(f"    AirLabs API key: found")
+    if old_sec.get('flightaware_api_keys'):
+        sec['flightaware_api_keys'] = old_sec['flightaware_api_keys']
+        summary['flightaware_api_key'] = True
+        print(f"    FlightAware API key: found")
+
+save_json(cfg_path, cfg)
+save_json(sec_path, sec)
+save_json(out_path, summary)
+
+count = len(summary)
+print(f"  Migration: {count} setting group(s) carried over")
+PYEOF
+    if [[ -f "$MIGRATED_JSON" ]]; then
+        success "Phase 5b: Settings migration complete"
+    else
+        warn "Phase 5b: Migration script did not produce output — configs unchanged"
+    fi
+else
+    info "Phase 5b: No old installation backup found — skipping migration"
+    echo '{}' > "$MIGRATED_JSON"
+fi
+
 # ── Phase 6: Sudoers ──────────────────────────────────────────────
 info "Phase 6: Installing sudoers rules…"
 SUDOERS_TMP=$(mktemp)
@@ -218,16 +395,44 @@ echo
 echo -e "${BOLD}Phase 10: Initial configuration (Enter to skip — configure via web UI later)${RESET}"
 echo
 
-read -rp "  Home latitude  (e.g. 40.7128, blank to skip): " INPUT_LAT
-read -rp "  Home longitude (e.g. -74.006, blank to skip): " INPUT_LON
-
-INPUT_TM=""; INPUT_AL=""; INPUT_FA=""
-read -rsp "  Tomorrow.io API key    (blank to skip): " INPUT_TM; echo
-read -rsp "  AirLabs API key        (blank to skip): " INPUT_AL; echo
-read -rsp "  FlightAware API key    (blank to skip): " INPUT_FA; echo
-
 CFG_JSON="${CFG_DIR}/config.json"
 SEC_JSON="${CFG_DIR}/secrets.json"
+
+# Check what the migration phase already handled
+_migrated() { python3 -c "import json; d=json.load(open('$MIGRATED_JSON')); print('yes' if d.get('$1') else '')" 2>/dev/null; }
+M_LOC=$(_migrated location)
+M_TM=$(_migrated tomorrow_api_key)
+M_AL=$(_migrated airlabs_api_key)
+M_FA=$(_migrated flightaware_api_key)
+
+INPUT_LAT=""; INPUT_LON=""
+if [[ -n "$M_LOC" ]]; then
+    success "  Location migrated from old installation — skipping prompt"
+else
+    read -rp "  Home latitude  (e.g. 40.7128, blank to skip): " INPUT_LAT
+    read -rp "  Home longitude (e.g. -74.006, blank to skip): " INPUT_LON
+fi
+
+INPUT_TM=""
+if [[ -n "$M_TM" ]]; then
+    success "  Tomorrow.io API key migrated — skipping prompt"
+else
+    read -rsp "  Tomorrow.io API key    (blank to skip): " INPUT_TM; echo
+fi
+
+INPUT_AL=""
+if [[ -n "$M_AL" ]]; then
+    success "  AirLabs API key migrated — skipping prompt"
+else
+    read -rsp "  AirLabs API key        (blank to skip): " INPUT_AL; echo
+fi
+
+INPUT_FA=""
+if [[ -n "$M_FA" ]]; then
+    success "  FlightAware API key migrated — skipping prompt"
+else
+    read -rsp "  FlightAware API key    (blank to skip): " INPUT_FA; echo
+fi
 
 if [[ -n "$INPUT_LAT" && -n "$INPUT_LON" ]]; then
     info "  Writing location…"
