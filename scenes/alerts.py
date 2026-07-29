@@ -1,6 +1,6 @@
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utilities.animator import Animator
 from setup import colours, fonts, frames
@@ -27,13 +27,14 @@ def _get_sun_alerts(sunrise, sunset):
     """Return countdown alert for upcoming sunrise or sunset within 30 minutes."""
     if not sunrise or not sunset:
         return []
-    now = datetime.now()  # local naive — matches how sunrise/sunset are stored
+    now = datetime.now(timezone.utc)  # sunrise/sunset are UTC-aware
     alerts = []
     for dt, label in ((sunrise, "Rise"), (sunset, "Sun")):
         secs = (dt - now).total_seconds()
         if 0 < secs <= _SUN_WINDOW_SECONDS:
             mins = max(1, int(secs / 60))
-            logger.info(f"[Alerts] {label} countdown: {mins}m (local now={now.strftime('%H:%M')} event={dt.strftime('%H:%M')})")
+            local_event = dt.astimezone().strftime('%H:%M')
+            logger.info(f"[Alerts] {label} countdown: {mins}m (local event={local_event})")
             alerts.append((f"{label} {mins}m", colours.LIGHT_ORANGE))
     return alerts
 

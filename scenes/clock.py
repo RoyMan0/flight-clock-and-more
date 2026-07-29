@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from utilities.temperature import grab_forecast
 from utilities.animator import Animator
 from setup import colours, fonts, frames
@@ -57,14 +57,30 @@ class ClockScene(object):
                 for day in forecast:
                     forecast_date = day['startTime'][:10]
                     if forecast_date == today_str:
-                        # Tomorrow.io with timezone:auto returns sunriseTime/sunsetTime
-                        # as LOCAL times regardless of the Z suffix — treat as local naive.
-                        local_sunrise = datetime.strptime(day['values']['sunriseTime'], '%Y-%m-%dT%H:%M:%SZ')
-                        local_sunset  = datetime.strptime(day['values']['sunsetTime'],  '%Y-%m-%dT%H:%M:%SZ')
-                        self.today_sunrise = local_sunrise
-                        self.today_sunset  = local_sunset
+                        # Tomorrow.io with timezone:auto is inconsistent — sometimes
+                        # returns local time with a Z suffix, sometimes true UTC.
+                        # Read the UTC offset from startTime and use it to interpret
+                        # the sunrise/sunset values correctly regardless of format.
+                        try:
+                            start_aware = datetime.fromisoformat(
+                                day['startTime'].replace('Z', '+00:00'))
+                            tz = start_aware.tzinfo
+                        except Exception:
+                            tz = timezone.utc
+
+                        def _parse_sun(s):
+                            naive = datetime.strptime(s, '%Y-%m-%dT%H:%M:%SZ')
+                            return naive.replace(tzinfo=tz).astimezone(timezone.utc)
+
+                        utc_sunrise = _parse_sun(day['values']['sunriseTime'])
+                        utc_sunset  = _parse_sun(day['values']['sunsetTime'])
+                        self.today_sunrise = utc_sunrise
+                        self.today_sunset  = utc_sunset
                         self.last_fetch_date = now.date()
-                        logging.info(f"[ClockScene] sunrise={local_sunrise.strftime('%H:%M')} sunset={local_sunset.strftime('%H:%M')} (local) for {today_str}")
+                        local_rise = utc_sunrise.astimezone().strftime('%H:%M')
+                        local_set  = utc_sunset.astimezone().strftime('%H:%M')
+                        tz_name    = str(tz)
+                        logging.info(f"[ClockScene] sunrise={local_rise} sunset={local_set} local (startTime tz={tz_name}) for {today_str}")
                         break
 
                 if self.today_sunrise is None:
@@ -88,11 +104,12 @@ class ClockScene(object):
         clock_format = "%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M"
         current_time = now.strftime(clock_format)
 
-        local_sunrise, local_sunset = self.calculate_sunrise_sunset()
+        utc_sunrise, utc_sunset = self.calculate_sunrise_sunset()
+        now_utc = datetime.now(timezone.utc)
 
-        if local_sunrise is None or local_sunset is None:
+        if utc_sunrise is None or utc_sunset is None:
             clock_color = colours.RED
-        elif local_sunrise <= now < local_sunset:
+        elif utc_sunrise <= now_utc < utc_sunset:
             clock_color = DAY_COLOUR
         else:
             clock_color = NIGHT_COLOUR
