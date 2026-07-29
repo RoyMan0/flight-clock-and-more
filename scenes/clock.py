@@ -57,30 +57,26 @@ class ClockScene(object):
                 for day in forecast:
                     forecast_date = day['startTime'][:10]
                     if forecast_date == today_str:
-                        # Tomorrow.io with timezone:auto is inconsistent — sometimes
-                        # returns local time with a Z suffix, sometimes true UTC.
-                        # Read the UTC offset from startTime and use it to interpret
-                        # the sunrise/sunset values correctly regardless of format.
-                        try:
-                            start_aware = datetime.fromisoformat(
-                                day['startTime'].replace('Z', '+00:00'))
-                            tz = start_aware.tzinfo
-                        except Exception:
-                            tz = timezone.utc
+                        # Parse as UTC (Z = UTC per spec)
+                        utc_sunrise = datetime.strptime(day['values']['sunriseTime'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                        utc_sunset  = datetime.strptime(day['values']['sunsetTime'],  '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
 
-                        def _parse_sun(s):
-                            naive = datetime.strptime(s, '%Y-%m-%dT%H:%M:%SZ')
-                            return naive.replace(tzinfo=tz).astimezone(timezone.utc)
+                        # Sanity check: Tomorrow.io sometimes returns local time with
+                        # a Z suffix instead of true UTC. If the local sunrise hour is
+                        # outside 4am–10am, the value is local-as-UTC and needs fixing.
+                        local_tz = datetime.now().astimezone().tzinfo
+                        local_rise_h = utc_sunrise.astimezone(local_tz).hour
+                        if not (4 <= local_rise_h <= 10):
+                            logging.info(f"[ClockScene] sunriseTime looks like local time (local hour={local_rise_h}) — reinterpreting")
+                            utc_sunrise = utc_sunrise.replace(tzinfo=None).replace(tzinfo=local_tz).astimezone(timezone.utc)
+                            utc_sunset  = utc_sunset.replace(tzinfo=None).replace(tzinfo=local_tz).astimezone(timezone.utc)
 
-                        utc_sunrise = _parse_sun(day['values']['sunriseTime'])
-                        utc_sunset  = _parse_sun(day['values']['sunsetTime'])
                         self.today_sunrise = utc_sunrise
                         self.today_sunset  = utc_sunset
                         self.last_fetch_date = now.date()
-                        local_rise = utc_sunrise.astimezone().strftime('%H:%M')
-                        local_set  = utc_sunset.astimezone().strftime('%H:%M')
-                        tz_name    = str(tz)
-                        logging.info(f"[ClockScene] sunrise={local_rise} sunset={local_set} local (startTime tz={tz_name}) for {today_str}")
+                        local_rise = utc_sunrise.astimezone(local_tz).strftime('%H:%M')
+                        local_set  = utc_sunset.astimezone(local_tz).strftime('%H:%M')
+                        logging.info(f"[ClockScene] sunrise={local_rise} sunset={local_set} local for {today_str}")
                         break
 
                 if self.today_sunrise is None:
