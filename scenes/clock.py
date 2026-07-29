@@ -57,12 +57,14 @@ class ClockScene(object):
                 for day in forecast:
                     forecast_date = day['startTime'][:10]
                     if forecast_date == today_str:
-                        utc_sunrise = datetime.strptime(day['values']['sunriseTime'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-                        utc_sunset  = datetime.strptime(day['values']['sunsetTime'],  '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-                        self.today_sunrise = utc_sunrise
-                        self.today_sunset  = utc_sunset
+                        # Tomorrow.io with timezone:auto returns sunriseTime/sunsetTime
+                        # as LOCAL times regardless of the Z suffix — treat as local naive.
+                        local_sunrise = datetime.strptime(day['values']['sunriseTime'], '%Y-%m-%dT%H:%M:%SZ')
+                        local_sunset  = datetime.strptime(day['values']['sunsetTime'],  '%Y-%m-%dT%H:%M:%SZ')
+                        self.today_sunrise = local_sunrise
+                        self.today_sunset  = local_sunset
                         self.last_fetch_date = now.date()
-                        logging.info(f"[ClockScene] sunrise={utc_sunrise.isoformat()} sunset={utc_sunset.isoformat()} (UTC) for {today_str}")
+                        logging.info(f"[ClockScene] sunrise={local_sunrise.strftime('%H:%M')} sunset={local_sunset.strftime('%H:%M')} (local) for {today_str}")
                         break
 
                 if self.today_sunrise is None:
@@ -86,12 +88,11 @@ class ClockScene(object):
         clock_format = "%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M"
         current_time = now.strftime(clock_format)
 
-        utc_sunrise, utc_sunset = self.calculate_sunrise_sunset()
-        now_utc = datetime.now(timezone.utc)
+        local_sunrise, local_sunset = self.calculate_sunrise_sunset()
 
-        if utc_sunrise is None or utc_sunset is None:
+        if local_sunrise is None or local_sunset is None:
             clock_color = colours.RED
-        elif utc_sunrise <= now_utc < utc_sunset:
+        elif local_sunrise <= now < local_sunset:
             clock_color = DAY_COLOUR
         else:
             clock_color = NIGHT_COLOUR
