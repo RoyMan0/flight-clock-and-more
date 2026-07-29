@@ -26,7 +26,7 @@ _plg = _cfg.get("plugins", {})
 
 # Location / units
 LOCATION_HOME = _loc.get("location_home", [0.0, 0.0])
-TEMPERATURE_LOCATION = _loc.get("temperature_location", "0.0,0.0")
+TEMPERATURE_LOCATION = f"{LOCATION_HOME[0]},{LOCATION_HOME[1]}"
 # Unified units setting — drives temperature, distance, speed, and snow depth.
 # Falls back to legacy distance_units for backward compatibility.
 UNITS = _loc.get("units", _loc.get("distance_units", "imperial"))
