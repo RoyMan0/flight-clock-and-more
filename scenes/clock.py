@@ -39,9 +39,13 @@ class ClockScene(object):
         try:
             # Only fetch forecast if it's a new day or if no cached data
             if self.last_fetch_date != now.date():
+                # Clear stale values immediately — yesterday's times must not linger
+                self.today_sunrise = None
+                self.today_sunset = None
+
                 # Cooldown: don't hammer the API on repeated failures
                 if datetime.now(timezone.utc).timestamp() < self._forecast_retry_after:
-                    return self.today_sunrise, self.today_sunset
+                    return None, None
 
                 forecast = grab_forecast(tag="ClockScene")
                 if not forecast:  # None or empty list
@@ -49,17 +53,20 @@ class ClockScene(object):
                     self._forecast_retry_after = datetime.now(timezone.utc).timestamp() + 300  # 5 min
                     return None, None
 
+                today_str = now.strftime('%Y-%m-%d')
                 for day in forecast:
                     forecast_date = day['startTime'][:10]
-                    if forecast_date == now.strftime('%Y-%m-%d'):
-                        # Parse UTC sunrise and sunset times
+                    if forecast_date == today_str:
                         utc_sunrise = datetime.strptime(day['values']['sunriseTime'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-                        utc_sunset = datetime.strptime(day['values']['sunsetTime'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-
-                        # Cache values
+                        utc_sunset  = datetime.strptime(day['values']['sunsetTime'],  '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
                         self.today_sunrise = utc_sunrise
-                        self.today_sunset = utc_sunset
+                        self.today_sunset  = utc_sunset
                         self.last_fetch_date = now.date()
+                        logging.info(f"[ClockScene] sunrise={utc_sunrise.isoformat()} sunset={utc_sunset.isoformat()} (UTC) for {today_str}")
+                        break
+
+                if self.today_sunrise is None:
+                    logging.warning(f"[ClockScene] No matching day found in forecast for {today_str} (got {[d['startTime'][:10] for d in forecast]})")
 
         except Exception as e:
             logging.error(f"Error fetching forecast: {e}")

@@ -33,6 +33,7 @@ def _get_sun_alerts(sunrise, sunset):
         secs = (dt - now).total_seconds()
         if 0 < secs <= _SUN_WINDOW_SECONDS:
             mins = max(1, int(secs / 60))
+            logger.info(f"[Alerts] {label} countdown: {mins}m (now={now.isoformat()} event={dt.isoformat()})")
             alerts.append((f"{label} {mins}m", colours.LIGHT_ORANGE))
     return alerts
 
