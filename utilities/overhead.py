@@ -328,42 +328,38 @@ def _fa_record_call(key: str, reset_day: int = 1, cost_per_call: float = FA_COST
         json.dump(usage, f)
 
 
-def _fa_get_active_key(keys: list[str], budget: float, reset_days: list[int] = None) -> Optional[str]:
+def _fa_get_active_key(keys: list[str], budget: float) -> Optional[str]:
     """Return the FlightAware key under budget whose reset date is soonest.
-    Using the key closest to its reset first preserves freshly-reset keys."""
+    FlightAware always resets on the 1st of the month."""
     if not keys:
         return None
-    if reset_days is None:
-        reset_days = []
     usage = _fa_load_usage()
     key_data = usage["keys"]
     legacy = key_data.get("legacy", {})
+    period = _billing_period(1)
     candidates = []
     for i, key in enumerate(keys):
-        reset_day = reset_days[i] if i < len(reset_days) else 1
-        period = _billing_period(reset_day)
         _, cost = _fa_key_calls(key_data.get(_key_hash(key), {}), period)
         if i == 0:
             _, leg_cost = _fa_key_calls(legacy, period)
             cost += leg_cost
         if cost < budget:
-            candidates.append((_days_until_reset(reset_day), key))
+            candidates.append((_days_until_reset(1), key))
     if not candidates:
         return None
     candidates.sort(key=lambda x: x[0])
     return candidates[0][1]
 
 
-def get_fa_metrics(keys: list[str], budget: float, reset_days: list[int] = None) -> dict:
-    """Return FlightAware usage metrics for the metrics endpoint."""
-    if reset_days is None:
-        reset_days = []
+def get_fa_metrics(keys: list[str], budget: float) -> dict:
+    """Return FlightAware usage metrics for the metrics endpoint.
+    FlightAware always resets on the 1st of the month."""
     usage = _fa_load_usage()
     key_data = usage["keys"]
     legacy = key_data.get("legacy", {})
     key_metrics = []
     for i, key in enumerate(keys):
-        reset_day = reset_days[i] if i < len(reset_days) else 1
+        reset_day = 1
         period = _billing_period(reset_day)
         calls, cost = _fa_key_calls(key_data.get(_key_hash(key), {}), period)
         if i == 0:
@@ -1227,7 +1223,6 @@ class Overhead:
         al_keys      = _get_keys(self._secrets, "airlabs_api_keys", "airlabs_api_key")
         fa_keys      = _get_keys(self._secrets, "flightaware_api_keys", "flightaware_api_key")
         al_reset_days = _get_reset_days(self._secrets, "airlabs_reset_days", len(al_keys))
-        fa_reset_days = _get_reset_days(self._secrets, "flightaware_reset_days", len(fa_keys))
         fa_budget    = float(self._secrets.get("flightaware_monthly_budget", 4.50))
 
         # ── FlightStats (free, no quota) ──────────────────────────────
@@ -1335,7 +1330,7 @@ class Overhead:
         # ── FlightAware (fallback) ────────────────────────────────────
         # Also try FA when AirLabs returned partial data (origin but no destination)
         airlabs_incomplete = result and not result.get("al_destination")
-        fa_key = _fa_get_active_key(fa_keys, fa_budget, fa_reset_days)
+        fa_key = _fa_get_active_key(fa_keys, fa_budget)
         if (not result or airlabs_incomplete) and not fr24_has_route:
             if not fa_key:
                 log.warning(
@@ -1422,7 +1417,7 @@ class Overhead:
                             "al_owner_icao":  "",
                         }
                         fa_idx = fa_keys.index(fa_key)
-                        _fa_record_call(fa_key, fa_reset_days[fa_idx])
+                        _fa_record_call(fa_key)
                         log.info(f"[overhead] FlightAware schedule for {callsign} (ident={_fa_ident}): "
                                  f"{result['al_origin']}→{result['al_destination']}")
                         break

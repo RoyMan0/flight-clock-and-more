@@ -879,20 +879,13 @@
                        :value="k"
                        @change="secrets.flightaware_api_keys[i] = $event.target.value"
                        autocomplete="off" :placeholder="'Key ' + (i+1)">
-                <select class="form-select bg-dark text-light border-secondary form-select-sm" style="max-width:130px"
-                        :value="(secrets.flightaware_reset_days || [])[i] || 1"
-                        @change="if(!secrets.flightaware_reset_days) secrets.flightaware_reset_days=[]; secrets.flightaware_reset_days[i] = parseInt($event.target.value)">
-                  <template x-for="d in Array.from({length:28}, (_,n)=>n+1)" :key="d">
-                    <option :value="d" :selected="d === ((secrets.flightaware_reset_days || [])[i] || 1)" x-text="'Resets ' + d + (d===1?'st':d===2?'nd':d===3?'rd':'th')"></option>
-                  </template>
-                </select>
-                <button class="btn btn-outline-danger btn-sm" @click="secrets.flightaware_api_keys.splice(i, 1); (secrets.flightaware_reset_days||[]).splice(i,1)">
+                <button class="btn btn-outline-danger btn-sm" @click="secrets.flightaware_api_keys.splice(i, 1)">
                   <i class="bi bi-x"></i>
                 </button>
               </div>
             </template>
             <button class="btn btn-outline-secondary btn-sm mt-1"
-                    @click="secrets.flightaware_api_keys = [...(secrets.flightaware_api_keys || []), '']; secrets.flightaware_reset_days = [...(secrets.flightaware_reset_days || []), 1]">
+                    @click="secrets.flightaware_api_keys = [...(secrets.flightaware_api_keys || []), '']">
               <i class="bi bi-plus me-1"></i>Add Key
             </button>
             <button class="btn btn-success btn-sm mt-1 ms-2" @click="saveSecrets()">
@@ -1079,7 +1072,6 @@ function configPage() {
       if (!Array.isArray(sec.airlabs_api_keys)) sec.airlabs_api_keys = [];
       if (!Array.isArray(sec.flightaware_api_keys)) sec.flightaware_api_keys = [];
       if (!Array.isArray(sec.airlabs_reset_days)) sec.airlabs_reset_days = [];
-      if (!Array.isArray(sec.flightaware_reset_days)) sec.flightaware_reset_days = [];
       this.secrets = sec;
       this.backups = backs;
     },

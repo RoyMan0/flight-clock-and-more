@@ -291,9 +291,8 @@ class SpecificFlightTrackerPlugin(BasePlugin):
     def _fetch_flightaware(self, callsign: str) -> dict | None:
         """Fetch schedule from FlightAware as last-resort fallback. Returns partial route dict or None."""
         fa_keys = _get_keys(self.secrets, "flightaware_api_keys", "flightaware_api_key")
-        fa_reset_days = _get_reset_days(self.secrets, "flightaware_reset_days", len(fa_keys))
         fa_budget = float(self.secrets.get("flightaware_monthly_budget", 4.50))
-        fa_key = _fa_get_active_key(fa_keys, fa_budget, fa_reset_days)
+        fa_key = _fa_get_active_key(fa_keys, fa_budget)
         if not fa_key:
             return None
         try:

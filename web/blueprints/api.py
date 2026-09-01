@@ -393,10 +393,9 @@ def get_metrics():
     al_keys = _get_keys(secrets, "airlabs_api_keys", "airlabs_api_key")
     fa_keys = _get_keys(secrets, "flightaware_api_keys", "flightaware_api_key")
     al_reset_days = _get_reset_days(secrets, "airlabs_reset_days", len(al_keys))
-    fa_reset_days = _get_reset_days(secrets, "flightaware_reset_days", len(fa_keys))
     return jsonify({
         "airlabs":     get_al_metrics(al_keys, al_reset_days),
-        "flightaware": get_fa_metrics(fa_keys, budget, fa_reset_days),
+        "flightaware": get_fa_metrics(fa_keys, budget),
         "owm":         get_owm_metrics(),
     })
 
