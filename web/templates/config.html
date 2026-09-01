@@ -143,6 +143,25 @@
               <input type="time" class="form-control bg-dark text-light border-secondary"
                      x-model="sysCfg.display.night_end">
             </div>
+            <div class="col-md-4">
+              <div class="form-check form-switch mt-4">
+                <input class="form-check-input" type="checkbox" x-model="sysCfg.display.clock_only">
+                <label class="form-check-label">Clock Only Mode</label>
+              </div>
+              <div class="text-muted small mt-1">Disables all plugins &amp; API calls during set hours</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Clock Only Start</label>
+              <input type="time" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.display.clock_only_start"
+                     :disabled="!sysCfg.display.clock_only">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Clock Only End</label>
+              <input type="time" class="form-control bg-dark text-light border-secondary"
+                     x-model="sysCfg.display.clock_only_end"
+                     :disabled="!sysCfg.display.clock_only">
+            </div>
             <div class="col-md-3">
               <label class="form-label">Forecast Days</label>
               <input type="number" class="form-control bg-dark text-light border-secondary"

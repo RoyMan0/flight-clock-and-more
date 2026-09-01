@@ -103,7 +103,33 @@ class PluginManager:
     # Frame dispatch
     # ------------------------------------------------------------------
 
+    def _is_clock_only(self) -> bool:
+        """Return True if clock-only mode is active right now."""
+        disp = self.cfg.get("display") or {}
+        if not disp.get("clock_only", False):
+            return False
+        start = disp.get("clock_only_start", "22:00")
+        end   = disp.get("clock_only_end",   "06:00")
+        now   = datetime.now().strftime("%H:%M")
+        if start <= end:
+            return start <= now < end
+        return now >= start or now < end
+
     def _dispatch(self):
+        # --- Clock-only mode: show clock_weather only, no API calls ---
+        if self._is_clock_only():
+            if self._active_id != "clock_weather":
+                log.info("[plugins] Clock-only mode active — switching to clock_weather")
+                self._switch_to("clock_weather")
+            cw = self._plugins.get("clock_weather")
+            if cw:
+                try:
+                    if cw.draw():
+                        self.display.swap()
+                except Exception as e:
+                    log.error(f"[plugins] Draw error (clock_weather): {e}")
+            return
+
         # --- Priority interrupt: flight tracker ---
         if (
             self._flight_plugin is not None
@@ -227,9 +253,12 @@ class PluginManager:
     def _update_loop(self):
         while not self._stop_event.is_set():
             now = time.monotonic()
+            clock_only = self._is_clock_only()
             for pid, plugin in list(self._plugins.items()):
                 if not plugin.enabled:
                     continue
+                if clock_only and pid != "clock_weather":
+                    continue  # suppress all API calls during clock-only period
                 last = self._update_last.get(pid, 0)
                 if now - last >= plugin.update_interval:
                     try:
