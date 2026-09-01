@@ -65,6 +65,8 @@ apt-get install -y -q \
     git \
     python3-venv \
     python3-dev \
+    python3-setuptools \
+    python3-pil \
     build-essential \
     libglib2.0-dev \
     cmake \
@@ -73,6 +75,7 @@ apt-get install -y -q \
     dnsmasq \
     iptables \
     fonts-liberation \
+    dphys-swapfile \
     curl
 
 # NetworkManager must be running; dnsmasq should NOT run at system level
@@ -81,6 +84,41 @@ systemctl enable --now NetworkManager 2>/dev/null || true
 systemctl disable --now dnsmasq 2>/dev/null || true
 
 success "System packages installed"
+
+# ── Phase 1b: Swap — ensure enough memory for C++ compile ────────
+info "Phase 1b: Checking swap…"
+_total_mb=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+if [[ $_total_mb -lt 900 ]]; then
+    info "  Low RAM detected (${_total_mb}MB) — ensuring 512MB swap for rgbmatrix build…"
+    dphys-swapfile swapoff 2>/dev/null || true
+    sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=512/' /etc/dphys-swapfile
+    grep -q "^CONF_SWAPSIZE=" /etc/dphys-swapfile || echo "CONF_SWAPSIZE=512" >> /etc/dphys-swapfile
+    dphys-swapfile setup
+    dphys-swapfile swapon
+    success "Swap set to 512MB"
+else
+    success "Sufficient RAM (${_total_mb}MB) — swap unchanged"
+fi
+
+# ── Phase 1c: Boot config for Adafruit RGB Matrix Bonnet ─────────
+BOOT_CFG=""
+for _f in /boot/firmware/config.txt /boot/config.txt; do
+    [[ -f "$_f" ]] && BOOT_CFG="$_f" && break
+done
+
+if [[ -n "$BOOT_CFG" ]]; then
+    info "Phase 1c: Configuring boot settings for RGB Matrix Bonnet ($BOOT_CFG)…"
+    # Disable Bluetooth (frees GPIO 18 for PWM) and onboard audio (frees GPIO pins)
+    for _line in "dtoverlay=disable-bt" "dtparam=audio=off"; do
+        if ! grep -qF "$_line" "$BOOT_CFG"; then
+            echo "$_line" >> "$BOOT_CFG"
+            info "  Added: $_line"
+        fi
+    done
+    success "Boot config updated (reboot required for GPIO changes to take effect)"
+else
+    warn "Phase 1c: Could not find /boot/firmware/config.txt or /boot/config.txt — skipping boot config"
+fi
 
 # Allow the app user to write captive-portal config into NM's dnsmasq dir
 # NM reads /etc/NetworkManager/dnsmasq-shared.d/ when starting a hotspot.
@@ -173,9 +211,28 @@ if [[ ! -f "$MATRIX_SRC/pyproject.toml" && ! -f "$MATRIX_SRC/setup.py" ]]; then
 fi
 
 info "  Installing build dependencies for rgbmatrix…"
-# Pillow<10 required: the rgbmatrix Pillow shim needs Imaging.h, which was
-# removed from the public API in Pillow 10. Must be installed before the build.
-sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython "Pillow<10"
+sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython
+
+# The rgbmatrix Pillow shim (shims/pillow.c) needs Imaging.h. Pillow>=10
+# removed this header from the public API, and Pillow<10 doesn't support
+# Python 3.13+. Solution: use the system python3-pil package (already
+# installed in Phase 1) which ships the header, then symlink it into the
+# Python include dir if the compiler can't find it there already.
+_py_ver=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+_imaging_h=$(find /usr -name "Imaging.h" 2>/dev/null | head -1)
+if [[ -n "$_imaging_h" ]]; then
+    _py_inc="/usr/include/python${_py_ver}"
+    if [[ ! -f "${_py_inc}/Imaging.h" ]]; then
+        info "  Symlinking Imaging.h into ${_py_inc}/…"
+        ln -sf "$_imaging_h" "${_py_inc}/Imaging.h"
+    fi
+    info "  Imaging.h found at $_imaging_h"
+else
+    warn "  Imaging.h not found — rgbmatrix Pillow shim may fail to compile"
+fi
+
+# Install current Pillow in the venv for runtime use
+sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet Pillow
 info "  Building Python binding (this takes ~3–10 minutes on a Pi)…"
 if MAX_JOBS=1 "${VENV}/bin/pip" install --no-build-isolation "${MATRIX_SRC}"; then
     success "rgbmatrix installed"
