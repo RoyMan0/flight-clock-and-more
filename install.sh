@@ -173,7 +173,9 @@ if [[ ! -f "$MATRIX_SRC/pyproject.toml" && ! -f "$MATRIX_SRC/setup.py" ]]; then
 fi
 
 info "  Installing build dependencies for rgbmatrix…"
-sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython
+# Pillow<10 required: the rgbmatrix Pillow shim needs Imaging.h, which was
+# removed from the public API in Pillow 10. Must be installed before the build.
+sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython "Pillow<10"
 info "  Building Python binding (this takes ~3–10 minutes on a Pi)…"
 if MAX_JOBS=1 "${VENV}/bin/pip" install --no-build-isolation "${MATRIX_SRC}"; then
     success "rgbmatrix installed"
