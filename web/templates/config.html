@@ -1050,8 +1050,8 @@ function configPage() {
         fetch('/api/config/backups').then(r=>r.json()),
       ]);
 
-      // flight_tracker is a priority interrupt, not a rotation plugin
-      this.pluginOrder = plugins.filter(p => p.id !== 'flight_tracker').map(p => p.id);
+      // flight_tracker is a priority interrupt; snow_report is hidden until fixed
+      this.pluginOrder = plugins.filter(p => p.id !== 'flight_tracker' && p.id !== 'snow_report').map(p => p.id);
       const cfgs = {};
       for (const p of plugins) cfgs[p.id] = { enabled: p.enabled, ...(p.config || {}) };
       if (!cfgs.clock_weather) cfgs.clock_weather = {};
