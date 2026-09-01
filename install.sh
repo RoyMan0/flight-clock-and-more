@@ -120,6 +120,27 @@ success "Python environment ready"
 
 # ── Phase 4: rgbmatrix C extension ───────────────────────────────
 info "Phase 4: Building rgbmatrix LED library…"
+
+# The C++ compile takes 3–10 minutes depending on Pi model. If this installer
+# is running over SSH without screen/tmux, a dropped connection will kill the
+# build mid-way and can corrupt the filesystem on a hard power cycle.
+if [[ -z "${STY:-}" && -z "${TMUX:-}" && -t 0 ]]; then
+    echo
+    warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    warn "  You are running over SSH without screen or tmux."
+    warn "  If the connection drops during the rgbmatrix build, the"
+    warn "  installer will be killed and may leave the Pi in a bad state."
+    warn ""
+    warn "  Recommended: Ctrl+C now, then re-run inside screen:"
+    warn "    screen -S install"
+    warn "    sudo bash install.sh"
+    warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -n "  Continue anyway? [y/N] "
+    read -r _ssh_ans
+    [[ "${_ssh_ans:-n}" =~ ^[Yy] ]] || die "Aborted. Re-run inside screen: screen -S install && sudo bash install.sh"
+    echo
+fi
+
 MATRIX_SRC="${INSTALL_HOME}/rpi-rgb-led-matrix"
 
 # If the directory exists, verify it is a valid rpi-rgb-led-matrix git repo.
@@ -153,8 +174,8 @@ fi
 
 info "  Installing build dependencies for rgbmatrix…"
 sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython
-info "  Building Python binding (this takes ~2–3 minutes on a Pi)…"
-if "${VENV}/bin/pip" install --no-build-isolation "${MATRIX_SRC}"; then
+info "  Building Python binding (this takes ~3–10 minutes on a Pi)…"
+if MAX_JOBS=1 "${VENV}/bin/pip" install --no-build-isolation "${MATRIX_SRC}"; then
     success "rgbmatrix installed"
 else
     warn "rgbmatrix build failed — you can still run with --no-hardware, or retry later"
