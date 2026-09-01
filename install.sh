@@ -108,16 +108,37 @@ done
 
 if [[ -n "$BOOT_CFG" ]]; then
     info "Phase 1c: Configuring boot settings for RGB Matrix Bonnet ($BOOT_CFG)…"
-    # Disable Bluetooth (frees GPIO 18 for PWM) and onboard audio (frees GPIO pins)
-    for _line in "dtoverlay=disable-bt" "dtparam=audio=off"; do
-        if ! grep -qF "$_line" "$BOOT_CFG"; then
-            echo "$_line" >> "$BOOT_CFG"
-            info "  Added: $_line"
+    echo
+    echo -e "  ${BOLD}Did you solder the PWM jumper bridge on the bonnet?${RESET}"
+    echo    "  Quality    (Y) — jumper soldered: less flicker, but disables onboard audio"
+    echo    "  Convenience(N) — no jumper:       audio works, slightly more flicker  [default]"
+    echo -n "  Soldered jumper? [y/N] "
+    read -r _pwm_ans
+    _pwm_mode=false
+    [[ "${_pwm_ans:-n}" =~ ^[Yy] ]] && _pwm_mode=true
+    echo
+
+    # Disable Bluetooth on all configurations (frees UART/GPIO for matrix)
+    if ! grep -qF "dtoverlay=disable-bt" "$BOOT_CFG"; then
+        echo "dtoverlay=disable-bt" >> "$BOOT_CFG"
+        info "  Added: dtoverlay=disable-bt"
+    fi
+
+    if $_pwm_mode; then
+        # Quality mode: audio must be off — GPIO 18 is shared with PWM
+        if ! grep -qF "dtparam=audio=off" "$BOOT_CFG"; then
+            echo "dtparam=audio=off" >> "$BOOT_CFG"
+            info "  Added: dtparam=audio=off (PWM/Quality mode)"
         fi
-    done
-    success "Boot config updated (reboot required for GPIO changes to take effect)"
+        HAT_PWM_ENABLED=true
+        success "Boot config set for Quality mode (PWM enabled)"
+    else
+        HAT_PWM_ENABLED=false
+        success "Boot config set for Convenience mode (audio preserved)"
+    fi
 else
     warn "Phase 1c: Could not find /boot/firmware/config.txt or /boot/config.txt — skipping boot config"
+    HAT_PWM_ENABLED=false
 fi
 
 # Allow the app user to write captive-portal config into NM's dnsmasq dir
@@ -537,18 +558,20 @@ else
     read -rsp "  FlightAware API key    (blank to skip): " INPUT_FA; echo
 fi
 
-if [[ -n "$INPUT_LAT" && -n "$INPUT_LON" ]]; then
-    info "  Writing location…"
-    sudo -u "$INSTALL_USER" env LAT="$INPUT_LAT" LON="$INPUT_LON" \
+if [[ -n "$INPUT_LAT" && -n "$INPUT_LON" ]] || [[ -n "${HAT_PWM_ENABLED:-}" ]]; then
+    info "  Writing config…"
+    sudo -u "$INSTALL_USER" env LAT="$INPUT_LAT" LON="$INPUT_LON" HAT_PWM="${HAT_PWM_ENABLED:-false}" \
     "${VENV}/bin/python3" - "$CFG_JSON" <<'PYEOF'
 import json, os, sys
 path = sys.argv[1]
-lat = float(os.environ['LAT'])
-lon = float(os.environ['LON'])
 with open(path) as f:
     cfg = json.load(f)
-cfg.setdefault('location', {})['location_home'] = [lat, lon]
-cfg['location']['temperature_location'] = f'{lat},{lon}'
+lat = os.environ.get('LAT', '').strip()
+lon = os.environ.get('LON', '').strip()
+if lat and lon:
+    cfg.setdefault('location', {})['location_home'] = [float(lat), float(lon)]
+hat_pwm = os.environ.get('HAT_PWM', 'false').lower() == 'true'
+cfg.setdefault('display', {})['hat_pwm_enabled'] = hat_pwm
 with open(path, 'w') as f:
     json.dump(cfg, f, indent=2)
 PYEOF
