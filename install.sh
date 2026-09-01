@@ -121,13 +121,36 @@ success "Python environment ready"
 # ── Phase 4: rgbmatrix C extension ───────────────────────────────
 info "Phase 4: Building rgbmatrix LED library…"
 MATRIX_SRC="${INSTALL_HOME}/rpi-rgb-led-matrix"
-if [[ ! -d "$MATRIX_SRC" ]]; then
+
+# If the directory exists, verify it is a valid rpi-rgb-led-matrix git repo.
+# A stale or incomplete clone (e.g. from a previous install) will fail the pip
+# build with "Neither setup.py nor pyproject.toml found" — re-clone in that case.
+_matrix_valid=false
+if [[ -d "$MATRIX_SRC" ]]; then
+    _remote=$(sudo -u "$INSTALL_USER" git -C "$MATRIX_SRC" remote get-url origin 2>/dev/null || true)
+    if echo "$_remote" | grep -q "rpi-rgb-led-matrix"; then
+        info "  rpi-rgb-led-matrix already cloned — pulling…"
+        if sudo -u "$INSTALL_USER" git -C "$MATRIX_SRC" pull --ff-only --quiet; then
+            _matrix_valid=true
+        else
+            warn "  git pull failed — re-cloning from scratch…"
+        fi
+    else
+        warn "  Existing directory is not the rpi-rgb-led-matrix repo — re-cloning…"
+    fi
+    $_matrix_valid || rm -rf "$MATRIX_SRC"
+fi
+if ! $_matrix_valid; then
     info "  Cloning rpi-rgb-led-matrix…"
     sudo -u "$INSTALL_USER" git clone --quiet https://github.com/hzeller/rpi-rgb-led-matrix.git "$MATRIX_SRC"
-else
-    info "  rpi-rgb-led-matrix already cloned — pulling…"
-    sudo -u "$INSTALL_USER" git -C "$MATRIX_SRC" pull --ff-only --quiet || true
 fi
+
+# pip install expects pyproject.toml or setup.py at the path root
+if [[ ! -f "$MATRIX_SRC/pyproject.toml" && ! -f "$MATRIX_SRC/setup.py" ]]; then
+    warn "  pyproject.toml not found at repo root — trying bindings/python…"
+    MATRIX_SRC="${MATRIX_SRC}/bindings/python"
+fi
+
 info "  Installing build dependencies for rgbmatrix…"
 sudo -u "$INSTALL_USER" "${VENV}/bin/pip" install --quiet scikit-build-core cython
 info "  Building Python binding (this takes ~2–3 minutes on a Pi)…"
