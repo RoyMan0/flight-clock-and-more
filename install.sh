@@ -100,46 +100,7 @@ else
     success "Sufficient RAM (${_total_mb}MB) — swap unchanged"
 fi
 
-# ── Phase 1c: Boot config for Adafruit RGB Matrix Bonnet ─────────
-BOOT_CFG=""
-for _f in /boot/firmware/config.txt /boot/config.txt; do
-    [[ -f "$_f" ]] && BOOT_CFG="$_f" && break
-done
-
-if [[ -n "$BOOT_CFG" ]]; then
-    info "Phase 1c: Configuring boot settings for RGB Matrix Bonnet ($BOOT_CFG)…"
-    echo
-    echo -e "  ${BOLD}Did you solder the PWM jumper bridge on the bonnet?${RESET}"
-    echo    "  Quality    (Y) — jumper soldered: less flicker, but disables onboard audio"
-    echo    "  Convenience(N) — no jumper:       audio works, slightly more flicker  [default]"
-    echo -n "  Soldered jumper? [y/N] "
-    read -r _pwm_ans
-    _pwm_mode=false
-    [[ "${_pwm_ans:-n}" =~ ^[Yy] ]] && _pwm_mode=true
-    echo
-
-    # Disable Bluetooth on all configurations (frees UART/GPIO for matrix)
-    if ! grep -qF "dtoverlay=disable-bt" "$BOOT_CFG"; then
-        echo "dtoverlay=disable-bt" >> "$BOOT_CFG"
-        info "  Added: dtoverlay=disable-bt"
-    fi
-
-    if $_pwm_mode; then
-        # Quality mode: audio must be off — GPIO 18 is shared with PWM
-        if ! grep -qF "dtparam=audio=off" "$BOOT_CFG"; then
-            echo "dtparam=audio=off" >> "$BOOT_CFG"
-            info "  Added: dtparam=audio=off (PWM/Quality mode)"
-        fi
-        HAT_PWM_ENABLED=true
-        success "Boot config set for Quality mode (PWM enabled)"
-    else
-        HAT_PWM_ENABLED=false
-        success "Boot config set for Convenience mode (audio preserved)"
-    fi
-else
-    warn "Phase 1c: Could not find /boot/firmware/config.txt or /boot/config.txt — skipping boot config"
-    HAT_PWM_ENABLED=false
-fi
+HAT_PWM_ENABLED=false
 
 # Allow the app user to write captive-portal config into NM's dnsmasq dir
 # NM reads /etc/NetworkManager/dnsmasq-shared.d/ when starting a hotspot.
