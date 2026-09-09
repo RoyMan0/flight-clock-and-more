@@ -1433,12 +1433,8 @@ class Overhead:
             smart_expires = min(smart_expires, now + 24 * 3600)
         elif has_route:
             smart_expires = now + SCHEDULE_CACHE_TTL
-        elif fa_key:
-            # FA was called and still found nothing — private/military aircraft
-            # won't appear in FA 30 min later either; cache for full TTL to stop hammering FA
-            smart_expires = now + SCHEDULE_CACHE_TTL
         else:
-            smart_expires = now + 1800  # only AirLabs tried; retry sooner in case data appears
+            smart_expires = now + 1800  # retry soon if no route found
         self._schedule_cache[callsign] = {"data": result, "expires": smart_expires}
         self._save_disk_cache()
         return result
