@@ -80,6 +80,8 @@ Two files, both gitignored:
 
 `config.py` at the root is a **compatibility shim** that reads from `config.json`/`secrets.json` and exposes constants (e.g. `LOCATION_HOME`, `TOMORROW_API_KEY`). Legacy scenes import from it. New code should use `get_config()` directly.
 
+`TEMPERATURE_LOCATION` is derived at import time from `LOCATION_HOME` — it is not a separate config field. Do not add a `temperature_location` key to `config.json`; it will be ignored.
+
 ### Flight Tracker Data Pipeline (`utilities/overhead.py`)
 
 The `Overhead` class fetches aircraft positions and resolves routes in a background thread:
@@ -114,6 +116,9 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
 ## Known States / Gotchas
 
 - **`snow_report` plugin** — disabled/hidden in the web UI until it's fixed. It is filtered out of both the Plugin Order list and the config cards. Do not re-expose it without fixing the underlying issues.
+- **Tomorrow.io sunrise/sunset parsing** — the API returns `sunriseTime`/`sunsetTime` with a `Z` suffix, but sometimes the value is already local time (not true UTC), depending on the location's timezone. `ClockScene.calculate_sunrise_sunset()` applies a sanity check: if the parsed-as-UTC value produces a local sunrise hour outside 4am–10am, it reinterprets the value as local time and converts to UTC. `today_sunrise` and `today_sunset` are always UTC-aware `datetime` objects; compare them with `datetime.now(timezone.utc)`, never naive datetimes.
+- **OWM API keys** — new OpenWeatherMap keys require explicit subscription to the "One Call 3.0" plan at openweathermap.org before they work. A 401 error from OWM almost always means this subscription step was skipped, not that the key is wrong.
+- **Pi 3 hotspot / `dtoverlay=disable-bt`** — do NOT add `dtoverlay=disable-bt` to `/boot/firmware/config.txt` on Pi 3. Bluetooth and WiFi share the same chip (CYW43438); disabling BT via that overlay breaks WiFi AP mode, which prevents the first-boot setup hotspot from broadcasting.
 - **`rgbmatrix/` directory** — gitignored; it's a Mac dev stub. The real C extension is installed on the Pi only. Never commit the stub.
 - **`draw()` must return bool** — `display.swap()` is only called when `draw()` returns `True`. Returning nothing (implicit `None`) is treated as False and will skip the swap, which is intentional for empty-state handling.
 - **Airline logos** — PNG files in `logos/` keyed by ICAO airline code. Convert to RGBA on load with `.convert("RGBA")` before any resize to avoid Pillow palette+transparency warnings.
