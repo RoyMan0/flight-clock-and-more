@@ -819,7 +819,7 @@ class Overhead:
         max_farthest = int(flights_cfg.get("max_farthest", 5))
         journey_code = loc.get("journey_code", "")
 
-        radius_nm = loc.get("search_radius_nm") or 25
+        radius_nm = float(loc.get("search_radius_nm") or 25)
 
         data = []
         try:
