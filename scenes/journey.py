@@ -106,8 +106,11 @@ class JourneyScene(object):
         # Airport codes (7x13 font, descent=2) reach y=12; distance text
         # (4x6 font, ascent=5) starts at y=11.  The old clear stopped at
         # y=9, leaving stale pixels that overlapped on redraws.
+        # Start at x=16 (first column after the 16px logo): 4-digit
+        # distances like "1234mi" are 24px wide and centre to x=16,
+        # which the logo clear (x 0-15) doesn't cover.
         self.draw_square(
-            JOURNEY_POSITION[0],
+            16,
             JOURNEY_POSITION[1],
             JOURNEY_POSITION[0] + JOURNEY_WIDTH - 1,
             DISTANCE_POSITION[1],
