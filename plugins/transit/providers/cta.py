@@ -22,6 +22,7 @@ import requests
 
 from plugins.transit.providers.base import (
     HTTP_HEADERS, Arrival, ProviderConfigError, TransitProvider, hex_to_rgb,
+    merge_sequence, order_by_line, orient_line,
 )
 
 log = logging.getLogger(__name__)
@@ -34,6 +35,10 @@ _DATA_ROOT = os.path.abspath(
 TRAIN_API = "https://lapi.transitchicago.com/api/1.0/ttarrivals.aspx"
 L_STOPS_URL = "https://data.cityofchicago.org/resource/8pix-ypme.json?$limit=2000"
 BUS_API = "https://www.ctabustracker.com/bustime/api/v2"
+# Station order per line, generated from CTA GTFS by scripts/build_cta_rail_order.py
+RAIL_ORDER_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "cta_rail_order.json")
+)
 
 # Train Tracker route code → (dataset flag column, display name, colour)
 TRAIN_LINES = {
@@ -100,11 +105,21 @@ class CtaTrainProvider(TransitProvider):
         return any(row.get(TRAIN_LINES[rt][0]) in (True, "true") for rt in route_ids if rt in TRAIN_LINES)
 
     def list_stops(self, route_ids: list[str]) -> list[dict]:
+        """Stations in line order (e.g. Red: 95th/Dan Ryan → Howard)."""
         stations = {}
         for row in self._load_platforms():
             if self._serves(row, route_ids):
                 stations[row["map_id"]] = row.get("station_descriptive_name") or row.get("station_name")
-        return sorted(({"id": k, "name": v} for k, v in stations.items()), key=lambda s: s["name"])
+        try:
+            with open(RAIL_ORDER_PATH) as f:
+                line_order = json.load(f)
+        except Exception as e:
+            log.warning(f"[transit] CTA rail order unavailable: {e}")
+            line_order = {}
+        ordered = [m for m in order_by_line([line_order.get(rt, []) for rt in route_ids])
+                   if m in stations]
+        rest = sorted((m for m in stations if m not in set(ordered)), key=lambda m: stations[m])
+        return [{"id": m, "name": stations[m]} for m in ordered + rest]
 
     def list_directions(self, stop_id: str, route_ids: list[str]) -> list[dict]:
         bound = defaultdict(list)
@@ -167,7 +182,7 @@ class CtaBusProvider(TransitProvider):
         super().__init__(agency_id, spec)
         self._routes = None
         self._routes_at = 0.0
-        self._stops: dict = {}       # route → (fetched_at, {stpid: (name, dir)})
+        self._stops: dict = {}       # route → (fetched_at, {stpid: (name, dir, lat, lon)}, {dir: [stpid…]})
 
     def _call(self, endpoint: str, **params) -> dict:
         key = self._secret(self.spec.get("api_key_secret"))
@@ -193,24 +208,44 @@ class CtaBusProvider(TransitProvider):
             self._routes_at = time.time()
         return self._routes
 
-    def _route_stops(self, rt: str) -> dict:
+    def _route_patterns(self, rt: str):
+        """(stops, sequences) for a route from getpatterns — stops in travel order per direction."""
         cached = self._stops.get(rt)
         if cached and time.time() - cached[0] < 86400:
-            return cached[1]
-        stops = {}
-        for d in self._call("getdirections", rt=rt).get("directions", []):
-            dname = d.get("dir") or d.get("id") or d.get("name")
-            for s in self._call("getstops", rt=rt, dir=dname).get("stops", []):
-                stops[str(s["stpid"])] = (s.get("stpnm", ""), dname)
-        self._stops[rt] = (time.time(), stops)
-        return stops
+            return cached[1], cached[2]
+        stops, by_dir = {}, defaultdict(list)
+        for ptr in self._call("getpatterns", rt=rt).get("ptr", []):
+            dname = ptr.get("rtdir", "")
+            seq = []
+            for pt in ptr.get("pt", []):
+                if pt.get("typ") != "S" or not pt.get("stpid"):
+                    continue
+                sid = str(pt["stpid"])
+                stops[sid] = (pt.get("stpnm", ""), dname, pt.get("lat"), pt.get("lon"))
+                seq.append(sid)
+            by_dir[dname].append(seq)
+        seqs = {}
+        for dname, pats in by_dir.items():
+            merged: list = []
+            for pat in sorted(pats, key=len, reverse=True):
+                merge_sequence(merged, pat)
+            seqs[dname] = merged
+        self._stops[rt] = (time.time(), stops, seqs)
+        return stops, seqs
+
+    def _route_stops(self, rt: str) -> dict:
+        return self._route_patterns(rt)[0]
 
     def list_stops(self, route_ids: list[str]) -> list[dict]:
-        merged = {}
+        """Stops in route order; each stop's opposite-direction twin is listed next to it."""
+        all_stops, sequences = {}, []
         for rt in route_ids:
-            for sid, (name, dname) in self._route_stops(rt).items():
-                merged[sid] = f"{name}  ({dname})"
-        return sorted(({"id": k, "name": v} for k, v in merged.items()), key=lambda s: s["name"])
+            stops, seqs = self._route_patterns(rt)
+            all_stops.update(stops)
+            for dname in sorted(seqs):
+                sequences.append(orient_line(seqs[dname], lambda s: all_stops[s][2:4]))
+        ordered = order_by_line(sequences, lambda s: all_stops[s][0].lower())
+        return [{"id": s, "name": f"{all_stops[s][0]}  ({all_stops[s][1]})"} for s in ordered]
 
     def list_directions(self, stop_id: str, route_ids: list[str]) -> list[dict]:
         dirs = []

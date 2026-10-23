@@ -565,35 +565,45 @@ def transit_directions():
 
 @api_bp.post("/transit/preview")
 def transit_preview():
-    """Fetch live arrivals for an unsaved config and render the 64×32 board."""
+    """Fetch live arrivals for an unsaved transit config and render each 64×32 page."""
     from PIL import Image
-    from plugins.transit.agencies import AGENCIES
-    from plugins.transit.render import build_rows, render_board
+    from plugins.transit.manager import (
+        build_pages, configured_stops, fetch_stop, line_label_width,
+    )
+    from plugins.transit.providers.base import ProviderNotReady
+    from plugins.transit.render import render_board
 
     data = request.get_json(force=True) or {}
-    agency = data.get("agency", "")
 
     def _run():
-        from plugins.transit.agencies import get_provider
-        prov = get_provider(agency)
-        if prov is None:
-            raise ValueError("unknown agency")
-        arrivals = prov.get_arrivals(str(data.get("stop_id", "")),
-                                     [str(r) for r in data.get("routes", [])],
-                                     data.get("direction", "both"))
-        cutoff = time.time() + 60 * float(data.get("min_minutes", 0) or 0)
-        arrivals = [a for a in arrivals if a.arrival_ts >= cutoff]
-        ln_w, rows = build_rows(arrivals, alias_set=AGENCIES[agency].get("alias_set", ""),
-                                user_aliases=data.get("dest_aliases") or {})
-        img = render_board(ln_w, rows).resize((64 * 6, 32 * 6), Image.NEAREST)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return {
-            "rows": [{"line": r["label"], "dest_full": r["dest_full"], "dest": r["dest"],
-                      "min": r["min"]} for r in rows],
-            "total": len(arrivals),
-            "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
-        }
+        stops = configured_stops(data)
+        if not stops:
+            raise ValueError("Add at least one stop first")
+        results, problems, preparing = [], [], False
+        for stop in stops:
+            name = stop.get("stop_name") or stop.get("stop_id")
+            try:
+                results.append((stop, fetch_stop(stop)))
+            except ProviderNotReady as e:
+                preparing = True
+                problems.append(f"{name}: {e}")
+            except Exception as e:
+                problems.append(f"{name}: {e}")
+        if not results and preparing:
+            raise ProviderNotReady("; ".join(problems))
+
+        pages = []
+        for title, ln_w, rows in build_pages(data, results, line_label_width(stops)):
+            img = render_board(ln_w, rows, title).resize((64 * 6, 32 * 6), Image.NEAREST)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            pages.append({
+                "title": title or "",
+                "rows": [{"line": r["label"], "dest_full": r["dest_full"], "dest": r["dest"],
+                          "min": r["min"], "missable": r["missable"]} for r in rows],
+                "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+            })
+        return {"pages": pages, "problems": problems}
 
     return _transit_call(_run)
 

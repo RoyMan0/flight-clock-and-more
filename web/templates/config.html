@@ -785,31 +785,165 @@
               </div>
             </div>
 
-            <!-- 1. Metro / agency -->
-            <div class="col-md-6">
-              <label class="form-label">1. Metro Area / Transit Agency</label>
-              <select class="form-select bg-dark text-light border-secondary"
-                      x-model="pluginConfigs.transit.agency" @change="transitAgencyChanged()">
-                <option value="">— Select —</option>
-                <template x-for="a in transit.agencies" :key="a.id">
-                  <option :value="a.id" x-text="a.name" :selected="a.id === pluginConfigs.transit.agency"></option>
-                </template>
-              </select>
-            </div>
-            <div class="col-md-6" x-show="transitAgency()?.key_secret">
-              <label class="form-label">
-                API Key <span class="text-muted small" x-text="transitAgency()?.key_required ? '(required)' : '(optional)'"></span>
-              </label>
-              <div class="d-flex gap-2">
-                <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary"
-                       autocomplete="off" :placeholder="transitAgency()?.key_help || 'API key'"
-                       :value="secrets[transitAgency()?.key_secret] || ''"
-                       @change="secrets[transitAgency().key_secret] = $event.target.value">
-                <button class="btn btn-success btn-sm text-nowrap" @click="saveSecrets().then(() => transitLoadRoutes())">
-                  <i class="bi bi-save me-1"></i>Save Key
-                </button>
+            <!-- Display mode -->
+            <div class="col-md-8">
+              <label class="form-label">When showing more than one stop</label>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" id="tm_combined" value="combined"
+                       x-model="pluginConfigs.transit.display_mode">
+                <label class="form-check-label" for="tm_combined">
+                  <strong>Combined</strong> — the next 3 across all stops, soonest first
+                </label>
               </div>
-              <div class="form-text text-muted" x-text="transitAgency()?.key_help"></div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" id="tm_cycle" value="cycle"
+                       x-model="pluginConfigs.transit.display_mode">
+                <label class="form-check-label" for="tm_cycle">
+                  <strong>Cycle</strong> — the next 3 for each stop, one stop at a time (stop name in the header)
+                </label>
+              </div>
+            </div>
+            <div class="col-md-2" x-show="pluginConfigs.transit.display_mode === 'cycle'">
+              <label class="form-label">Sec / Stop</label>
+              <input type="number" min="3" max="60" class="form-control bg-dark text-light border-secondary"
+                     x-model.number="pluginConfigs.transit.seconds_per_page">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Refresh (sec)</label>
+              <input type="number" min="15" max="300" class="form-control bg-dark text-light border-secondary"
+                     x-model.number="pluginConfigs.transit.update_interval">
+            </div>
+
+            <!-- Stops -->
+            <template x-for="(stop, i) in (pluginConfigs.transit.stops || [])" :key="transitUi(i).uid">
+              <div class="col-12">
+                <div class="border border-secondary rounded p-3">
+                  <div class="d-flex align-items-center mb-2">
+                    <button class="btn btn-sm btn-link text-light p-0 me-2" @click="transitUi(i).open = !transitUi(i).open">
+                      <i class="bi" :class="transitUi(i).open ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                    </button>
+                    <span class="fw-semibold flex-grow-1">
+                      Stop <span x-text="i + 1"></span>:
+                      <span class="text-info" x-text="stop.stop_name || 'not chosen yet'"></span>
+                      <span class="text-muted small" x-show="(stop.routes || []).length"
+                            x-text="'(' + transitRouteLabels(i) + ')'"></span>
+                    </span>
+                    <button class="btn btn-sm btn-outline-danger" @click="removeTransitStop(i)" title="Remove stop">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+
+                  <div class="row g-3" x-show="transitUi(i).open">
+                    <!-- 1. Agency -->
+                    <div class="col-md-6">
+                      <label class="form-label">1. Metro Area / Transit Agency</label>
+                      <select class="form-select bg-dark text-light border-secondary"
+                              x-model="stop.agency" @change="transitAgencyChanged(i)">
+                        <option value="">— Select —</option>
+                        <template x-for="a in transit.agencies" :key="a.id">
+                          <option :value="a.id" x-text="a.name" :selected="a.id === stop.agency"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="col-md-6" x-show="transitAgency(i)?.key_secret">
+                      <label class="form-label">
+                        API Key <span class="text-muted small" x-text="transitAgency(i)?.key_required ? '(required)' : '(optional)'"></span>
+                      </label>
+                      <div class="d-flex gap-2">
+                        <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary"
+                               autocomplete="off" :placeholder="transitAgency(i)?.key_help || 'API key'"
+                               :value="secrets[transitAgency(i)?.key_secret] || ''"
+                               @change="secrets[transitAgency(i).key_secret] = $event.target.value">
+                        <button class="btn btn-success btn-sm text-nowrap" @click="saveSecrets().then(() => transitLoadRoutes(i, true))">
+                          <i class="bi bi-save me-1"></i>Save Key
+                        </button>
+                      </div>
+                      <div class="form-text text-muted" x-text="transitAgency(i)?.key_help"></div>
+                    </div>
+
+                    <div class="col-12" x-show="transitUi(i).status">
+                      <div class="small" :class="transitUi(i).statusError ? 'text-danger' : 'text-info'">
+                        <span class="spinner-border spinner-border-sm me-1" x-show="transitUi(i).loading"></span>
+                        <span x-text="transitUi(i).status"></span>
+                      </div>
+                    </div>
+
+                    <!-- 2. Lines -->
+                    <div class="col-md-6" x-show="transitUi(i).routes.length">
+                      <label class="form-label">2. Lines <span class="text-muted small">(choose one or more)</span></label>
+                      <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
+                             placeholder="Filter lines…" x-model="transitUi(i).routeFilter">
+                      <div class="border border-secondary rounded p-2" style="max-height:220px;overflow-y:auto">
+                        <template x-for="r in transitFilteredRoutes(i)" :key="r.id">
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" :id="'tr_'+i+'_'+r.id"
+                                   :checked="(stop.routes||[]).includes(r.id)"
+                                   @change="toggleTransitRoute(i, r.id, $event.target.checked)">
+                            <label class="form-check-label small" :for="'tr_'+i+'_'+r.id">
+                              <span class="d-inline-block rounded-1 me-1 align-middle"
+                                    style="width:12px;height:12px" :style="'background:' + (r.color || '#888')"></span>
+                              <strong x-text="r.label"></strong>
+                              <span class="text-muted" x-text="r.name && r.name !== r.label ? ' — ' + r.name : ''"></span>
+                            </label>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+
+                    <!-- 3. Stop (in line order) -->
+                    <div class="col-md-6" x-show="(stop.routes||[]).length && transitUi(i).stops.length">
+                      <label class="form-label">3. Stop / Station <span class="text-muted small">(in line order)</span></label>
+                      <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
+                             placeholder="Search stops…" x-model="transitUi(i).stopFilter">
+                      <select class="form-select form-select-sm bg-dark text-light border-secondary" size="8"
+                              @change="selectTransitStop(i, $event.target.value)">
+                        <template x-for="s in transitFilteredStops(i)" :key="s.id">
+                          <option :value="s.id" x-text="s.name" :selected="s.id === stop.stop_id"></option>
+                        </template>
+                      </select>
+                    </div>
+
+                    <!-- 4. Direction etc. -->
+                    <div class="col-md-6" x-show="stop.stop_id">
+                      <label class="form-label">4. Direction of Travel</label>
+                      <select class="form-select bg-dark text-light border-secondary" x-model="stop.direction">
+                        <option value="both" :selected="stop.direction === 'both'">Both directions</option>
+                        <template x-for="d in transitUi(i).directions" :key="d.key">
+                          <option :value="d.key" x-text="d.label" :selected="d.key === stop.direction"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="col-md-3" x-show="stop.stop_id">
+                      <label class="form-label">Walk Time (min)</label>
+                      <input type="number" min="0" max="60" class="form-control bg-dark text-light border-secondary"
+                             x-model.number="stop.min_minutes">
+                      <div class="form-text text-muted">Arrivals you can't make in time show grey.</div>
+                    </div>
+                    <div class="col-md-3" x-show="stop.stop_id && pluginConfigs.transit.display_mode === 'cycle'">
+                      <label class="form-label">Header Name</label>
+                      <input type="text" maxlength="12" class="form-control bg-dark text-light border-secondary"
+                             x-model="stop.label" placeholder="auto">
+                      <div class="form-text text-muted">Up to 12 characters.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <div class="col-12">
+              <button class="btn btn-outline-light btn-sm" @click="addTransitStop()">
+                <i class="bi bi-plus-lg me-1"></i>Add Stop
+              </button>
+              <span class="text-muted small ms-2">Add a stop for each station/line combo you want — e.g. Red Line at Addison and Blue Line at Lake.</span>
+            </div>
+
+            <div class="col-12" x-show="(pluginConfigs.transit.stops || []).some(s => s.stop_id)">
+              <label class="form-label">Destination Short Names <span class="text-muted small">(optional, one per line)</span></label>
+              <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" rows="3"
+                        placeholder="95th/Dan Ryan = 95th"
+                        :value="Object.entries(pluginConfigs.transit.dest_aliases||{}).map(([k,v]) => k + ' = ' + v).join('\n')"
+                        @change="pluginConfigs.transit.dest_aliases = Object.fromEntries($event.target.value.split('\n').map(l => l.split('=').map(s => s.trim())).filter(p => p.length === 2 && p[0] && p[1]))"></textarea>
+              <div class="form-text text-muted">Long names are shortened automatically; use Test to see the result and override any you don't like.</div>
             </div>
 
             <div class="col-12" x-show="transit.status">
@@ -819,97 +953,36 @@
               </div>
             </div>
 
-            <!-- 2. Lines -->
-            <div class="col-md-6" x-show="transit.routes.length">
-              <label class="form-label">2. Lines <span class="text-muted small">(choose one or more)</span></label>
-              <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
-                     placeholder="Filter lines…" x-model="transit.routeFilter">
-              <div class="border border-secondary rounded p-2" style="max-height:220px;overflow-y:auto">
-                <template x-for="r in transitFilteredRoutes()" :key="r.id">
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" :id="'tr_'+r.id"
-                           :checked="(pluginConfigs.transit.routes||[]).includes(r.id)"
-                           @change="toggleTransitRoute(r.id, $event.target.checked)">
-                    <label class="form-check-label small" :for="'tr_'+r.id">
-                      <span class="d-inline-block rounded-1 me-1 align-middle"
-                            style="width:12px;height:12px" :style="'background:' + (r.color || '#888')"></span>
-                      <strong x-text="r.label"></strong>
-                      <span class="text-muted" x-text="r.name && r.name !== r.label ? ' — ' + r.name : ''"></span>
-                    </label>
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <!-- 3. Stop -->
-            <div class="col-md-6" x-show="(pluginConfigs.transit.routes||[]).length && transit.stops.length">
-              <label class="form-label">3. Stop / Station</label>
-              <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
-                     placeholder="Search stops…" x-model="transit.stopFilter">
-              <select class="form-select form-select-sm bg-dark text-light border-secondary" size="8"
-                      @change="selectTransitStop($event.target.value)">
-                <template x-for="s in transitFilteredStops()" :key="s.id">
-                  <option :value="s.id" x-text="s.name" :selected="s.id === pluginConfigs.transit.stop_id"></option>
-                </template>
-              </select>
-              <div class="form-text text-muted" x-show="pluginConfigs.transit.stop_name">
-                Selected: <strong class="text-light" x-text="pluginConfigs.transit.stop_name"></strong>
-              </div>
-            </div>
-
-            <!-- 4. Direction -->
-            <div class="col-md-6" x-show="pluginConfigs.transit.stop_id">
-              <label class="form-label">4. Direction of Travel</label>
-              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.transit.direction">
-                <option value="both" :selected="pluginConfigs.transit.direction === 'both'">Both directions</option>
-                <template x-for="d in transit.directions" :key="d.key">
-                  <option :value="d.key" x-text="d.label" :selected="d.key === pluginConfigs.transit.direction"></option>
-                </template>
-              </select>
-            </div>
-            <div class="col-md-3" x-show="pluginConfigs.transit.stop_id">
-              <label class="form-label">Walk Time (min)</label>
-              <input type="number" min="0" max="60" class="form-control bg-dark text-light border-secondary"
-                     x-model.number="pluginConfigs.transit.min_minutes">
-              <div class="form-text text-muted">Hide arrivals you can't make.</div>
-            </div>
-            <div class="col-md-3" x-show="pluginConfigs.transit.stop_id">
-              <label class="form-label">Refresh (sec)</label>
-              <input type="number" min="15" max="300" class="form-control bg-dark text-light border-secondary"
-                     x-model.number="pluginConfigs.transit.update_interval">
-            </div>
-
-            <div class="col-12" x-show="pluginConfigs.transit.stop_id">
-              <label class="form-label">Destination Short Names <span class="text-muted small">(optional, one per line)</span></label>
-              <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" rows="3"
-                        placeholder="95th/Dan Ryan = 95th"
-                        :value="Object.entries(pluginConfigs.transit.dest_aliases||{}).map(([k,v]) => k + ' = ' + v).join('\n')"
-                        @change="pluginConfigs.transit.dest_aliases = Object.fromEntries($event.target.value.split('\n').map(l => l.split('=').map(s => s.trim())).filter(p => p.length === 2 && p[0] && p[1]))"></textarea>
-              <div class="form-text text-muted">Long names are shortened automatically; use Test to see the result and override any you don't like.</div>
-            </div>
-
-            <!-- Preview -->
+            <!-- Preview: one image per page -->
             <div class="col-12" x-show="transit.preview">
-              <div class="d-flex flex-wrap gap-3 align-items-start">
-                <img :src="transit.preview?.image" alt="Display preview" class="border border-secondary rounded"
-                     style="image-rendering:pixelated;max-width:100%;width:384px">
-                <table class="table table-sm table-dark small mb-0" style="width:auto">
-                  <thead><tr><th>Ln</th><th>Destination</th><th>Shown as</th><th>Min</th></tr></thead>
-                  <tbody>
-                    <template x-for="(r, i) in (transit.preview?.rows || [])" :key="i">
-                      <tr><td x-text="r.line"></td><td x-text="r.dest_full"></td><td x-text="r.dest"></td><td x-text="r.min"></td></tr>
-                    </template>
-                    <tr x-show="!(transit.preview?.rows || []).length"><td colspan="4" class="text-muted">No upcoming arrivals right now.</td></tr>
-                  </tbody>
-                </table>
-              </div>
+              <div class="small text-warning mb-2" x-show="(transit.preview?.problems || []).length"
+                   x-text="(transit.preview?.problems || []).join(' · ')"></div>
+              <div class="text-muted small" x-show="!(transit.preview?.pages || []).length">No upcoming arrivals right now.</div>
+              <template x-for="(pg, p) in (transit.preview?.pages || [])" :key="p">
+                <div class="d-flex flex-wrap gap-3 align-items-start mb-3">
+                  <img :src="pg.image" alt="Display preview" class="border border-secondary rounded"
+                       style="image-rendering:pixelated;max-width:100%;width:384px">
+                  <table class="table table-sm table-dark small mb-0" style="width:auto">
+                    <thead><tr><th>Ln</th><th>Destination</th><th>Shown as</th><th>Min</th></tr></thead>
+                    <tbody>
+                      <template x-for="(r, k) in pg.rows" :key="k">
+                        <tr :class="r.missable ? 'text-secondary' : ''" :title="r.missable ? 'Too soon to make it with your walk time' : ''">
+                          <td x-text="r.line"></td><td x-text="r.dest_full"></td><td x-text="r.dest"></td>
+                          <td x-text="r.min + (r.missable ? ' (too soon)' : '')"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </template>
             </div>
           </div>
           <div class="mt-3 d-flex gap-2">
             <button class="btn btn-success btn-sm" @click="saveTransit()">
               <i class="bi bi-save me-1"></i>Save
             </button>
-            <button class="btn btn-outline-info btn-sm" @click="previewTransit()" :disabled="!pluginConfigs.transit.stop_id">
+            <button class="btn btn-outline-info btn-sm" @click="previewTransit()"
+                    :disabled="!(pluginConfigs.transit.stops || []).some(s => s.stop_id)">
               <i class="bi bi-eye me-1"></i>Test
             </button>
           </div>
@@ -1136,7 +1209,7 @@ function configPage() {
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
       event_countdown:         { event_title: '', event_datetime: '' },
-      transit:                 { agency: '', routes: [], stop_id: '', stop_name: '', direction: 'both', min_minutes: 0, update_interval: 30, dest_aliases: {} },
+      transit:                 { stops: [], display_mode: 'combined', seconds_per_page: 6, update_interval: 30, dest_aliases: {} },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     secrets: {},
@@ -1149,8 +1222,7 @@ function configPage() {
     teamsLoading: false,
     teamsData: {},
     teamTab: '',
-    transit: { agencies: [], routes: [], stops: [], directions: [], routeFilter: '', stopFilter: '',
-               status: '', statusError: false, loading: false, preview: null },
+    transit: { agencies: [], ui: [], routesCache: {}, status: '', statusError: false, loading: false, preview: null },
     timezones: [],
     wifiNetworks: [],
     wifiSsid: '',
@@ -1222,8 +1294,15 @@ function configPage() {
       if (!cfgs.clock_weather) cfgs.clock_weather = {};
       if (!cfgs.clock_weather.alerts) cfgs.clock_weather.alerts = {};
       if (cfgs.transit) {
-        cfgs.transit = { agency: '', routes: [], stop_id: '', stop_name: '', direction: 'both',
-                         min_minutes: 0, update_interval: 30, dest_aliases: {}, ...cfgs.transit };
+        const t = { display_mode: 'combined', seconds_per_page: 6, update_interval: 30, dest_aliases: {}, ...cfgs.transit };
+        // Upgrade the original single-stop format to a one-item stops list
+        if (!Array.isArray(t.stops)) {
+          t.stops = t.stop_id ? [{ agency: t.agency, routes: t.routes || [], stop_id: t.stop_id,
+                                   stop_name: t.stop_name || '', label: '', direction: t.direction || 'both',
+                                   min_minutes: t.min_minutes || 0 }] : [];
+        }
+        for (const k of ['agency', 'routes', 'stop_id', 'stop_name', 'direction', 'min_minutes']) delete t[k];
+        cfgs.transit = t;
       }
       this.pluginConfigs = cfgs;
       // Migrate legacy naive event_datetime to UTC ISO so timezone is always correct
@@ -1338,122 +1417,176 @@ function configPage() {
     },
 
     // ---------------- Transit arrivals ----------------
+    // pluginConfigs.transit.stops[i] holds the saved settings for each watched stop;
+    // transit.ui[i] holds that stop's picker state (lists, filters, status).
 
-    transitAgency() {
-      return this.transit.agencies.find(a => a.id === this.pluginConfigs.transit?.agency);
+    _newTransitUi() {
+      return { uid: Math.random().toString(36).slice(2), open: true, routes: [], stops: [], directions: [],
+               routeFilter: '', stopFilter: '', status: '', statusError: false, loading: false };
+    },
+
+    transitUi(i) {
+      while (this.transit.ui.length <= i) this.transit.ui.push(this._newTransitUi());
+      return this.transit.ui[i];
+    },
+
+    transitAgency(i) {
+      const stop = (this.pluginConfigs.transit?.stops || [])[i];
+      return stop && this.transit.agencies.find(a => a.id === stop.agency);
+    },
+
+    transitRouteLabels(i) {
+      const ui = this.transitUi(i);
+      const stop = this.pluginConfigs.transit.stops[i];
+      return (stop.routes || []).map(id => (ui.routes.find(r => r.id === id) || {label: id}).label).join(', ');
     },
 
     async transitInit() {
       try {
         this.transit.agencies = await fetch('/api/transit/agencies').then(r => r.json());
       } catch (e) { this.transit.agencies = []; }
-      const t = this.pluginConfigs.transit;
-      if (!t.agency) return;
-      await this.transitLoadRoutes();
-      if ((t.routes || []).length) await this.transitLoadStops();
-      if (t.stop_id) await this.transitLoadDirections();
+      // init can run more than once; keep existing picker state. Configured stops
+      // start collapsed, unfinished ones open.
+      const stops = this.pluginConfigs.transit.stops || [];
+      this.transit.ui = stops.map((s, k) => this.transit.ui[k] || { ...this._newTransitUi(), open: !s.stop_id });
+      if (!stops.length) this.addTransitStop();
+      await Promise.all(stops.map(async (stop, i) => {
+        if (!stop.agency) return;
+        await this.transitLoadRoutes(i);
+        if ((stop.routes || []).length) await this.transitLoadStops(i);
+        if (stop.stop_id) await this.transitLoadDirections(i);
+      }));
     },
 
     // GET a picker list; while the agency's schedule data is still downloading
     // the API answers 202 "preparing", so poll until it's ready.
-    async transitFetch(url, attempt = 0) {
-      this.transit.loading = true;
-      this.transit.statusError = false;
+    async transitFetch(url, ui, attempt = 0) {
+      ui.loading = true;
+      ui.statusError = false;
       try {
         const r = await fetch(url);
         const d = await r.json();
         if (d.status === 'preparing') {
-          this.transit.status = (d.message || 'Preparing schedule data…') + ' (first time can take a minute)';
+          ui.status = (d.message || 'Preparing schedule data…') + ' (first time can take a minute)';
           if (attempt < 60) {
             await new Promise(res => setTimeout(res, 3000));
-            return this.transitFetch(url, attempt + 1);
+            return this.transitFetch(url, ui, attempt + 1);
           }
           return null;
         }
         if (d.status !== 'ok') {
-          this.transit.status = d.message || 'Request failed';
-          this.transit.statusError = true;
+          ui.status = d.message || 'Request failed';
+          ui.statusError = true;
           return null;
         }
-        this.transit.status = '';
+        ui.status = '';
         return d.items;
       } catch (e) {
-        this.transit.status = 'Request failed: ' + e;
-        this.transit.statusError = true;
+        ui.status = 'Request failed: ' + e;
+        ui.statusError = true;
         return null;
       } finally {
-        this.transit.loading = false;
+        ui.loading = false;
       }
     },
 
-    async transitLoadRoutes() {
-      const a = this.pluginConfigs.transit.agency;
-      this.transit.routes = a ? (await this.transitFetch(`/api/transit/routes?agency=${encodeURIComponent(a)}`)) || [] : [];
+    async transitLoadRoutes(i, force = false) {
+      const ui = this.transitUi(i);
+      const a = this.pluginConfigs.transit.stops[i].agency;
+      if (!a) { ui.routes = []; return; }
+      if (!force && this.transit.routesCache[a]) { ui.routes = this.transit.routesCache[a]; return; }
+      const items = await this.transitFetch(`/api/transit/routes?agency=${encodeURIComponent(a)}`, ui);
+      if (items) this.transit.routesCache[a] = items;
+      ui.routes = items || [];
     },
 
-    async transitLoadStops() {
+    async transitLoadStops(i) {
+      const ui = this.transitUi(i);
+      const stop = this.pluginConfigs.transit.stops[i];
+      if (!stop.agency || !(stop.routes || []).length) { ui.stops = []; return; }
+      const q = `agency=${encodeURIComponent(stop.agency)}&routes=${encodeURIComponent(stop.routes.join(','))}`;
+      ui.stops = (await this.transitFetch(`/api/transit/stops?${q}`, ui)) || [];
+    },
+
+    async transitLoadDirections(i) {
+      const ui = this.transitUi(i);
+      const stop = this.pluginConfigs.transit.stops[i];
+      if (!stop.stop_id) { ui.directions = []; return; }
+      const q = `agency=${encodeURIComponent(stop.agency)}&stop=${encodeURIComponent(stop.stop_id)}&routes=${encodeURIComponent((stop.routes || []).join(','))}`;
+      ui.directions = (await this.transitFetch(`/api/transit/directions?${q}`, ui)) || [];
+    },
+
+    addTransitStop() {
       const t = this.pluginConfigs.transit;
-      if (!t.agency || !(t.routes || []).length) { this.transit.stops = []; return; }
-      const q = `agency=${encodeURIComponent(t.agency)}&routes=${encodeURIComponent(t.routes.join(','))}`;
-      this.transit.stops = (await this.transitFetch(`/api/transit/stops?${q}`)) || [];
+      t.stops = [...(t.stops || []), { agency: '', routes: [], stop_id: '', stop_name: '', label: '', direction: 'both', min_minutes: 0 }];
+      this.transitUi(t.stops.length - 1).open = true;
     },
 
-    async transitLoadDirections() {
+    removeTransitStop(i) {
       const t = this.pluginConfigs.transit;
-      if (!t.stop_id) { this.transit.directions = []; return; }
-      const q = `agency=${encodeURIComponent(t.agency)}&stop=${encodeURIComponent(t.stop_id)}&routes=${encodeURIComponent((t.routes || []).join(','))}`;
-      this.transit.directions = (await this.transitFetch(`/api/transit/directions?${q}`)) || [];
+      if (t.stops[i].stop_id && !confirm(`Remove ${t.stops[i].stop_name || 'this stop'}?`)) return;
+      t.stops = t.stops.filter((_, k) => k !== i);
+      this.transit.ui = this.transit.ui.filter((_, k) => k !== i);
     },
 
-    async transitAgencyChanged() {
-      Object.assign(this.pluginConfigs.transit, { routes: [], stop_id: '', stop_name: '', direction: 'both' });
-      Object.assign(this.transit, { routes: [], stops: [], directions: [], preview: null, routeFilter: '', stopFilter: '' });
-      await this.transitLoadRoutes();
+    async transitAgencyChanged(i) {
+      Object.assign(this.pluginConfigs.transit.stops[i], { routes: [], stop_id: '', stop_name: '', label: '', direction: 'both' });
+      Object.assign(this.transitUi(i), { routes: [], stops: [], directions: [], routeFilter: '', stopFilter: '' });
+      await this.transitLoadRoutes(i);
     },
 
-    transitFilteredRoutes() {
-      const f = this.transit.routeFilter.trim().toLowerCase();
-      const sel = this.pluginConfigs.transit.routes || [];
-      return this.transit.routes.filter(r => !f || sel.includes(r.id)
+    transitFilteredRoutes(i) {
+      const ui = this.transitUi(i);
+      const f = ui.routeFilter.trim().toLowerCase();
+      const sel = this.pluginConfigs.transit.stops[i].routes || [];
+      return ui.routes.filter(r => !f || sel.includes(r.id)
         || r.label.toLowerCase().includes(f) || (r.name || '').toLowerCase().includes(f));
     },
 
-    transitFilteredStops() {
-      const f = this.transit.stopFilter.trim().toLowerCase();
-      return this.transit.stops.filter(s => !f || s.id === this.pluginConfigs.transit.stop_id
+    transitFilteredStops(i) {
+      const ui = this.transitUi(i);
+      const f = ui.stopFilter.trim().toLowerCase();
+      const cur = this.pluginConfigs.transit.stops[i].stop_id;
+      return ui.stops.filter(s => !f || s.id === cur
         || s.name.toLowerCase().includes(f) || String(s.id).toLowerCase() === f);
     },
 
-    async toggleTransitRoute(id, checked) {
-      const t = this.pluginConfigs.transit;
-      const list = t.routes || [];
-      t.routes = checked ? (list.includes(id) ? list : [...list, id]) : list.filter(r => r !== id);
-      await this.transitLoadStops();
+    async toggleTransitRoute(i, id, checked) {
+      const stop = this.pluginConfigs.transit.stops[i];
+      const list = stop.routes || [];
+      stop.routes = checked ? (list.includes(id) ? list : [...list, id]) : list.filter(r => r !== id);
+      await this.transitLoadStops(i);
       // Drop the chosen stop if none of the selected lines serve it any more
-      if (t.stop_id && !this.transit.stops.some(s => s.id === t.stop_id)) {
-        Object.assign(t, { stop_id: '', stop_name: '', direction: 'both' });
-        this.transit.directions = [];
-      } else if (t.stop_id) {
-        await this.transitLoadDirections();
+      if (stop.stop_id && !this.transitUi(i).stops.some(s => s.id === stop.stop_id)) {
+        Object.assign(stop, { stop_id: '', stop_name: '', direction: 'both' });
+        this.transitUi(i).directions = [];
+      } else if (stop.stop_id) {
+        await this.transitLoadDirections(i);
       }
     },
 
-    async selectTransitStop(id) {
-      const t = this.pluginConfigs.transit;
-      const stop = this.transit.stops.find(s => s.id === id);
-      Object.assign(t, { stop_id: id, stop_name: stop ? stop.name : id, direction: 'both' });
-      await this.transitLoadDirections();
+    async selectTransitStop(i, id) {
+      const stop = this.pluginConfigs.transit.stops[i];
+      const found = this.transitUi(i).stops.find(s => s.id === id);
+      Object.assign(stop, { stop_id: id, stop_name: found ? found.name : id, direction: 'both' });
+      await this.transitLoadDirections(i);
     },
 
     async saveTransit() {
+      const t = this.pluginConfigs.transit;
+      t.stops = (t.stops || []).filter(s => s.agency || s.stop_id);
+      this.transit.ui = this.transit.ui.slice(0, t.stops.length);
       await this.savePluginConfig('transit');
       // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
-      if (this.pluginConfigs.transit.enabled !== false) {
+      if (t.enabled !== false) {
         await fetch('/api/plugins/order', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(this.pluginOrder),
         });
       }
+      this.transit.status = 'Saved.';
+      this.transit.statusError = false;
+      setTimeout(() => { if (this.transit.status === 'Saved.') this.transit.status = ''; }, 2000);
     },
 
     async previewTransit() {

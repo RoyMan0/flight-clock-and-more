@@ -31,6 +31,7 @@ MAX_LABEL_CHARS = 4
 COL_HEADER = (200, 20, 0)
 COL_TEXT   = (255, 150, 0)
 COL_DUE    = (255, 210, 0)
+COL_MISSED = (90, 90, 90)       # arrivals sooner than the walk time
 
 _FONTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "fonts"))
 
@@ -170,24 +171,35 @@ def build_rows(arrivals, now: float = None, alias_set: str = "",
             "color": led_color(a.line_color),
             "block": a.line_block,
             "dest_full": a.dest,
-            "dest": shorten(a.dest, max_chars, alias_set, user_aliases),
+            "dest": shorten(a.dest, max_chars, a.alias_set or alias_set, user_aliases),
             "min": minutes_text(a, now),
             "realtime": a.realtime,
+            "missable": a.missable,
         })
     return ln_w, rows
 
 
-def render_board(ln_w: int, rows: list) -> Image.Image:
+HEADER_MAX_CHARS = (MATRIX_W - MIN_COL_W - 2) // CHAR_W
+
+
+def render_board(ln_w: int, rows: list, title: str = None) -> Image.Image:
+    """`title` replaces the "Ln  Dest" header (used to name the stop when cycling stops)."""
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     px = img.load()
     dest_x = ln_w + 2
 
-    _bdf_draw(img, 0, 0, "Ln", _FONT, COL_HEADER)
-    _bdf_draw(img, dest_x, 0, "Dest", _FONT, COL_HEADER)
+    if title:
+        _bdf_draw(img, 0, 0, title[:HEADER_MAX_CHARS], _FONT, COL_HEADER)
+    else:
+        _bdf_draw(img, 0, 0, "Ln", _FONT, COL_HEADER)
+        _bdf_draw(img, dest_x, 0, "Dest", _FONT, COL_HEADER)
     _bdf_draw(img, MATRIX_W - _bdf_width("Min", _FONT), 0, "Min", _FONT, COL_HEADER)
 
     for row, y in zip(rows, ROW_Y):
-        text_col = COL_TEXT if row["realtime"] else _dim(COL_TEXT, 0.55)
+        if row.get("missable"):
+            text_col = COL_MISSED
+        else:
+            text_col = COL_TEXT if row["realtime"] else _dim(COL_TEXT, 0.55)
         if row["block"]:
             for by in range(y, y + 5):
                 for bx in range(0, ln_w - 2):
@@ -196,6 +208,6 @@ def render_board(ln_w: int, rows: list) -> Image.Image:
             _bdf_draw(img, 0, y, row["label"], _FONT, row["color"])
         _bdf_draw(img, dest_x, y, row["dest"], _FONT, text_col)
         m = row["min"]
-        mcol = COL_DUE if m == "Due" else text_col
+        mcol = COL_DUE if m == "Due" and not row.get("missable") else text_col
         _bdf_draw(img, MATRIX_W - _bdf_width(m, _FONT), y, m, _FONT, mcol)
     return img

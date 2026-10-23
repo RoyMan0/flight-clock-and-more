@@ -34,7 +34,7 @@ import requests
 
 from plugins.transit.providers.base import (
     HTTP_HEADERS, Arrival, ProviderConfigError, ProviderNotReady,
-    TransitProvider, hex_to_rgb,
+    TransitProvider, hex_to_rgb, merge_sequence, order_by_line, orient_line,
 )
 
 log = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 _DATA_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "transit")
 )
-_INDEX_VERSION = 1
+_INDEX_VERSION = 3
 _FEED_CACHE_SECS = 15
 
 
@@ -92,7 +92,7 @@ class GtfsRtProvider(TransitProvider):
 
     def _set_index(self, idx: dict):
         children = defaultdict(list)
-        for sid, (_name, parent) in idx["stops"].items():
+        for sid, (_name, parent, *_coords) in idx["stops"].items():
             if parent:
                 children[parent].append(sid)
         self._index = idx
@@ -159,9 +159,15 @@ class GtfsRtProvider(TransitProvider):
             col, rd = reader(z, "stops.txt")
             has_parent = "parent_station" in col
             for row in rd:
+                try:
+                    lat = round(float(row[col["stop_lat"]]), 5)
+                    lon = round(float(row[col["stop_lon"]]), 5)
+                except (KeyError, ValueError):
+                    lat = lon = None
                 stops[row[col["stop_id"]]] = [
                     row[col["stop_name"]].strip(),
                     row[col["parent_station"]].strip() if has_parent else "",
+                    lat, lon,
                 ]
 
             trips = {}                      # trip_id → (route, dir, headsign)
@@ -177,13 +183,35 @@ class GtfsRtProvider(TransitProvider):
                 if hs:
                     headsign_counts[f"{route}|{d}"][hs] += 1
 
+            # stop_times is grouped by trip and sorted by stop_sequence in practice,
+            # so each trip's stop pattern can be collected without holding the file.
             stop_routes = defaultdict(set)  # stop_id → {"route|dir"}
+            patterns = defaultdict(Counter) # "route|dir" → {(stop, …): trips}
             col, rd = reader(z, "stop_times.txt")
             ti, si = col["trip_id"], col["stop_id"]
+            cur_trip, cur_key, cur_stops = None, None, []
             for row in rd:
-                t = trips.get(row[ti])
-                if t:
-                    stop_routes[row[si]].add(f"{t[0]}|{t[1]}")
+                tid = row[ti]
+                if tid != cur_trip:
+                    if cur_key and cur_stops:
+                        patterns[cur_key][tuple(cur_stops)] += 1
+                    cur_trip, cur_stops = tid, []
+                    t = trips.get(tid)
+                    cur_key = f"{t[0]}|{t[1]}" if t else None
+                if cur_key:
+                    stop_routes[row[si]].add(cur_key)
+                    cur_stops.append(row[si])
+            if cur_key and cur_stops:
+                patterns[cur_key][tuple(cur_stops)] += 1
+
+        # Merge each route/direction's patterns (longest first) into one ordered list
+        route_seq = defaultdict(dict)
+        for key, counter in patterns.items():
+            rid, d = key.split("|", 1)
+            merged: list = []
+            for pat, _n in sorted(counter.items(), key=lambda kv: (-len(kv[0]), -kv[1])):
+                merge_sequence(merged, list(pat))
+            route_seq[rid][d] = merged
 
         return {
             "version": _INDEX_VERSION,
@@ -192,6 +220,7 @@ class GtfsRtProvider(TransitProvider):
             "stops": stops,
             "stop_routes": {k: sorted(v) for k, v in stop_routes.items()},
             "headsigns": {k: c.most_common(1)[0][0] for k, c in headsign_counts.items()},
+            "route_seq": route_seq,
             "trips": {tid: [d, hs] for tid, (_r, d, hs) in trips.items()} if keep_trips else {},
         }
 
@@ -243,15 +272,42 @@ class GtfsRtProvider(TransitProvider):
                     station_dirs[self._station_of(sid)].add(d)
 
         out = []
-        for st, dirs in station_dirs.items():
+        for st in self._line_order(route_ids, station_dirs):
+            dirs = station_dirs[st]
             name = idx["stops"].get(st, [st])[0]
             # A one-directional stop (most bus stops) gets its heading in the label
             if len(dirs) == 1:
                 d = next(iter(dirs))
                 name = f"{name}  → {self._dir_label(d, route_ids).replace('Toward ', '')}"
             out.append({"id": st, "name": name})
-        out.sort(key=lambda s: _natural_key(s["name"]))
         return out
+
+    def _line_order(self, route_ids: list[str], stations) -> list[str]:
+        """Stations in the order they sit along the line(s), south end first."""
+        idx = self._index
+        stops = idx["stops"]
+
+        def coord_of(sid):
+            st = stops.get(sid)
+            return (st[2], st[3]) if st else None
+
+        def name_of(sid):
+            return stops.get(sid, [sid])[0].lower()
+
+        sequences = []
+        for rid in route_ids:
+            for d, seq in sorted(idx["route_seq"].get(rid, {}).items()):
+                st_seq = []
+                for sid in seq:
+                    st = self._station_of(sid)
+                    if not st_seq or st_seq[-1] != st:
+                        st_seq.append(st)
+                sequences.append(orient_line(st_seq, coord_of))
+        ordered = [s for s in order_by_line(sequences, name_of) if s in stations]
+        seen = set(ordered)
+        rest = sorted((s for s in stations if s not in seen),
+                      key=lambda s: _natural_key(stops.get(s, [s])[0]))
+        return ordered + rest
 
     def _target_stops(self, stop_id: str) -> set:
         targets = {stop_id}

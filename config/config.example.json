@@ -153,12 +153,9 @@
       "enabled": false,
       "display_duration": 20,
       "update_interval": 30,
-      "agency": "",
-      "routes": [],
-      "stop_id": "",
-      "stop_name": "",
-      "direction": "both",
-      "min_minutes": 0,
+      "display_mode": "combined",
+      "seconds_per_page": 6,
+      "stops": [],
       "dest_aliases": {}
     }
   },

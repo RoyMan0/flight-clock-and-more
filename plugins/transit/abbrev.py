@@ -99,7 +99,11 @@ def _fits(s: str, max_chars: int) -> bool:
     return len(s) <= max_chars
 
 
+_BRACKETED = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")   # "(Red Line)", "[ X Stop ]"
+
+
 def _strip_noise(s: str) -> str:
+    s = _BRACKETED.sub("", s).strip()
     return _HEADSIGN_VIA.sub("", _HEADSIGN_PREFIX.sub("", s))
 
 
