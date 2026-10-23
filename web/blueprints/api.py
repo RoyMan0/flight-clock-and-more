@@ -513,6 +513,92 @@ def sports_teams():
 
 
 # ------------------------------------------------------------------
+# Transit arrivals — cascading pickers for the config page
+# ------------------------------------------------------------------
+
+def _transit_call(fn):
+    """Run a provider call, mapping 'still preparing' / setup errors to JSON."""
+    from plugins.transit.providers.base import ProviderConfigError, ProviderNotReady
+    try:
+        return jsonify({"status": "ok", "items": fn()})
+    except ProviderNotReady as e:
+        return jsonify({"status": "preparing", "message": str(e)}), 202
+    except (ProviderConfigError, ValueError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Request failed: {e}"}), 502
+
+
+def _transit_provider():
+    from plugins.transit.agencies import get_provider
+    prov = get_provider(request.args.get("agency", ""))
+    if prov is None:
+        raise ValueError("unknown agency")
+    return prov
+
+
+def _transit_routes_arg():
+    return [r for r in request.args.get("routes", "").split(",") if r]
+
+
+@api_bp.get("/transit/agencies")
+def transit_agencies():
+    from plugins.transit.agencies import list_agencies
+    return jsonify(list_agencies())
+
+
+@api_bp.get("/transit/routes")
+def transit_routes():
+    return _transit_call(lambda: _transit_provider().list_routes())
+
+
+@api_bp.get("/transit/stops")
+def transit_stops():
+    return _transit_call(lambda: _transit_provider().list_stops(_transit_routes_arg()))
+
+
+@api_bp.get("/transit/directions")
+def transit_directions():
+    return _transit_call(lambda: _transit_provider().list_directions(
+        request.args.get("stop", ""), _transit_routes_arg()))
+
+
+@api_bp.post("/transit/preview")
+def transit_preview():
+    """Fetch live arrivals for an unsaved config and render the 64×32 board."""
+    from PIL import Image
+    from plugins.transit.agencies import AGENCIES
+    from plugins.transit.render import build_rows, render_board
+
+    data = request.get_json(force=True) or {}
+    agency = data.get("agency", "")
+
+    def _run():
+        from plugins.transit.agencies import get_provider
+        prov = get_provider(agency)
+        if prov is None:
+            raise ValueError("unknown agency")
+        arrivals = prov.get_arrivals(str(data.get("stop_id", "")),
+                                     [str(r) for r in data.get("routes", [])],
+                                     data.get("direction", "both"))
+        cutoff = time.time() + 60 * float(data.get("min_minutes", 0) or 0)
+        arrivals = [a for a in arrivals if a.arrival_ts >= cutoff]
+        ln_w, rows = build_rows(arrivals, alias_set=AGENCIES[agency].get("alias_set", ""),
+                                user_aliases=data.get("dest_aliases") or {})
+        img = render_board(ln_w, rows).resize((64 * 6, 32 * 6), Image.NEAREST)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return {
+            "rows": [{"line": r["label"], "dest_full": r["dest_full"], "dest": r["dest"],
+                      "min": r["min"]} for r in rows],
+            "total": len(arrivals),
+            "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+        }
+
+    return _transit_call(_run)
+
+
+# ------------------------------------------------------------------
 # Flight data (for dashboard panel)
 # ------------------------------------------------------------------
 
@@ -970,9 +1056,37 @@ def check_updates():
         return jsonify({"ok": False, "has_updates": False, "error": str(e)}), 500
 
 
+def _requirements_hash():
+    import hashlib
+    try:
+        with open(os.path.join(BASE_DIR, "requirements.txt"), "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def _install_requirements_then_restart(deps_changed: bool):
+    import logging
+    import sys
+    log = logging.getLogger(__name__)
+    time.sleep(1)
+    if deps_changed:
+        # The service runs from the venv, so sys.executable's pip installs into it
+        log.info("[update] requirements.txt changed — installing dependencies")
+        r = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet", "-r",
+             os.path.join(BASE_DIR, "requirements.txt")],
+            capture_output=True, text=True, timeout=900,
+        )
+        if r.returncode != 0:
+            log.warning(f"[update] pip install failed: {r.stderr.strip()[-2000:]}")
+    subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"])
+
+
 @api_bp.post("/system/update")
 def update_app():
     try:
+        req_before = _requirements_hash()
         result = subprocess.run(
             ["git", "pull"],
             cwd=BASE_DIR,
@@ -982,12 +1096,17 @@ def update_app():
         )
         output = result.stdout.strip()
         updated = output != "Already up to date."
+        deps_changed = False
         if updated:
+            deps_changed = _requirements_hash() != req_before
+            if deps_changed:
+                output += "\nInstalling updated Python dependencies before restart (may take a few minutes)…"
             threading.Thread(
-                target=lambda: (time.sleep(1), subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"])),
+                target=_install_requirements_then_restart,
+                args=(deps_changed,),
                 daemon=True,
             ).start()
-        return jsonify({"ok": True, "updated": updated, "output": output})
+        return jsonify({"ok": True, "updated": updated, "deps_changed": deps_changed, "output": output})
     except Exception as e:
         return jsonify({"ok": False, "updated": False, "output": str(e)}), 500
 

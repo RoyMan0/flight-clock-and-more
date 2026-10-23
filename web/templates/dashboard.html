@@ -203,7 +203,7 @@ function dashboard() {
     },
 
     pluginLabel(pid) {
-      const names = {ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports'};
+      const names = {ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports',transit:'Transit Arrivals'};
       return names[pid] || pid.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     },
 
@@ -286,8 +286,13 @@ function dashboard() {
           this.sysActionMsg = 'Update failed: ' + d.output;
           this.sysActionPending = false;
         } else {
-          this.sysActionMsg = 'Updates installed — restarting…';
-          setTimeout(() => { window.location.reload(); }, 6000);
+          if (d.deps_changed) {
+            this.sysActionMsg = 'Updates installed — installing new dependencies, then restarting (a few minutes on a Pi 3)…';
+            setTimeout(() => { window.location.reload(); }, 120000);
+          } else {
+            this.sysActionMsg = 'Updates installed — restarting…';
+            setTimeout(() => { window.location.reload(); }, 6000);
+          }
         }
       } catch (_) {
         this.sysActionMsg = 'Update check failed.';

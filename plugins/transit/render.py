@@ -1,0 +1,201 @@
+"""
+Station-sign rendering for the transit plugin.
+
+Layout (64×32, 4x6 BDF font, 4 px per character):
+  y0      header (red):  Ln | Dest | Min
+  y9/17/25  three arrival rows
+
+The Ln column width adapts to the configured lines: a colour block for rail
+lines that are identified by colour (CTA), or up to 4 characters of text
+in the line colour (MTA "A", RTD "W", buses "133"). Dest gets whatever is left.
+"""
+
+import logging
+import math
+import os
+import time
+
+from PIL import Image
+
+from plugins.transit.abbrev import shorten
+
+log = logging.getLogger(__name__)
+
+MATRIX_W = 64
+MATRIX_H = 32
+CHAR_W = 4
+ROW_Y = (9, 17, 25)
+MIN_COL_W = 3 * CHAR_W          # "Due", "Dly", "12", "99+"
+MAX_LABEL_CHARS = 4
+
+COL_HEADER = (200, 20, 0)
+COL_TEXT   = (255, 150, 0)
+COL_DUE    = (255, 210, 0)
+
+_FONTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "fonts"))
+
+
+# ------------------------------------------------------------------
+# BDF pixel-font renderer (same helpers as the sports/news plugins)
+# ------------------------------------------------------------------
+
+def _parse_bdf(path: str) -> dict:
+    """Parse BDF font file → {char_code: {dw, bbw, bbh, rows}}."""
+    glyphs: dict = {}
+    cur: dict = {}
+    rows: list = []
+    reading = False
+    try:
+        with open(path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("ENCODING"):
+                    cur = {"code": int(line.split()[1])}
+                elif line.startswith("DWIDTH"):
+                    cur["dw"] = int(line.split()[1])
+                elif line.startswith("BBX"):
+                    p = line.split()
+                    cur.update(bbw=int(p[1]), bbh=int(p[2]), xoff=int(p[3]), yoff=int(p[4]))
+                elif line == "BITMAP":
+                    reading, rows = True, []
+                elif line == "ENDCHAR" and reading:
+                    cur["rows"] = rows
+                    glyphs[cur["code"]] = cur
+                    reading = False
+                elif reading:
+                    rows.append(int(line, 16))
+    except Exception as e:
+        log.warning(f"[transit] BDF parse error ({path}): {e}")
+    return glyphs
+
+
+def _bdf_width(text: str, font: dict) -> int:
+    return sum(font[ord(c)]["dw"] for c in text if ord(c) in font)
+
+
+def _bdf_draw(img: Image.Image, x: int, y: int, text: str, font: dict, color: tuple):
+    """Stamp BDF glyphs directly into img pixels. y = top of character cell."""
+    if not font:
+        return
+    px = img.load()
+    iw, ih = img.size
+    cx = x
+    for ch in text:
+        g = font.get(ord(ch))
+        if g is None:
+            cx += CHAR_W
+            continue
+        bbw = g["bbw"]
+        total_bits = ((bbw + 7) // 8) * 8
+        for ri, rv in enumerate(g["rows"]):
+            py = y + ri
+            if py < 0 or py >= ih:
+                continue
+            for bi in range(bbw):
+                if (rv >> (total_bits - 1 - bi)) & 1:
+                    ox = cx + bi
+                    if 0 <= ox < iw:
+                        px[ox, py] = color
+        cx += g["dw"]
+
+
+_FONT = _parse_bdf(os.path.join(_FONTS_DIR, "4x6.bdf"))
+
+
+def push_pil_to_canvas(img: Image.Image, display_manager):
+    canvas = display_manager.canvas
+    for y in range(MATRIX_H):
+        for x in range(MATRIX_W):
+            r, g, b = img.getpixel((x, y))
+            canvas.SetPixel(x, y, r, g, b)
+    with display_manager._lock:
+        display_manager._pil_image.paste(img, (0, 0))
+
+
+# ------------------------------------------------------------------
+# Layout
+# ------------------------------------------------------------------
+
+def led_color(rgb: tuple) -> tuple:
+    """Make an agency brand colour readable on an LED panel."""
+    if not rgb:
+        return (255, 255, 255)
+    peak = max(rgb)
+    if peak < 40:
+        return (255, 255, 255)          # near-black (e.g. MTA's grey/black lines)
+    if peak < 160:
+        scale = 160 / peak
+        return tuple(min(255, int(c * scale)) for c in rgb)
+    return tuple(rgb)
+
+
+def _dim(rgb: tuple, f: float = 0.5) -> tuple:
+    return tuple(int(c * f) for c in rgb)
+
+
+def label_column_width(arrivals) -> int:
+    """Ln column width in px: wide enough for the header and every line label."""
+    w = 2 * CHAR_W                      # "Ln"
+    for a in arrivals:
+        if not a.line_block:
+            w = max(w, CHAR_W * len(a.line_label[:MAX_LABEL_CHARS]))
+    return w
+
+
+def dest_max_chars(ln_w: int) -> int:
+    dest_x = ln_w + 2
+    return (MATRIX_W - MIN_COL_W - 1 - dest_x) // CHAR_W
+
+
+def minutes_text(a, now: float) -> str:
+    mins = math.floor((a.arrival_ts - now) / 60)
+    if a.delayed:
+        return "Dly"
+    if a.approaching or mins <= 1:
+        return "Due"
+    return "99+" if mins > 99 else str(mins)
+
+
+def build_rows(arrivals, now: float = None, alias_set: str = "",
+               user_aliases: dict = None, ln_w: int = None):
+    """Turn Arrival objects into display rows. Returns (ln_w, rows)."""
+    now = now or time.time()
+    if ln_w is None:
+        ln_w = label_column_width(arrivals)
+    max_chars = dest_max_chars(ln_w)
+    rows = []
+    for a in arrivals[:len(ROW_Y)]:
+        rows.append({
+            "label": a.line_label[:MAX_LABEL_CHARS],
+            "color": led_color(a.line_color),
+            "block": a.line_block,
+            "dest_full": a.dest,
+            "dest": shorten(a.dest, max_chars, alias_set, user_aliases),
+            "min": minutes_text(a, now),
+            "realtime": a.realtime,
+        })
+    return ln_w, rows
+
+
+def render_board(ln_w: int, rows: list) -> Image.Image:
+    img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
+    px = img.load()
+    dest_x = ln_w + 2
+
+    _bdf_draw(img, 0, 0, "Ln", _FONT, COL_HEADER)
+    _bdf_draw(img, dest_x, 0, "Dest", _FONT, COL_HEADER)
+    _bdf_draw(img, MATRIX_W - _bdf_width("Min", _FONT), 0, "Min", _FONT, COL_HEADER)
+
+    for row, y in zip(rows, ROW_Y):
+        text_col = COL_TEXT if row["realtime"] else _dim(COL_TEXT, 0.55)
+        if row["block"]:
+            for by in range(y, y + 5):
+                for bx in range(0, ln_w - 2):
+                    px[bx, by] = row["color"]
+        else:
+            _bdf_draw(img, 0, y, row["label"], _FONT, row["color"])
+        _bdf_draw(img, dest_x, y, row["dest"], _FONT, text_col)
+        m = row["min"]
+        mcol = COL_DUE if m == "Due" else text_col
+        _bdf_draw(img, MATRIX_W - _bdf_width(m, _FONT), y, m, _FONT, mcol)
+    return img

@@ -75,7 +75,7 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = create_app = None
     try:
         from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
     except Exception as e:
@@ -104,6 +104,10 @@ def main():
         from plugins.event_countdown.manager import EventCountdownPlugin
     except Exception as e:
         log.warning(f"Event countdown plugin failed to import: {e}")
+    try:
+        from plugins.transit.manager import TransitPlugin
+    except Exception as e:
+        log.warning(f"Transit plugin failed to import: {e}")
     try:
         from web.app import create_app
     except Exception as e:
@@ -211,6 +215,14 @@ def main():
             ))
         except Exception as e:
             log.warning(f"Event countdown plugin failed to load: {e}")
+
+    if TransitPlugin:
+        try:
+            pm.register("transit", TransitPlugin(
+                display, cfg.get_plugin_config("transit"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"Transit plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)

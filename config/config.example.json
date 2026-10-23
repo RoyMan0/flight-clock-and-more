@@ -30,7 +30,7 @@
       "br_y": 0.0
     }
   },
-  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit"],
   "plugins": {
     "clock_weather": {
       "enabled": false,
@@ -148,6 +148,18 @@
       "display_duration": 30,
       "event_title": "",
       "event_datetime": ""
+    },
+    "transit": {
+      "enabled": false,
+      "display_duration": 20,
+      "update_interval": 30,
+      "agency": "",
+      "routes": [],
+      "stop_id": "",
+      "stop_name": "",
+      "direction": "both",
+      "min_minutes": 0,
+      "dest_aliases": {}
     }
   },
   "web": {

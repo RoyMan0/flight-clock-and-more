@@ -25,6 +25,8 @@ cd ~/its-a-plane-python && rm data/api_cache.json && git pull && sudo systemctl 
 
 Only delete `data/api_cache.json` when a change affects route/schedule lookups. For UI-only or config changes, skip the `rm`.
 
+**When `requirements.txt` changes**, also run `~/venv/bin/pip install -r requirements.txt` on the Pi before restarting. The service runs `~/venv/bin/python3` (see `utilities/its-a-plane.service.template`). The dashboard "Update" button (`POST /api/system/update`) does this automatically: it hashes `requirements.txt` before/after `git pull` and runs pip with `sys.executable` before restarting. `install.sh` (Phase 3) always installs `requirements.txt`, so fresh installs and re-runs are covered.
+
 **Tail logs on Pi:**
 ```bash
 tail -f workdammit.log
@@ -103,6 +105,16 @@ All route results go through `_route_makes_sense()` sanity checking. Bad routes 
 
 **API key rotation:** Both AirLabs and FlightAware support multiple keys in `secrets.json` as arrays. The active key is selected by preferring the key whose billing reset date is soonest (uses expiring calls first). AirLabs reset days are configurable per-key; FlightAware always resets on the 1st of the month.
 
+### Transit Arrivals Plugin (`plugins/transit/`)
+
+Shows the next 3 arrivals at one stop (header `Ln | Dest | Min`). Agencies are declared in `agencies.py`; each maps to a provider in `providers/`:
+- `cta.py` — CTA Train Tracker / Bus Tracker JSON APIs (keys required). Station list comes from the City of Chicago open-data "L" stops dataset.
+- `gtfs_rt.py` — generic static GTFS + GTFS-realtime (RTD, MTA subway). Static GTFS is reduced once to `data/transit/<agency>/index.json` (rebuilt weekly in a background thread; UI endpoints return 202 "preparing" meanwhile). Adding most new cities = a new registry entry, no code.
+  - RTD realtime trips mostly lack `direction_id`; trip IDs match static, so `trip_map: True` recovers direction + headsign.
+  - MTA realtime trip IDs do NOT match static; direction comes from the platform stop suffix (`N`/`S`) and destination from the trip's last stop.
+- Destinations are shortened by `abbrev.py` (user aliases → built-in per-agency aliases → rules → truncate), never plain-truncated first.
+- Config page pickers use `/api/transit/{agencies,routes,stops,directions}` and `POST /api/transit/preview` (renders the actual 64×32 board).
+
 ### Web UI (`web/`)
 
 Flask app created by `web/app.py:create_app()`. Two blueprints:
@@ -124,6 +136,8 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
 - **Airline logos** — PNG files in `logos/` keyed by ICAO airline code. Convert to RGBA on load with `.convert("RGBA")` before any resize to avoid Pillow palette+transparency warnings.
 - **Log file** — `workdammit.log` in the project root, written by `RotatingFileHandler` in `main.py` (10MB max, 2 backups). The systemd service file must NOT redirect stdout to this file — the app owns it.
 - **Binary content in logs** — the log may contain binary characters from PIL warnings. Use `grep -a` when grepping log files.
+- **protobuf pin (fr24 vs gtfs-realtime-bindings)** — `fr24` requires `protobuf<7`; `gtfs-realtime-bindings` 3.x requires `protobuf>=7`. `requirements.txt` pins `gtfs-realtime-bindings==2.0.0` + `protobuf>=6.33,<7` (verified working with fr24 0.3.1 and 0.4.0). Don't bump the bindings until fr24 supports protobuf 7, or the FR24 fallback breaks. Some Pis also have an old `protobuf` in `~/.local`; the venv copy shadows it, and pip's "Not uninstalling … outside environment" message about it is harmless.
+- **Mac dev Python** — `/usr/local/bin/python3` is an x86_64 binary that won't run (no Rosetta), and `/usr/bin/python3` is 3.9, which is too old (the code uses `X | None` at module level). Use a 3.10+ interpreter (e.g. a `uv`-managed 3.12 venv) for local testing.
 - **Third-party log suppression** — `werkzeug`, `httpx`, and `fr24` loggers are set to WARNING in `main.py` to reduce noise.
 
 ## Secrets Schema
@@ -142,8 +156,15 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
   "schwab_app_secret": "",
   "schwab_callback_url": "",
   "schwab_token_path": "",
-  "owm_api_key": ""
+  "owm_api_key": "",
+  "cta_train_api_key": "",
+  "cta_bus_api_key": "",
+  "mta_api_key": ""
 }
 ```
+
+`cta_*` keys are required for Chicago; `mta_api_key` is optional (subway feeds currently work without one).
+
+**Never commit API keys** — the GitHub repo is public. Keys live only in each device's gitignored `config/secrets.json`, entered through the web config page (the transit card has its own key fields; transit keys are hidden from the generic "Other Secrets" card). The owner reuses one pair of CTA keys across their own and friends' Pis, so if a key gets revoked or rate-limited, every one of those Pis is affected.
 
 `flightaware_reset_days` is no longer used — FlightAware always resets on the 1st. The field may exist in older installs but is ignored.

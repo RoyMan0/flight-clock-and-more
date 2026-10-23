@@ -4,3 +4,11 @@ Pillow>=10.0
 folium>=0.17
 urllib3>=2.0
 qrcode>=7.4
+# FR24 position/route fallback for the flight tracker (utilities/fr24_lookup.py)
+fr24>=0.3.1,<0.5
+h2
+hpack
+# Transit plugin (RTD, MTA). 3.x requires protobuf>=7, which conflicts with
+# fr24's protobuf<7 pin — keep 2.0.0 until fr24 supports protobuf 7.
+gtfs-realtime-bindings==2.0.0
+protobuf>=6.33,<7
