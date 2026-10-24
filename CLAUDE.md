@@ -105,7 +105,7 @@ All route results go through `_route_makes_sense()` sanity checking. Bad routes 
 
 **API key rotation:** Both AirLabs and FlightAware support multiple keys in `secrets.json` as arrays. The active key is selected by preferring the key whose billing reset date is soonest (uses expiring calls first). AirLabs reset days are configurable per-key; FlightAware always resets on the 1st of the month.
 
-### Transit Arrivals Plugin (`plugins/transit/`)
+### Transit Arrivals/Departures Plugin (`plugins/transit/`)
 
 Shows upcoming arrivals, station-sign style (header `Ln | Dest | Min`), for a list of watched stops in `plugins.transit.stops` (each: agency, routes, stop_id, direction, min_minutes, optional header `label`). Stops can be from different agencies.
 - `display_mode: "combined"` — static board: next 3 across all stops by time. `"scroll"` — fixed `Ln | Dest | Min` header with every stop's next 3 rows (faint divider between stops, no stop-name line) scrolling bottom-to-top underneath (like `ap_news`), `scroll_speed` px/frame; loops for `display_duration`, which is raised to at least one full pass. A single stop always uses the static board. `"cycle"` (old page-flip mode) is read as `"scroll"`.
@@ -124,6 +124,16 @@ Agencies are declared in `agencies.py`; each maps to a provider in `providers/`:
   - MTA realtime trip IDs do NOT match static; direction comes from the platform stop suffix (`N`/`S`) and destination from the trip's last stop.
 - Destinations are shortened by `abbrev.py` (user aliases → built-in per-agency aliases → rules → truncate), never plain-truncated first.
 - Config page pickers use `/api/transit/{agencies,routes,stops,directions}` and `POST /api/transit/preview` (renders the actual 64×32 board).
+
+### World Clock Plugin (`plugins/world_clock/`)
+
+Current time in any number of user-chosen cities: four 8 px rows (no header), city name left, time right. With more than four cities the list scrolls bottom-to-top like `ap_news` (`scroll_speed` px/frame, a dashed divider marks where the list loops; `display_duration` is raised to at least one pass).
+- Config: `plugins.world_clock.cities` is an **ordered** list of `{"id", "label"}` (ids from `cities.py`; `label` overrides the display name). The config page has a filtered checkbox list to add cities and ▲/▼ to reorder.
+- `cities.py` — ~230 cities with IANA tz + lat/lon, covering every inhabited UTC offset (incl. :30/:45 zones). `short` names must be ≤ 9 chars (the column width without a day marker).
+- Time colour = LIGHT_ORANGE when the sun is up in that city, LIGHT_BLUE when down (same colours as `ClockScene`), from the real sun position via `utilities/solar.is_daylight()` — not the `NIGHT_START`/`NIGHT_END` window.
+- Follows the system `location.clock_format` (12hr → `3:45P`, like the world_daylight overlay). A dim compact "+1"/"-1" (hand-drawn mini glyphs, 6 px) marks a different date from the Pi's local date.
+- Reuses `plugins/transit/render.py` BDF helpers and `plugins/transit/abbrev.shorten()` for over-long names. No network calls; `update()` is a no-op.
+- `utilities/solar.py` holds the sun-position math shared with `world_daylight` (moved there unchanged).
 
 ### Web UI (`web/`)
 

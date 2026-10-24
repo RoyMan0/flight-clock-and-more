@@ -19,6 +19,7 @@ from typing import Optional, Tuple
 from PIL import Image
 
 from plugins.base_plugin import BasePlugin
+from utilities.solar import angular_dist as _angular_dist, sun_geo_position as _sun_geo_position
 from utilities.temperature import get_temperature_cached, get_forecast_cached
 from config import NIGHT_START, NIGHT_END, CLOCK_FORMAT, TEMPERATURE_UNITS
 
@@ -166,36 +167,6 @@ _TIME_KERN = {':': 2}
 # Astronomical helpers
 # ------------------------------------------------------------------
 
-def _sun_geo_position(dt_utc: datetime) -> Tuple[float, float]:
-    """Return (lat, lon) of sub-solar point (where sun is directly overhead)."""
-    jd = dt_utc.timestamp() / 86400.0 + 2440587.5
-    n  = jd - 2451545.0   # days from J2000.0
-
-    # Mean longitude and anomaly
-    L = (280.460 + 0.9856474 * n) % 360
-    g = math.radians((357.528 + 0.9856003 * n) % 360)
-
-    # Ecliptic longitude
-    lam = math.radians(L + 1.915 * math.sin(g) + 0.020 * math.sin(2 * g))
-
-    # Obliquity of ecliptic
-    eps = math.radians(23.439 - 0.0000004 * n)
-
-    # Declination
-    dec = math.degrees(math.asin(math.sin(eps) * math.sin(lam)))
-
-    # Right ascension
-    ra = math.degrees(math.atan2(math.cos(eps) * math.sin(lam), math.cos(lam))) % 360
-
-    # Greenwich Mean Sidereal Time → GHA → geographic longitude
-    # GHA is measured westward; geographic lon is eastward, so lon = -GHA
-    gmst = (280.46061837 + 360.98564736629 * n) % 360
-    gha  = (gmst - ra) % 360
-    lon  = -gha if gha <= 180 else 360 - gha
-
-    return dec, lon
-
-
 def _moon_geo_position(dt_utc: datetime) -> Tuple[float, float]:
     """Return approximate (lat, lon) of sub-lunar point. ~2° accuracy — fine for 64×32."""
     jd = dt_utc.timestamp() / 86400.0 + 2440587.5
@@ -225,17 +196,6 @@ def _moon_geo_position(dt_utc: datetime) -> Tuple[float, float]:
     lon  = -gha if gha <= 180 else 360 - gha
 
     return dec, lon
-
-
-def _angular_dist(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Haversine angular distance in degrees between two geographic points."""
-    lat1_r = math.radians(lat1)
-    lat2_r = math.radians(lat2)
-    dlat   = math.radians(lat2 - lat1)
-    dlon   = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2
-         + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2) ** 2)
-    return math.degrees(2 * math.asin(math.sqrt(max(0.0, min(1.0, a)))))
 
 
 def _geo_to_pixel(lat: float, lon: float) -> Tuple[int, int]:

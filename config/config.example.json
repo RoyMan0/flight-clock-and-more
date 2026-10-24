@@ -30,7 +30,7 @@
       "br_y": 0.0
     }
   },
-  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock"],
   "plugins": {
     "clock_weather": {
       "enabled": false,
@@ -157,6 +157,12 @@
       "scroll_speed": 1,
       "stops": [],
       "dest_aliases": {}
+    },
+    "world_clock": {
+      "enabled": false,
+      "display_duration": 20,
+      "scroll_speed": 1,
+      "cities": []
     }
   },
   "web": {

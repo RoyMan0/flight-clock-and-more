@@ -39,7 +39,7 @@
                          :checked="pluginConfigs[pid]?.enabled !== false"
                          @change="togglePlugin(pid, $event.target.checked)">
                 </div>
-                <span class="flex-grow-1 fw-semibold" x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports',transit:'Transit Arrivals'}[pid] || pid.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()))"></span>
+                <span class="flex-grow-1 fw-semibold" x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports',transit:'Transit Arrivals/Departures',world_clock:'World Clock'}[pid] || pid.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()))"></span>
                 <div class="d-flex align-items-center gap-1" style="width:120px">
                   <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
                          style="width:65px"
@@ -773,9 +773,9 @@
         </div>
       </div>
 
-      <!-- Transit Arrivals Config -->
+      <!-- Transit Arrivals/Departures Config -->
       <div class="card mb-4" x-show="'transit' in pluginConfigs">
-        <div class="card-header"><i class="bi bi-train-front me-2"></i>Transit Arrivals</div>
+        <div class="card-header"><i class="bi bi-train-front me-2"></i>Transit Arrivals/Departures</div>
         <div class="card-body" x-show="'transit' in pluginConfigs">
           <div class="row g-3">
             <div class="col-12">
@@ -922,7 +922,7 @@
                       <label class="form-label">Walk Time (min)</label>
                       <input type="number" min="0" max="60" class="form-control bg-dark text-light border-secondary"
                              x-model.number="stop.min_minutes">
-                      <div class="form-text text-muted">Arrivals you can't make in time show grey.</div>
+                      <div class="form-text text-muted">Arrivals/Departures you can't make in time show grey.</div>
                     </div>
                   </div>
                 </div>
@@ -990,6 +990,106 @@
                     :disabled="!(pluginConfigs.transit.stops || []).some(s => s.stop_id)">
               <i class="bi bi-eye me-1"></i>Test
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- World Clock Config -->
+      <div class="card mb-4" x-show="'world_clock' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-clock me-2"></i>World Clock</div>
+        <div class="card-body" x-show="'world_clock' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.world_clock.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">
+                Times are <span style="color:#FEA727">orange</span> while it's daytime in that city and
+                <span style="color:#28B7F6">blue</span> at night — same as the clock. "+1"/"-1" marks a different date.
+              </div>
+            </div>
+            <div class="col-md-6" x-show="(pluginConfigs.world_clock.cities || []).length > 4">
+              <label class="form-label d-flex justify-content-between">
+                <span>Scroll Speed <span class="text-muted small">(more than 4 cities scroll)</span></span>
+                <span class="text-muted small" x-text="pluginConfigs.world_clock.scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="0.5" max="5" step="0.5"
+                     x-model.number="pluginConfigs.world_clock.scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>Slow</span><span>Fast</span>
+              </div>
+            </div>
+
+            <!-- Add cities -->
+            <div class="col-md-6">
+              <label class="form-label">Add Cities</label>
+              <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
+                     placeholder="Filter by city, country or UTC offset…" x-model="worldClock.filter">
+              <div class="border border-secondary rounded p-2" style="max-height:300px;overflow-y:auto">
+                <div class="text-muted small" x-show="!worldClock.cities.length">Loading cities…</div>
+                <template x-for="c in worldClockFiltered()" :key="c.id">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" :id="'wc_'+c.id"
+                           :checked="worldClockSelected(c.id)"
+                           @change="toggleWorldClockCity(c.id, $event.target.checked)">
+                    <label class="form-check-label small" :for="'wc_'+c.id">
+                      <span x-text="c.name"></span><span class="text-muted" x-text="', ' + c.country"></span>
+                      <span class="text-info ms-1" x-text="c.offset"></span>
+                    </label>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Selected, in display order -->
+            <div class="col-md-6">
+              <label class="form-label">Selected Cities <span class="text-muted small">(display order)</span></label>
+              <div class="text-muted small" x-show="!(pluginConfigs.world_clock.cities || []).length">
+                Tick cities on the left to add them.
+              </div>
+              <ul class="list-group">
+                <template x-for="(entry, idx) in (pluginConfigs.world_clock.cities || [])" :key="entry.id">
+                  <li class="list-group-item bg-dark text-light border-secondary d-flex align-items-center gap-2 py-1">
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveWorldClockCity(idx, -1)" :disabled="idx===0">▲</button>
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveWorldClockCity(idx, 1)"
+                              :disabled="idx===pluginConfigs.world_clock.cities.length-1">▼</button>
+                    </div>
+                    <span class="small flex-grow-1 text-truncate" style="min-width:0" x-text="worldClockCityName(entry.id)"
+                          :title="worldClockCityName(entry.id)"></span>
+                    <input type="text" maxlength="9" class="form-control form-control-sm bg-dark text-light border-secondary"
+                           style="width:88px;flex-shrink:0" x-model="entry.label" :placeholder="worldClockShort(entry.id)"
+                           title="Name on display (optional)">
+                    <button class="btn btn-sm btn-outline-danger py-0" @click="toggleWorldClockCity(entry.id, false)" title="Remove">✕</button>
+                  </li>
+                </template>
+              </ul>
+              <div class="form-text text-muted" x-show="(pluginConfigs.world_clock.cities || []).length">
+                The box is the name shown on the display (blank = the short name shown in grey).
+              </div>
+            </div>
+
+            <div class="col-12" x-show="worldClock.status">
+              <div class="small text-danger" x-text="worldClock.status"></div>
+            </div>
+            <div class="col-12" x-show="worldClock.preview">
+              <div class="text-muted small mb-1" x-show="worldClock.preview?.scrolling">
+                Full scroll loop — scrolls up continuously; the dashed line marks where the list repeats:
+              </div>
+              <img :src="worldClock.preview?.image" alt="World clock preview" class="border border-secondary rounded"
+                   style="image-rendering:pixelated;max-width:100%;width:384px">
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-success btn-sm" @click="saveWorldClock()">
+              <i class="bi bi-save me-1"></i>Save
+            </button>
+            <button class="btn btn-outline-info btn-sm" @click="previewWorldClock()"
+                    :disabled="!(pluginConfigs.world_clock.cities || []).length">
+              <i class="bi bi-eye me-1"></i>Test
+            </button>
+            <span class="small text-success align-self-center" x-show="worldClock.saved">Saved.</span>
           </div>
         </div>
       </div>
@@ -1215,6 +1315,7 @@ function configPage() {
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
       event_countdown:         { event_title: '', event_datetime: '' },
       transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
+      world_clock:             { cities: [], scroll_speed: 1 },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     secrets: {},
@@ -1228,6 +1329,7 @@ function configPage() {
     teamsData: {},
     teamTab: '',
     transit: { agencies: [], ui: [], routesCache: {}, status: '', statusError: false, loading: false, preview: null },
+    worldClock: { cities: [], filter: '', preview: null, status: '', saved: false },
     timezones: [],
     wifiNetworks: [],
     wifiSsid: '',
@@ -1311,6 +1413,7 @@ function configPage() {
         for (const k of ['agency', 'routes', 'stop_id', 'stop_name', 'direction', 'min_minutes']) delete t[k];
         cfgs.transit = t;
       }
+      if (cfgs.world_clock) cfgs.world_clock = { cities: [], scroll_speed: 1, ...cfgs.world_clock };
       this.pluginConfigs = cfgs;
       // Migrate legacy naive event_datetime to UTC ISO so timezone is always correct
       const ecDt = this.pluginConfigs.event_countdown?.event_datetime;
@@ -1330,6 +1433,7 @@ function configPage() {
       this.secrets = sec;
       this.backups = backs;
       if (cfgs.transit) this.transitInit();
+      if (cfgs.world_clock) this.worldClockInit();
     },
 
     moveUp(idx) {
@@ -1620,6 +1724,87 @@ function configPage() {
         this.transit.statusError = true;
       } finally {
         this.transit.loading = false;
+      }
+    },
+
+    // ---------------- World clock ----------------
+
+    async worldClockInit() {
+      const t = this.pluginConfigs.world_clock;
+      // Accept bare ids from hand-edited config: ["tokyo"] → [{id:"tokyo", label:""}]
+      t.cities = (t.cities || []).map(c => typeof c === 'string' ? { id: c, label: '' } : { label: '', ...c });
+      if (this.worldClock.cities.length) return;
+      try {
+        this.worldClock.cities = await fetch('/api/world_clock/cities').then(r => r.json());
+      } catch (e) {
+        this.worldClock.status = 'Could not load the city list: ' + e;
+      }
+    },
+
+    worldClockFiltered() {
+      const f = this.worldClock.filter.trim().toLowerCase();
+      if (!f) return this.worldClock.cities;
+      return this.worldClock.cities.filter(c => c.name.toLowerCase().includes(f)
+        || c.country.toLowerCase().includes(f) || c.offset.toLowerCase().includes(f));
+    },
+
+    worldClockSelected(id) {
+      return (this.pluginConfigs.world_clock.cities || []).some(c => c.id === id);
+    },
+
+    worldClockCityName(id) {
+      const c = this.worldClock.cities.find(x => x.id === id);
+      return c ? `${c.name} · ${c.offset}` : id;
+    },
+
+    worldClockShort(id) {
+      const c = this.worldClock.cities.find(x => x.id === id);
+      return c ? c.short : '';
+    },
+
+    toggleWorldClockCity(id, checked) {
+      const t = this.pluginConfigs.world_clock;
+      const list = t.cities || [];
+      if (checked) {
+        if (!list.some(c => c.id === id)) t.cities = [...list, { id, label: '' }];
+      } else {
+        t.cities = list.filter(c => c.id !== id);
+      }
+    },
+
+    moveWorldClockCity(idx, delta) {
+      const arr = [...this.pluginConfigs.world_clock.cities];
+      const j = idx + delta;
+      if (j < 0 || j >= arr.length) return;
+      [arr[idx], arr[j]] = [arr[j], arr[idx]];
+      this.pluginConfigs.world_clock.cities = arr;
+    },
+
+    async saveWorldClock() {
+      await this.savePluginConfig('world_clock');
+      // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
+      if (this.pluginConfigs.world_clock.enabled !== false) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.worldClock.saved = true;
+      setTimeout(() => this.worldClock.saved = false, 2000);
+    },
+
+    async previewWorldClock() {
+      this.worldClock.status = '';
+      try {
+        const r = await fetch('/api/world_clock/preview', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginConfigs.world_clock),
+        });
+        const d = await r.json();
+        if (d.status === 'ok') this.worldClock.preview = d;
+        else this.worldClock.status = d.message || 'Preview failed';
+      } catch (e) {
+        this.worldClock.status = 'Preview failed: ' + e;
       }
     },
 

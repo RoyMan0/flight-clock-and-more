@@ -624,6 +624,52 @@ def transit_preview():
 
 
 # ------------------------------------------------------------------
+# World clock — city picker + preview for the config page
+# ------------------------------------------------------------------
+
+@api_bp.get("/world_clock/cities")
+def world_clock_cities():
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    from plugins.world_clock.cities import CITIES, display_name
+
+    now = datetime.now(timezone.utc)
+    out = []
+    for c in CITIES:
+        try:
+            mins = int(now.astimezone(ZoneInfo(c["tz"])).utcoffset().total_seconds() // 60)
+        except Exception:
+            continue
+        sign = "+" if mins >= 0 else "-"
+        h, m = divmod(abs(mins), 60)
+        offset = f"UTC{sign}{h}" + (f":{m:02d}" if m else "") if mins else "UTC"
+        out.append({"id": c["id"], "name": c["name"], "short": display_name(c),
+                    "country": c["country"], "offset": offset, "offset_min": mins})
+    out.sort(key=lambda c: c["name"].lower())
+    return jsonify(out)
+
+
+@api_bp.post("/world_clock/preview")
+def world_clock_preview():
+    """Render an unsaved world clock config: the board, or the whole scroll loop."""
+    from PIL import Image
+    from plugins.world_clock.manager import build_rows, build_strip, needs_scroll, render_board
+
+    data = request.get_json(force=True) or {}
+    rows = build_rows(data)
+    if not rows:
+        return jsonify({"status": "error", "message": "Select at least one city"}), 400
+    img = build_strip(rows) if needs_scroll(rows) else render_board(rows)
+    buf = io.BytesIO()
+    img.resize((img.width * 6, img.height * 6), Image.NEAREST).save(buf, format="PNG")
+    return jsonify({
+        "status": "ok",
+        "scrolling": needs_scroll(rows),
+        "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+    })
+
+
+# ------------------------------------------------------------------
 # Flight data (for dashboard panel)
 # ------------------------------------------------------------------
 
