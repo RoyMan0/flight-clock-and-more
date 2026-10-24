@@ -181,33 +181,81 @@ def build_rows(arrivals, now: float = None, alias_set: str = "",
 
 HEADER_MAX_CHARS = (MATRIX_W - MIN_COL_W - 2) // CHAR_W
 
+# Scroll mode: fixed header row, schedule scrolls in rows 8–31
+SCROLL_Y = 8
+SCROLL_H = MATRIX_H - SCROLL_Y
+LINE_H = 8                       # 6 px glyph cell + 2 px gap
+COL_STOP = (215, 215, 215)       # stop name above each stop's rows (brighter than walk-time grey)
+COL_DIVIDER = (50, 50, 50)
 
-def render_board(ln_w: int, rows: list, title: str = None) -> Image.Image:
-    """`title` replaces the "Ln  Dest" header (used to name the stop when cycling stops)."""
-    img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
-    px = img.load()
-    dest_x = ln_w + 2
 
+def _draw_header(img: Image.Image, ln_w: int, title: str = None):
     if title:
         _bdf_draw(img, 0, 0, title[:HEADER_MAX_CHARS], _FONT, COL_HEADER)
     else:
         _bdf_draw(img, 0, 0, "Ln", _FONT, COL_HEADER)
-        _bdf_draw(img, dest_x, 0, "Dest", _FONT, COL_HEADER)
+        _bdf_draw(img, ln_w + 2, 0, "Dest", _FONT, COL_HEADER)
     _bdf_draw(img, MATRIX_W - _bdf_width("Min", _FONT), 0, "Min", _FONT, COL_HEADER)
 
+
+def _draw_row(img: Image.Image, y: int, ln_w: int, row: dict):
+    px = img.load()
+    if row.get("missable"):
+        text_col = COL_MISSED
+    else:
+        text_col = COL_TEXT if row["realtime"] else _dim(COL_TEXT, 0.55)
+    if row["block"]:
+        for by in range(y, y + 5):
+            for bx in range(0, ln_w - 2):
+                px[bx, by] = row["color"]
+    else:
+        _bdf_draw(img, 0, y, row["label"], _FONT, row["color"])
+    _bdf_draw(img, ln_w + 2, y, row["dest"], _FONT, text_col)
+    m = row["min"]
+    mcol = COL_DUE if m == "Due" and not row.get("missable") else text_col
+    _bdf_draw(img, MATRIX_W - _bdf_width(m, _FONT), y, m, _FONT, mcol)
+
+
+def render_board(ln_w: int, rows: list, title: str = None) -> Image.Image:
+    """`title` replaces the "Ln  Dest" header (used to name the stop when cycling stops)."""
+    img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
+    _draw_header(img, ln_w, title)
     for row, y in zip(rows, ROW_Y):
-        if row.get("missable"):
-            text_col = COL_MISSED
-        else:
-            text_col = COL_TEXT if row["realtime"] else _dim(COL_TEXT, 0.55)
-        if row["block"]:
-            for by in range(y, y + 5):
-                for bx in range(0, ln_w - 2):
-                    px[bx, by] = row["color"]
-        else:
-            _bdf_draw(img, 0, y, row["label"], _FONT, row["color"])
-        _bdf_draw(img, dest_x, y, row["dest"], _FONT, text_col)
-        m = row["min"]
-        mcol = COL_DUE if m == "Due" and not row.get("missable") else text_col
-        _bdf_draw(img, MATRIX_W - _bdf_width(m, _FONT), y, m, _FONT, mcol)
+        _draw_row(img, y, ln_w, row)
+    return img
+
+
+def build_scroll_strip(ln_w: int, blocks: list) -> Image.Image:
+    """
+    One tall image for scroll mode: for each stop, its name then its rows,
+    with a faint divider between stops. blocks: [(title, rows)]. Loops seamlessly.
+    """
+    heights = [LINE_H * (1 + len(rows)) + 3 for _t, rows in blocks]
+    img = Image.new("RGB", (MATRIX_W, max(1, sum(heights))), (0, 0, 0))
+    px = img.load()
+    y = 0
+    for (title, rows), h in zip(blocks, heights):
+        _bdf_draw(img, 0, y, (title or "")[:MATRIX_W // CHAR_W], _FONT, COL_STOP)
+        for k, row in enumerate(rows):
+            _draw_row(img, y + LINE_H * (k + 1), ln_w, row)
+        div_y = y + h - 2
+        for x in range(8, MATRIX_W - 8, 3):
+            px[x, div_y] = COL_DIVIDER
+            px[x + 1, div_y] = COL_DIVIDER
+        y += h
+    return img
+
+
+def render_scroll_frame(ln_w: int, strip: Image.Image, offset: int) -> Image.Image:
+    """Fixed header row + the strip scrolled to `offset`, wrapping around."""
+    img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
+    _draw_header(img, ln_w)
+    sh = strip.height
+    offset %= sh
+    y = SCROLL_Y
+    while y < MATRIX_H:
+        part = strip.crop((0, offset, MATRIX_W, min(sh, offset + MATRIX_H - y)))
+        img.paste(part, (0, y))
+        y += part.height
+        offset = 0
     return img

@@ -568,10 +568,17 @@ def transit_preview():
     """Fetch live arrivals for an unsaved transit config and render each 64×32 page."""
     from PIL import Image
     from plugins.transit.manager import (
-        build_pages, configured_stops, fetch_stop, line_label_width,
+        build_pages, configured_stops, fetch_stop, is_scroll_mode, line_label_width,
     )
     from plugins.transit.providers.base import ProviderNotReady
-    from plugins.transit.render import render_board
+    from plugins.transit.render import (
+        SCROLL_Y, build_scroll_strip, render_board, render_scroll_frame,
+    )
+
+    def _png(img):
+        buf = io.BytesIO()
+        img.resize((img.width * 6, img.height * 6), Image.NEAREST).save(buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
     data = request.get_json(force=True) or {}
 
@@ -592,18 +599,26 @@ def transit_preview():
         if not results and preparing:
             raise ProviderNotReady("; ".join(problems))
 
+        built = build_pages(data, results, line_label_width(stops))
+        scrolling = is_scroll_mode(data) and len(built) > 1
         pages = []
-        for title, ln_w, rows in build_pages(data, results, line_label_width(stops)):
-            img = render_board(ln_w, rows, title).resize((64 * 6, 32 * 6), Image.NEAREST)
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
+        for title, ln_w, rows in built:
             pages.append({
                 "title": title or "",
                 "rows": [{"line": r["label"], "dest_full": r["dest_full"], "dest": r["dest"],
                           "min": r["min"], "missable": r["missable"]} for r in rows],
-                "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                # Scroll mode gets one tall image of the whole loop instead (below)
+                "image": None if scrolling else _png(render_board(ln_w, rows)),
             })
-        return {"pages": pages, "problems": problems}
+        scroll_image = None
+        if scrolling:
+            ln_w = built[0][1]
+            strip = build_scroll_strip(ln_w, [(t, rows) for t, _w, rows in built])
+            tall = Image.new("RGB", (64, SCROLL_Y + strip.height))
+            tall.paste(render_scroll_frame(ln_w, strip, 0).crop((0, 0, 64, SCROLL_Y)), (0, 0))
+            tall.paste(strip, (0, SCROLL_Y))
+            scroll_image = _png(tall)
+        return {"pages": pages, "scroll_image": scroll_image, "problems": problems}
 
     return _transit_call(_run)
 

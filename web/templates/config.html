@@ -786,7 +786,7 @@
             </div>
 
             <!-- Display mode -->
-            <div class="col-md-8">
+            <div class="col-md-6">
               <label class="form-label">When showing more than one stop</label>
               <div class="form-check">
                 <input class="form-check-input" type="radio" id="tm_combined" value="combined"
@@ -796,17 +796,23 @@
                 </label>
               </div>
               <div class="form-check">
-                <input class="form-check-input" type="radio" id="tm_cycle" value="cycle"
+                <input class="form-check-input" type="radio" id="tm_scroll" value="scroll"
                        x-model="pluginConfigs.transit.display_mode">
-                <label class="form-check-label" for="tm_cycle">
-                  <strong>Cycle</strong> — the next 3 for each stop, one stop at a time (stop name in the header)
+                <label class="form-check-label" for="tm_scroll">
+                  <strong>Scroll</strong> — the next 3 for each stop, scrolling up under the Ln / Dest / Min header (like Breaking News)
                 </label>
               </div>
             </div>
-            <div class="col-md-2" x-show="pluginConfigs.transit.display_mode === 'cycle'">
-              <label class="form-label">Sec / Stop</label>
-              <input type="number" min="3" max="60" class="form-control bg-dark text-light border-secondary"
-                     x-model.number="pluginConfigs.transit.seconds_per_page">
+            <div class="col-md-4" x-show="pluginConfigs.transit.display_mode === 'scroll'">
+              <label class="form-label d-flex justify-content-between">
+                <span>Scroll Speed</span>
+                <span class="text-muted small" x-text="pluginConfigs.transit.scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="0.5" max="5" step="0.5"
+                     x-model.number="pluginConfigs.transit.scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>Slow</span><span>Fast</span>
+              </div>
             </div>
             <div class="col-md-2">
               <label class="form-label">Refresh (sec)</label>
@@ -918,11 +924,11 @@
                              x-model.number="stop.min_minutes">
                       <div class="form-text text-muted">Arrivals you can't make in time show grey.</div>
                     </div>
-                    <div class="col-md-3" x-show="stop.stop_id && pluginConfigs.transit.display_mode === 'cycle'">
-                      <label class="form-label">Header Name</label>
-                      <input type="text" maxlength="12" class="form-control bg-dark text-light border-secondary"
+                    <div class="col-md-3" x-show="stop.stop_id && pluginConfigs.transit.display_mode === 'scroll'">
+                      <label class="form-label">Short Name</label>
+                      <input type="text" maxlength="16" class="form-control bg-dark text-light border-secondary"
                              x-model="stop.label" placeholder="auto">
-                      <div class="form-text text-muted">Up to 12 characters.</div>
+                      <div class="form-text text-muted">Shown above this stop's rows. Up to 16 characters.</div>
                     </div>
                   </div>
                 </div>
@@ -952,16 +958,22 @@
               </div>
             </div>
 
-            <!-- Preview: one image per page -->
+            <!-- Preview: one board image (combined), or the whole scrolling loop (scroll) -->
             <div class="col-12" x-show="transit.preview">
+              <div class="mb-3" x-show="transit.preview?.scroll_image">
+                <div class="text-muted small mb-1">Full scroll loop — the header stays fixed while the rows below it scroll up:</div>
+                <img :src="transit.preview?.scroll_image" alt="Scroll preview" class="border border-secondary rounded"
+                     style="image-rendering:pixelated;max-width:100%;width:384px">
+              </div>
               <div class="small text-warning mb-2" x-show="(transit.preview?.problems || []).length"
                    x-text="(transit.preview?.problems || []).join(' · ')"></div>
               <div class="text-muted small" x-show="!(transit.preview?.pages || []).length">No upcoming arrivals right now.</div>
               <template x-for="(pg, p) in (transit.preview?.pages || [])" :key="p">
                 <div class="d-flex flex-wrap gap-3 align-items-start mb-3">
-                  <img :src="pg.image" alt="Display preview" class="border border-secondary rounded"
+                  <img :src="pg.image" alt="Display preview" class="border border-secondary rounded" x-show="pg.image"
                        style="image-rendering:pixelated;max-width:100%;width:384px">
                   <table class="table table-sm table-dark small mb-0" style="width:auto">
+                    <caption class="caption-top text-light small py-1" x-show="transit.preview?.scroll_image" x-text="pg.title"></caption>
                     <thead><tr><th>Ln</th><th>Destination</th><th>Shown as</th><th>Min</th></tr></thead>
                     <tbody>
                       <template x-for="(r, k) in pg.rows" :key="k">
@@ -1208,7 +1220,7 @@ function configPage() {
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
       event_countdown:         { event_title: '', event_datetime: '' },
-      transit:                 { stops: [], display_mode: 'combined', seconds_per_page: 6, update_interval: 30, dest_aliases: {} },
+      transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     secrets: {},
@@ -1293,7 +1305,9 @@ function configPage() {
       if (!cfgs.clock_weather) cfgs.clock_weather = {};
       if (!cfgs.clock_weather.alerts) cfgs.clock_weather.alerts = {};
       if (cfgs.transit) {
-        const t = { display_mode: 'combined', seconds_per_page: 6, update_interval: 30, dest_aliases: {}, ...cfgs.transit };
+        const t = { display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {}, ...cfgs.transit };
+        if (t.display_mode === 'cycle') t.display_mode = 'scroll';   // page-flip mode was replaced by scrolling
+        delete t.seconds_per_page;
         // Upgrade the original single-stop format to a one-item stops list
         if (!Array.isArray(t.stops)) {
           t.stops = t.stop_id ? [{ agency: t.agency, routes: t.routes || [], stop_id: t.stop_id,

@@ -154,7 +154,7 @@
       "display_duration": 20,
       "update_interval": 30,
       "display_mode": "combined",
-      "seconds_per_page": 6,
+      "scroll_speed": 1,
       "stops": [],
       "dest_aliases": {}
     }

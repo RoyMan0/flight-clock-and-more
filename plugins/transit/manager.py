@@ -7,12 +7,14 @@ Config (plugins.transit):
                       routes       route ids to include at this stop (one or more)
                       stop_id      stop/station id from the agency's data
                       stop_name    full name (for the UI)
-                      label        optional short name for the stop header in cycle mode
+                      label        optional short stop name shown in scroll mode
                       direction    "both" or a provider direction key
                       min_minutes  walk time: arrivals sooner than this are shown grey
   display_mode      "combined" — next 3 across every stop, soonest first
-                    "cycle"    — next 3 for each stop, one stop per page
-  seconds_per_page  page time in cycle mode
+                    "scroll"   — next 3 for each stop under a fixed Ln/Dest/Min header,
+                                 scrolling bottom-to-top like Breaking News
+                                 ("cycle" from earlier versions is treated as "scroll")
+  scroll_speed      scroll mode speed in px/frame (10 fps)
   dest_aliases      {"Full destination name": "Short"} user overrides
 
 Legacy single-stop configs (agency/routes/stop_id/direction at the top level)
@@ -32,15 +34,16 @@ from plugins.transit.abbrev import shorten
 from plugins.transit.agencies import AGENCIES, get_provider
 from plugins.transit.providers.base import ProviderConfigError, ProviderNotReady
 from plugins.transit.render import (
-    HEADER_MAX_CHARS, MAX_LABEL_CHARS, ROW_Y, build_rows, label_column_width,
-    push_pil_to_canvas, render_board,
+    CHAR_W, MATRIX_W, MAX_LABEL_CHARS, ROW_Y, build_rows, build_scroll_strip,
+    label_column_width, push_pil_to_canvas, render_board, render_scroll_frame,
 )
 
 log = logging.getLogger(__name__)
 
 STALE_AFTER_SECS = 300      # keep showing a stop's last good data this long when fetches fail
 KEEP_ARRIVALS = 8           # extra arrivals held so rows refill as trains depart
-DEFAULT_PAGE_SECS = 6
+DEFAULT_SCROLL_SPEED = 1.0  # px/frame
+STOP_NAME_CHARS = MATRIX_W // CHAR_W
 
 
 # ------------------------------------------------------------------
@@ -93,17 +96,21 @@ def line_label_width(stops: list[dict]) -> int:
     return w
 
 
+def is_scroll_mode(config: dict) -> bool:
+    return config.get("display_mode", "combined") in ("scroll", "cycle")
+
+
 def stop_title(stop: dict) -> str:
     if (stop.get("label") or "").strip():
-        return stop["label"].strip()[:HEADER_MAX_CHARS]
+        return stop["label"].strip()[:STOP_NAME_CHARS]
     alias_set = AGENCIES.get(stop.get("agency", ""), {}).get("alias_set", "")
-    return shorten(stop.get("stop_name") or str(stop.get("stop_id")), HEADER_MAX_CHARS, alias_set)
+    return shorten(stop.get("stop_name") or str(stop.get("stop_id")), STOP_NAME_CHARS, alias_set)
 
 
 def build_pages(config: dict, results: list, ln_w: int = 8, now: float = None) -> list:
     """
     results: [(stop, [Arrival])] → pages: [(title or None, ln_w, rows)].
-    Combined mode yields at most one page; cycle mode one page per stop with arrivals.
+    Combined mode yields at most one page; scroll mode one page per stop with arrivals.
     """
     now = now or time.time()
     aliases = config.get("dest_aliases") or {}
@@ -120,7 +127,7 @@ def build_pages(config: dict, results: list, ln_w: int = 8, now: float = None) -
     ln_w = max(ln_w, label_column_width(every))
     n = len(ROW_Y)
 
-    if config.get("display_mode", "combined") == "cycle":
+    if is_scroll_mode(config):
         pages = []
         for stop, arr in upcoming:
             if arr:
@@ -156,15 +163,13 @@ class TransitPlugin(BasePlugin):
         self._lock = threading.Lock()
         self._results: dict = {}          # stop_key → (fetched_at, [Arrival])
         self._ln_w: Optional[int] = None
-        self._page_idx = 0
-        self._page_start = 0.0
-        self._cycle_done = False
+        self._y_offset = 0.0
+        self._strip = None
+        self._strip_key: Optional[tuple] = None
         self._last_render_key: Optional[tuple] = None
 
     def reset(self):
-        self._page_idx = 0
-        self._page_start = time.monotonic()
-        self._cycle_done = False
+        self._y_offset = 0.0
         self._last_render_key = None
 
     def on_config_change(self, new_config: dict):
@@ -217,43 +222,53 @@ class TransitPlugin(BasePlugin):
     # Display
     # ------------------------------------------------------------------
 
-    def _page_secs(self) -> float:
-        return float(self.config.get("seconds_per_page", DEFAULT_PAGE_SECS) or DEFAULT_PAGE_SECS)
+    def _scroll_speed(self) -> float:
+        try:
+            return max(0.1, float(self.config.get("scroll_speed", DEFAULT_SCROLL_SPEED)))
+        except (TypeError, ValueError):
+            return DEFAULT_SCROLL_SPEED
 
     @property
     def display_duration(self) -> float:
-        # In cycle mode, stay long enough to show every stop once
+        # In scroll mode, stay at least long enough for one full pass through every stop
         base = float(self.config.get("display_duration", 30))
-        if self.config.get("display_mode") == "cycle":
-            n = len(configured_stops(self.config))
-            return max(base, n * self._page_secs() + 1)
+        if is_scroll_mode(self.config):
+            strip_h = self._strip.height if self._strip is not None else \
+                len(configured_stops(self.config)) * 35
+            return max(base, strip_h / (self._scroll_speed() * 10) + 1)
         return base
-
-    def is_cycle_complete(self) -> bool:
-        return self._cycle_done
 
     def has_content(self) -> bool:
         return bool(self._pages())
+
+    @staticmethod
+    def _rows_key(rows: list) -> tuple:
+        return tuple((r["label"], r["dest"], r["min"], r["missable"]) for r in rows)
 
     def draw(self) -> bool:
         pages = self._pages()
         if not pages:
             return False
 
-        if len(pages) > 1:
-            now = time.monotonic()
-            if now - self._page_start >= self._page_secs():
-                self._page_idx += 1
-                self._page_start = now
-                if self._page_idx >= len(pages):
-                    # Every stop shown once — hold the last page; reset() starts over
-                    self._page_idx = len(pages) - 1
-                    self._cycle_done = True
-        idx = min(self._page_idx, len(pages) - 1)
-        title, ln_w, rows = pages[idx]
+        # Scroll mode with several stops: fixed header, schedule scrolls underneath
+        if is_scroll_mode(self.config) and len(pages) > 1:
+            ln_w = pages[0][1]
+            key = (ln_w, tuple((t, self._rows_key(rows)) for t, _w, rows in pages))
+            if key != self._strip_key:
+                self._strip = build_scroll_strip(ln_w, [(t, rows) for t, _w, rows in pages])
+                self._strip_key = key
+            strip = self._strip
+            push_pil_to_canvas(render_scroll_frame(ln_w, strip, int(self._y_offset)),
+                               self.display_manager)
+            # Loops for the whole display_duration, like Breaking News
+            self._y_offset = (self._y_offset + self._scroll_speed()) % strip.height
+            self._last_render_key = None
+            return True
 
-        key = (idx, title, ln_w, tuple((r["label"], r["dest"], r["min"], r["missable"]) for r in rows))
+        # Static board: combined mode, or a single stop
+        _title, ln_w, rows = pages[0]
+        key = (ln_w, self._rows_key(rows))
         if key != self._last_render_key:
-            push_pil_to_canvas(render_board(ln_w, rows, title), self.display_manager)
+            push_pil_to_canvas(render_board(ln_w, rows), self.display_manager)
             self._last_render_key = key
         return True
