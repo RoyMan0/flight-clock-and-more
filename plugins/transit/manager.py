@@ -7,12 +7,13 @@ Config (plugins.transit):
                       routes       route ids to include at this stop (one or more)
                       stop_id      stop/station id from the agency's data
                       stop_name    full name (for the UI)
-                      label        optional short stop name shown in scroll mode
+                      label        optional short stop name (config page preview only)
                       direction    "both" or a provider direction key
                       min_minutes  walk time: arrivals sooner than this are shown grey
   display_mode      "combined" — next 3 across every stop, soonest first
                     "scroll"   — next 3 for each stop under a fixed Ln/Dest/Min header,
-                                 scrolling bottom-to-top like Breaking News
+                                 scrolling bottom-to-top like Breaking News (stops
+                                 separated by a faint divider, no stop-name line)
                                  ("cycle" from earlier versions is treated as "scroll")
   scroll_speed      scroll mode speed in px/frame (10 fps)
   dest_aliases      {"Full destination name": "Short"} user overrides

@@ -924,12 +924,6 @@
                              x-model.number="stop.min_minutes">
                       <div class="form-text text-muted">Arrivals you can't make in time show grey.</div>
                     </div>
-                    <div class="col-md-3" x-show="stop.stop_id && pluginConfigs.transit.display_mode === 'scroll'">
-                      <label class="form-label">Short Name</label>
-                      <input type="text" maxlength="16" class="form-control bg-dark text-light border-secondary"
-                             x-model="stop.label" placeholder="auto">
-                      <div class="form-text text-muted">Shown above this stop's rows. Up to 16 characters.</div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -961,7 +955,7 @@
             <!-- Preview: one board image (combined), or the whole scrolling loop (scroll) -->
             <div class="col-12" x-show="transit.preview">
               <div class="mb-3" x-show="transit.preview?.scroll_image">
-                <div class="text-muted small mb-1">Full scroll loop — the header stays fixed while the rows below it scroll up:</div>
+                <div class="text-muted small mb-1">Full scroll loop — the header stays fixed while the rows below it scroll up (dividers separate stops):</div>
                 <img :src="transit.preview?.scroll_image" alt="Scroll preview" class="border border-secondary rounded"
                      style="image-rendering:pixelated;max-width:100%;width:384px">
               </div>

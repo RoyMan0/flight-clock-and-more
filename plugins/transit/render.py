@@ -185,7 +185,6 @@ HEADER_MAX_CHARS = (MATRIX_W - MIN_COL_W - 2) // CHAR_W
 SCROLL_Y = 8
 SCROLL_H = MATRIX_H - SCROLL_Y
 LINE_H = 8                       # 6 px glyph cell + 2 px gap
-COL_STOP = (215, 215, 215)       # stop name above each stop's rows (brighter than walk-time grey)
 COL_DIVIDER = (50, 50, 50)
 
 
@@ -227,17 +226,16 @@ def render_board(ln_w: int, rows: list, title: str = None) -> Image.Image:
 
 def build_scroll_strip(ln_w: int, blocks: list) -> Image.Image:
     """
-    One tall image for scroll mode: for each stop, its name then its rows,
-    with a faint divider between stops. blocks: [(title, rows)]. Loops seamlessly.
+    One tall image for scroll mode: each stop's rows, with a faint divider
+    between stops. blocks: [(title, rows)] (title unused on the panel). Loops seamlessly.
     """
-    heights = [LINE_H * (1 + len(rows)) + 3 for _t, rows in blocks]
+    heights = [LINE_H * len(rows) + 3 for _t, rows in blocks]
     img = Image.new("RGB", (MATRIX_W, max(1, sum(heights))), (0, 0, 0))
     px = img.load()
     y = 0
-    for (title, rows), h in zip(blocks, heights):
-        _bdf_draw(img, 0, y, (title or "")[:MATRIX_W // CHAR_W], _FONT, COL_STOP)
+    for (_title, rows), h in zip(blocks, heights):
         for k, row in enumerate(rows):
-            _draw_row(img, y + LINE_H * (k + 1), ln_w, row)
+            _draw_row(img, y + LINE_H * k, ln_w, row)
         div_y = y + h - 2
         for x in range(8, MATRIX_W - 8, 3):
             px[x, div_y] = COL_DIVIDER
