@@ -109,6 +109,7 @@ All route results go through `_route_makes_sense()` sanity checking. Bad routes 
 
 Shows upcoming arrivals, station-sign style (header `Ln | Dest | Min`), for a list of watched stops in `plugins.transit.stops` (each: agency, routes, stop_id, direction, min_minutes, optional header `label`). Stops can be from different agencies.
 - `display_mode: "combined"` — one page: next 3 across all stops by time. `"cycle"` — one page per stop (stop name replaces the header), `seconds_per_page` each; `is_cycle_complete()` fires after one pass and `display_duration` is raised to fit every stop.
+- Config page: each stop panel picks one line and one stop from matching list boxes (add panels for more). `routes` stays a list in config; older panels with several lines keep them until a new line is picked.
 - `min_minutes` (walk time) never hides arrivals: ones you can't reach are drawn grey (`Arrival.missable`). If all of the next 3 are too soon, the last row shows the next catchable one (`_pick_rows`).
 - Legacy single-stop configs (top-level `agency`/`stop_id`) are still read (`configured_stops()` in `manager.py`); the config page upgrades them on load.
 - `build_pages()` / `fetch_stop()` in `manager.py` are shared by the plugin and `POST /api/transit/preview`, so the preview matches the panel exactly.

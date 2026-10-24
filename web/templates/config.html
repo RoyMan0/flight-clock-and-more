@@ -870,23 +870,22 @@
 
                     <!-- 2. Lines -->
                     <div class="col-md-6" x-show="transitUi(i).routes.length">
-                      <label class="form-label">2. Lines <span class="text-muted small">(choose one or more)</span></label>
+                      <label class="form-label">2. Line</label>
                       <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
-                             placeholder="Filter lines…" x-model="transitUi(i).routeFilter">
-                      <div class="border border-secondary rounded p-2" style="max-height:220px;overflow-y:auto">
+                             placeholder="Search lines…" x-model="transitUi(i).routeFilter">
+                      <select class="form-select form-select-sm bg-dark text-light border-secondary" size="8"
+                              @change="selectTransitLine(i, $event.target.value)">
                         <template x-for="r in transitFilteredRoutes(i)" :key="r.id">
-                          <div class="form-check">
-                            <input class="form-check-input" type="checkbox" :id="'tr_'+i+'_'+r.id"
-                                   :checked="(stop.routes||[]).includes(r.id)"
-                                   @change="toggleTransitRoute(i, r.id, $event.target.checked)">
-                            <label class="form-check-label small" :for="'tr_'+i+'_'+r.id">
-                              <span class="d-inline-block rounded-1 me-1 align-middle"
-                                    style="width:12px;height:12px" :style="'background:' + (r.color || '#888')"></span>
-                              <strong x-text="r.label"></strong>
-                              <span class="text-muted" x-text="r.name && r.name !== r.label ? ' — ' + r.name : ''"></span>
-                            </label>
-                          </div>
+                          <option :value="r.id" :selected="(stop.routes||[])[0] === r.id"
+                                  x-text="r.label + (r.name && r.name !== r.label ? ' — ' + r.name : '')"></option>
                         </template>
+                      </select>
+                      <div class="form-text text-muted" x-show="(stop.routes||[]).length">
+                        Selected:
+                        <span class="d-inline-block rounded-1 mx-1 align-middle" style="width:10px;height:10px"
+                              :style="'background:' + ((transitUi(i).routes.find(r => r.id === (stop.routes||[])[0]) || {}).color || '#888')"></span>
+                        <strong class="text-light" x-text="transitRouteLabels(i)"></strong>
+                        <span x-show="(stop.routes||[]).length > 1"> — picking a line replaces these</span>
                       </div>
                     </div>
 
@@ -1551,10 +1550,11 @@ function configPage() {
         || s.name.toLowerCase().includes(f) || String(s.id).toLowerCase() === f);
     },
 
-    async toggleTransitRoute(i, id, checked) {
+    // One line per stop panel — add another panel to watch more lines
+    async selectTransitLine(i, id) {
       const stop = this.pluginConfigs.transit.stops[i];
-      const list = stop.routes || [];
-      stop.routes = checked ? (list.includes(id) ? list : [...list, id]) : list.filter(r => r !== id);
+      if (!id || ((stop.routes || []).length === 1 && stop.routes[0] === id)) return;
+      stop.routes = [id];
       await this.transitLoadStops(i);
       // Drop the chosen stop if none of the selected lines serve it any more
       if (stop.stop_id && !this.transitUi(i).stops.some(s => s.id === stop.stop_id)) {
