@@ -86,7 +86,12 @@ class PluginManager:
                 frame_start = time.monotonic()
 
                 self._apply_brightness()
-                self._dispatch()
+                try:
+                    self._dispatch()
+                except Exception as e:
+                    # A bug in one plugin must never take the whole display down
+                    # (systemd would restart the service and re-fetch every API).
+                    log.exception(f"[plugins] Frame error ({self._active_id}): {e}")
 
                 elapsed = time.monotonic() - frame_start
                 sleep_time = self.FRAME_PERIOD - elapsed
@@ -151,8 +156,12 @@ class PluginManager:
         ):
             if self._active_id != "flight_tracker":
                 self._switch_to("flight_tracker")
-            if self._flight_plugin.draw():
-                self.display.swap()
+            try:
+                if self._flight_plugin.draw():
+                    self.display.swap()
+            except Exception as e:
+                # Unprotected, this crashed the whole app (systemd restart) on any draw error
+                log.error(f"[plugins] Draw error (flight_tracker priority): {e}")
             return
 
         # --- Return from flight tracker when sky is clear ---

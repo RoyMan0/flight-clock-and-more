@@ -41,7 +41,10 @@ class MirrorCanvas:
     # --- drawing API used by plugins/scenes --------------------------
     def SetPixel(self, x, y, r, g, b):
         self.real.SetPixel(x, y, r, g, b)
-        self.mirror_pixel(x, y, r, g, b)
+        try:
+            self.mirror_pixel(x, y, r, g, b)
+        except Exception:
+            pass                     # the preview must never break drawing
 
     def Clear(self):
         self.real.Clear()
@@ -50,8 +53,11 @@ class MirrorCanvas:
 
     def Fill(self, r, g, b):
         self.real.Fill(r, g, b)
-        with self._lock:
-            self._buf[:] = bytes((r & 255, g & 255, b & 255)) * (self._w * self._h)
+        try:
+            with self._lock:
+                self._buf[:] = bytes((int(r) & 255, int(g) & 255, int(b) & 255)) * (self._w * self._h)
+        except Exception:
+            pass
 
     def SetImage(self, image, offset_x=0, offset_y=0, *args, **kwargs):
         """Fast whole-image push (C path on the Pi), mirrored with one paste."""
@@ -76,11 +82,13 @@ class MirrorCanvas:
 
     # --- mirror helpers ----------------------------------------------
     def mirror_pixel(self, x, y, r, g, b):
+        # Scenes sometimes pass floats (e.g. faded colours); the C library truncates, so do the same
+        x, y = int(x), int(y)
         if 0 <= x < self._w and 0 <= y < self._h:
             i = (y * self._w + x) * 3
-            self._buf[i] = r & 255
-            self._buf[i + 1] = g & 255
-            self._buf[i + 2] = b & 255
+            self._buf[i] = int(r) & 255
+            self._buf[i + 1] = int(g) & 255
+            self._buf[i + 2] = int(b) & 255
 
     def snapshot(self) -> Image.Image:
         with self._lock:

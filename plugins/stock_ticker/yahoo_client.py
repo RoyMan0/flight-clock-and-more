@@ -6,6 +6,7 @@ Uses the public v8 chart endpoint (one request per symbol).
 import json
 import logging
 import urllib.error
+import urllib.parse
 import urllib.request
 
 log = logging.getLogger(__name__)
@@ -17,8 +18,24 @@ _HEADERS = {
 }
 
 
+# Index names people commonly type → Yahoo's index symbols. The ticker still
+# shows the name the user entered (e.g. "SPX"), only the lookup changes.
+INDEX_ALIASES = {
+    "SPX": "^GSPC", "SP500": "^GSPC", "INX": "^GSPC",
+    "DJI": "^DJI", "DJIA": "^DJI", "DOW": "^DJI",
+    "NDX": "^NDX",
+    "IXIC": "^IXIC", "COMP": "^IXIC", "NASDAQ": "^IXIC",
+    "RUT": "^RUT",
+    "VIX": "^VIX",
+}
+
+
+def yahoo_symbol(symbol: str) -> str:
+    return INDEX_ALIASES.get(symbol.strip().upper(), symbol.strip())
+
+
 def _fetch_one(symbol: str) -> dict | None:
-    url = _CHART_URL.format(symbol=symbol)
+    url = _CHART_URL.format(symbol=urllib.parse.quote(yahoo_symbol(symbol), safe=""))
     try:
         req = urllib.request.Request(url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=8) as resp:
