@@ -956,11 +956,27 @@ def flight_history_day(date):
 
 @api_bp.post("/system/connect-bt")
 def connect_bt():
-    threading.Thread(
-        target=lambda: subprocess.run(["/home/royman/bt-connect.sh"]),
-        daemon=True,
-    ).start()
-    return jsonify({"ok": True})
+    """Reconnect Bluetooth audio. Runs ~/bt-connect.sh for the app's user if one exists
+    (custom per-device setups); otherwise reconnects every paired device via bluetoothctl,
+    so this works on any install regardless of username."""
+    custom = os.path.expanduser("~/bt-connect.sh")
+
+    def _connect():
+        if os.path.isfile(custom) and os.access(custom, os.X_OK):
+            subprocess.run([custom], capture_output=True, timeout=60)
+            return
+        listing = subprocess.run(["bluetoothctl", "devices", "Paired"],
+                                 capture_output=True, text=True, timeout=5)
+        if listing.returncode != 0 or not listing.stdout.strip():
+            listing = subprocess.run(["bluetoothctl", "paired-devices"],     # older BlueZ
+                                     capture_output=True, text=True, timeout=5)
+        for line in listing.stdout.splitlines():
+            parts = line.strip().split(" ", 2)
+            if len(parts) >= 2 and parts[0] == "Device":
+                subprocess.run(["bluetoothctl", "connect", parts[1]], capture_output=True, timeout=15)
+
+    threading.Thread(target=_connect, daemon=True).start()
+    return jsonify({"ok": True, "mode": "script" if os.path.isfile(custom) else "paired-devices"})
 
 
 @api_bp.get("/system/bt/devices")

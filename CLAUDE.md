@@ -178,6 +178,7 @@ Every new module must ship with all of these (the owner asked for this explicitl
 - **Binary content in logs** — the log may contain binary characters from PIL warnings. Use `grep -a` when grepping log files.
 - **protobuf pin (fr24 vs gtfs-realtime-bindings)** — `fr24` requires `protobuf<7`; `gtfs-realtime-bindings` 3.x requires `protobuf>=7`. `requirements.txt` pins `gtfs-realtime-bindings==2.0.0` + `protobuf>=6.33,<7` (verified working with fr24 0.3.1 and 0.4.0). Don't bump the bindings until fr24 supports protobuf 7, or the FR24 fallback breaks. Some Pis also have an old `protobuf` in `~/.local`; the venv copy shadows it, and pip's "Not uninstalling … outside environment" message about it is harmless.
 - **Mac dev Python** — `/usr/local/bin/python3` is an x86_64 binary that won't run (no Rosetta), and `/usr/bin/python3` is 3.9, which is too old (the code uses `X | None` at module level). Use a 3.10+ interpreter (e.g. a `uv`-managed 3.12 venv) for local testing.
+- **Bluetooth audio** — the config/dashboard Bluetooth buttons use `bluetoothctl` directly (`/api/system/bt/*`). The legacy `POST /api/system/connect-bt` runs `~/bt-connect.sh` for the app's user if it exists (not in the repo — a per-Pi custom script), otherwise reconnects every paired device. Never hard-code `/home/<user>` paths; installs run under different usernames.
 - **Third-party log suppression** — `werkzeug`, `httpx`, and `fr24` loggers are set to WARNING in `main.py` to reduce noise.
 
 ## Secrets Schema
