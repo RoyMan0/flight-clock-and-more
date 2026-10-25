@@ -39,7 +39,7 @@
                          :checked="pluginConfigs[pid]?.enabled !== false"
                          @change="togglePlugin(pid, $event.target.checked)">
                 </div>
-                <span class="flex-grow-1 fw-semibold" x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports',transit:'Transit Arrivals/Departures',world_clock:'World Clock'}[pid] || pid.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()))"></span>
+                <span class="flex-grow-1 fw-semibold" x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports',transit:'Transit Arrivals/Departures',world_clock:'World Clock',now_playing:'Now Playing'}[pid] || pid.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()))"></span>
                 <div class="d-flex align-items-center gap-1" style="width:120px">
                   <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
                          style="width:65px"
@@ -1094,6 +1094,178 @@
         </div>
       </div>
 
+      <!-- Now Playing Config -->
+      <div class="card mb-4" x-show="'now_playing' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-music-note-beamed me-2"></i>Now Playing</div>
+        <div class="card-body" x-show="'now_playing' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.now_playing.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">Shows during its turn in the rotation while something is playing; skipped otherwise.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label d-flex justify-content-between">
+                <span>Scroll Speed <span class="text-muted small">(long titles)</span></span>
+                <span class="text-muted small" x-text="pluginConfigs.now_playing.scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="0.5" max="5" step="0.5"
+                     x-model.number="pluginConfigs.now_playing.scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem">
+                <span>Slow</span><span>Fast</span>
+              </div>
+            </div>
+
+            <!-- Source order -->
+            <div class="col-12">
+              <label class="form-label">Sources <span class="text-muted small">(checked top to bottom — the first one playing is shown)</span></label>
+              <ul class="list-group">
+                <template x-for="(src, idx) in pluginConfigs.now_playing.source_order" :key="src">
+                  <li class="list-group-item bg-dark text-light border-secondary d-flex align-items-center gap-2 py-1">
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveNowPlayingSource(idx, -1)" :disabled="idx===0">▲</button>
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveNowPlayingSource(idx, 1)"
+                              :disabled="idx===pluginConfigs.now_playing.source_order.length-1">▼</button>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" :id="'nps_'+src" x-model="pluginConfigs.now_playing.sources[src]">
+                    </div>
+                    <label class="fw-semibold mb-0 flex-grow-1" :for="'nps_'+src" x-text="nowPlaying.labels[src]"></label>
+                    <span class="small text-muted" x-text="nowPlaying.hints[src]"></span>
+                  </li>
+                </template>
+              </ul>
+            </div>
+
+            <!-- Spotify -->
+            <div class="col-12" x-show="pluginConfigs.now_playing.sources.spotify">
+              <div class="border border-secondary rounded p-3">
+                <div class="fw-semibold mb-2"><i class="bi bi-spotify me-1" style="color:#1DB954"></i>Spotify
+                  <span class="small ms-2" :class="nowPlaying.spotify.connected ? 'text-success' : 'text-warning'"
+                        x-text="nowPlaying.spotify.connected ? ('Connected as ' + nowPlaying.spotify.user) : 'Not connected'"></span>
+                </div>
+                <ol class="small text-muted mb-2 ps-3">
+                  <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> → <strong>Create app</strong>. Any name. Redirect URI: <code>http://127.0.0.1:8888/callback</code> (add it exactly). Tick <strong>Web API</strong>.</li>
+                  <li>Copy the app's <strong>Client ID</strong> below and save it.</li>
+                  <li>Click <strong>Connect Spotify</strong> and approve. You'll land on a page that won't load — that's expected. Copy the full address from that tab and paste it below.</li>
+                </ol>
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-6">
+                    <label class="form-label small mb-1">Client ID</label>
+                    <div class="d-flex gap-2">
+                      <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary"
+                             autocomplete="off" :value="secrets.spotify_client_id || ''"
+                             @change="secrets.spotify_client_id = $event.target.value" placeholder="Spotify app Client ID">
+                      <button class="btn btn-success btn-sm text-nowrap" @click="saveSecrets().then(() => loadSpotifyStatus())">Save</button>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <button class="btn btn-outline-light btn-sm" @click="connectSpotify()">
+                      <i class="bi bi-box-arrow-up-right me-1"></i>Connect Spotify
+                    </button>
+                  </div>
+                  <div class="col-12" x-show="nowPlaying.spotify.awaitingPaste">
+                    <label class="form-label small mb-1">Paste the address of the page that wouldn't load (starts with http://127.0.0.1:8888/callback?code=…)</label>
+                    <div class="d-flex gap-2">
+                      <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                             x-model="nowPlaying.spotify.pasted" placeholder="http://127.0.0.1:8888/callback?code=...">
+                      <button class="btn btn-success btn-sm text-nowrap" @click="finishSpotify()">Finish</button>
+                    </div>
+                  </div>
+                  <div class="col-12 small" x-show="nowPlaying.spotify.message"
+                       :class="nowPlaying.spotify.error ? 'text-danger' : 'text-success'" x-text="nowPlaying.spotify.message"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mac Music app -->
+            <div class="col-12" x-show="pluginConfigs.now_playing.sources.mac">
+              <div class="border border-secondary rounded p-3">
+                <div class="fw-semibold mb-2"><i class="bi bi-apple me-1"></i>Mac Music app <span class="small text-muted">(Apple Music &amp; iTunes library, played on the Mac)</span></div>
+                <ol class="small text-muted mb-2 ps-3">
+                  <li>On the Mac: <strong>System Settings → General → Sharing → Remote Login</strong> → on.</li>
+                  <li>Enter the Mac's name and your Mac username, click <strong>Show key</strong>, and run the command once in <strong>Terminal</strong> on the Mac.</li>
+                  <li>Click <strong>Test</strong> below while something plays. The first time, the Mac asks to let <em>sshd-keygen-wrapper</em> control Music — click <strong>Allow</strong>.</li>
+                </ol>
+                <div class="row g-2">
+                  <div class="col-md-5">
+                    <label class="form-label small mb-1">Mac hostname or IP</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                           x-model="pluginConfigs.now_playing.mac_host" placeholder="e.g. Roys-MacBook.local">
+                    <div class="form-text text-muted">Shown under Sharing → Local hostname.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small mb-1">Mac username</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                           x-model="pluginConfigs.now_playing.mac_user" placeholder="short name, e.g. royman">
+                  </div>
+                  <div class="col-md-3 d-flex align-items-start pt-4">
+                    <button class="btn btn-outline-light btn-sm" @click="showMacKey()"><i class="bi bi-key me-1"></i>Show key</button>
+                  </div>
+                  <div class="col-12" x-show="nowPlaying.macCommand">
+                    <label class="form-label small mb-1">Run this once in Terminal on the Mac:</label>
+                    <div class="d-flex gap-2">
+                      <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" rows="2" readonly
+                                x-text="nowPlaying.macCommand"></textarea>
+                      <button class="btn btn-outline-secondary btn-sm" @click="navigator.clipboard?.writeText(nowPlaying.macCommand)">Copy</button>
+                    </div>
+                  </div>
+                  <div class="col-12 small text-danger" x-show="nowPlaying.macError" x-text="nowPlaying.macError"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Last.fm -->
+            <div class="col-12" x-show="pluginConfigs.now_playing.sources.lastfm">
+              <div class="border border-secondary rounded p-3">
+                <div class="fw-semibold mb-2"><i class="bi bi-broadcast me-1" style="color:#D51007"></i>Last.fm</div>
+                <div class="small text-muted mb-2">
+                  Shows whatever Last.fm says you're scrobbling right now — any device that scrobbles. Apple Music on iPhone needs a
+                  scrobbler app to appear. Free API key: <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>.
+                  No progress bar for this source (Last.fm doesn't report it).
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label small mb-1">API key</label>
+                    <div class="d-flex gap-2">
+                      <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary" autocomplete="off"
+                             :value="secrets.lastfm_api_key || ''" @change="secrets.lastfm_api_key = $event.target.value">
+                      <button class="btn btn-success btn-sm" @click="saveSecrets()">Save</button>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small mb-1">Last.fm username</label>
+                    <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                           x-model="pluginConfigs.now_playing.lastfm_user">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Test results -->
+            <div class="col-12" x-show="nowPlaying.test">
+              <ul class="list-unstyled small mb-2">
+                <template x-for="s in (nowPlaying.test?.statuses || [])" :key="s.source">
+                  <li><strong x-text="s.name + ': '"></strong><span :class="s.ok ? 'text-light' : 'text-danger'" x-text="s.text"></span></li>
+                </template>
+                <li class="text-muted" x-show="!(nowPlaying.test?.statuses || []).length">No sources are turned on.</li>
+              </ul>
+              <img x-show="nowPlaying.test?.image" :src="nowPlaying.test?.image" alt="Now playing preview"
+                   class="border border-secondary rounded" style="image-rendering:pixelated;max-width:100%;width:384px">
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-success btn-sm" @click="saveNowPlaying()"><i class="bi bi-save me-1"></i>Save</button>
+            <button class="btn btn-outline-info btn-sm" @click="testNowPlaying()" :disabled="nowPlaying.testing">
+              <span class="spinner-border spinner-border-sm me-1" x-show="nowPlaying.testing"></span><i class="bi bi-eye me-1" x-show="!nowPlaying.testing"></i>Test
+            </button>
+            <span class="small text-success" x-show="nowPlaying.saved">Saved.</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1276,7 +1448,7 @@
           <div class="card-header"><i class="bi bi-key me-2"></i>Other Secrets</div>
           <div class="card-body">
             <div class="row g-3">
-              <template x-for="[k, v] in Object.entries(secrets).filter(([k]) => !k.startsWith('airlabs') && !k.startsWith('flightaware') && !['cta_train_api_key','cta_bus_api_key','mta_api_key'].includes(k))" :key="k">
+              <template x-for="[k, v] in Object.entries(secrets).filter(([k]) => !k.startsWith('airlabs') && !k.startsWith('flightaware') && !['cta_train_api_key','cta_bus_api_key','mta_api_key','spotify_client_id','spotify_refresh_token','lastfm_api_key'].includes(k))" :key="k">
                 <div class="col-md-6">
                   <label class="form-label text-muted small" x-text="k"></label>
                   <input type="password" class="form-control bg-dark text-light border-secondary"
@@ -1316,6 +1488,7 @@ function configPage() {
       event_countdown:         { event_title: '', event_datetime: '' },
       transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
       world_clock:             { cities: [], scroll_speed: 1 },
+      now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     secrets: {},
@@ -1330,6 +1503,12 @@ function configPage() {
     teamTab: '',
     transit: { agencies: [], ui: [], routesCache: {}, status: '', statusError: false, loading: false, preview: null },
     worldClock: { cities: [], filter: '', preview: null, status: '', saved: false },
+    nowPlaying: {
+      labels: { spotify: 'Spotify', mac: 'Mac Music app', lastfm: 'Last.fm' },
+      hints: { spotify: 'any of your devices', mac: 'Apple Music / iTunes on the Mac', lastfm: 'anything that scrobbles' },
+      spotify: { connected: false, user: '', awaitingPaste: false, pasted: '', message: '', error: false },
+      macCommand: '', macError: '', test: null, testing: false, saved: false,
+    },
     timezones: [],
     wifiNetworks: [],
     wifiSsid: '',
@@ -1414,6 +1593,13 @@ function configPage() {
         cfgs.transit = t;
       }
       if (cfgs.world_clock) cfgs.world_clock = { cities: [], scroll_speed: 1, ...cfgs.world_clock };
+      if (cfgs.now_playing) {
+        const np = { scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '', ...cfgs.now_playing };
+        const all = ['spotify', 'mac', 'lastfm'];
+        np.source_order = [...(np.source_order || []).filter(s => all.includes(s)), ...all.filter(s => !(np.source_order || []).includes(s))];
+        np.sources = { spotify: true, mac: false, lastfm: false, ...(np.sources || {}) };
+        cfgs.now_playing = np;
+      }
       this.pluginConfigs = cfgs;
       // Migrate legacy naive event_datetime to UTC ISO so timezone is always correct
       const ecDt = this.pluginConfigs.event_countdown?.event_datetime;
@@ -1434,6 +1620,7 @@ function configPage() {
       this.backups = backs;
       if (cfgs.transit) this.transitInit();
       if (cfgs.world_clock) this.worldClockInit();
+      if (cfgs.now_playing) this.loadSpotifyStatus();
     },
 
     moveUp(idx) {
@@ -1805,6 +1992,87 @@ function configPage() {
         else this.worldClock.status = d.message || 'Preview failed';
       } catch (e) {
         this.worldClock.status = 'Preview failed: ' + e;
+      }
+    },
+
+    // ---------------- Now Playing ----------------
+
+    async loadSpotifyStatus() {
+      try {
+        const d = await fetch('/api/now_playing/spotify/status').then(r => r.json());
+        Object.assign(this.nowPlaying.spotify, { connected: !!d.connected, user: d.user || '' });
+      } catch (e) { /* leave as is */ }
+    },
+
+    async connectSpotify() {
+      const sp = this.nowPlaying.spotify;
+      sp.message = ''; sp.error = false;
+      // Open the tab synchronously so popup blockers allow it, then point it at Spotify
+      const tab = window.open('', '_blank');
+      try {
+        const d = await fetch('/api/now_playing/spotify/auth_url').then(r => r.json());
+        if (!d.ok) throw new Error(d.message);
+        if (tab) tab.location = d.url; else window.location.assign(d.url);
+        sp.awaitingPaste = true;
+        sp.message = 'Approve in the Spotify tab, then paste that tab\'s address below.';
+      } catch (e) {
+        if (tab) tab.close();
+        sp.message = e.message || String(e); sp.error = true;
+      }
+    },
+
+    async finishSpotify() {
+      const sp = this.nowPlaying.spotify;
+      const d = await fetch('/api/now_playing/spotify/callback', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url: sp.pasted }),
+      }).then(r => r.json());
+      if (d.ok) {
+        Object.assign(sp, { connected: true, user: d.user, awaitingPaste: false, pasted: '', message: 'Spotify connected.', error: false });
+      } else {
+        Object.assign(sp, { message: d.message, error: true });
+      }
+    },
+
+    async showMacKey() {
+      this.nowPlaying.macError = '';
+      const d = await fetch('/api/now_playing/mac/key').then(r => r.json());
+      if (d.ok) this.nowPlaying.macCommand = d.command;
+      else this.nowPlaying.macError = d.message;
+    },
+
+    moveNowPlayingSource(idx, delta) {
+      const arr = [...this.pluginConfigs.now_playing.source_order];
+      const j = idx + delta;
+      if (j < 0 || j >= arr.length) return;
+      [arr[idx], arr[j]] = [arr[j], arr[idx]];
+      this.pluginConfigs.now_playing.source_order = arr;
+    },
+
+    async saveNowPlaying() {
+      await this.savePluginConfig('now_playing');
+      // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
+      if (this.pluginConfigs.now_playing.enabled !== false) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.nowPlaying.saved = true;
+      setTimeout(() => this.nowPlaying.saved = false, 2000);
+    },
+
+    async testNowPlaying() {
+      this.nowPlaying.testing = true;
+      try {
+        this.nowPlaying.test = await fetch('/api/now_playing/test', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginConfigs.now_playing),
+        }).then(r => r.json());
+      } catch (e) {
+        this.nowPlaying.test = { statuses: [{ source: 'x', name: 'Test', ok: false, text: String(e) }] };
+      } finally {
+        this.nowPlaying.testing = false;
       }
     },
 

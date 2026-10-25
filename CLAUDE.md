@@ -135,6 +135,16 @@ Current time in any number of user-chosen cities: four 8 px rows (no header), ci
 - Reuses `plugins/transit/render.py` BDF helpers and `plugins/transit/abbrev.shorten()` for over-long names. No network calls; `update()` is a no-op.
 - `utilities/solar.py` holds the sun-position math shared with `world_daylight` (moved there unchanged).
 
+### Now Playing Plugin (`plugins/now_playing/`)
+
+Current song: title marquee across the top (green, 5x7 font), 22×22 artwork bottom-left, artist/album to its right (each scrolls if > 40 px), 1 px progress bar on row 31. Takes its normal rotation turn; `has_content()` is False when nothing is playing (or no update for 30 s).
+- Sources are checked in the user's `source_order`; the **first one playing wins**. Each source lives in `sources/`:
+  - `spotify.py` — Web API `currently-playing` (any of the user's devices). Auth is **PKCE with a paste-back flow**: redirect URI `http://127.0.0.1:8888/callback` (Spotify only allows plain-http redirects to loopback IPs, and the Pi is reached by LAN IP), so the user pastes the failed-to-load callback URL into the config page. `spotify_refresh_token` is rewritten whenever Spotify rotates it.
+  - `mac_music.py` — Music app on the user's Mac via `ssh … osascript -` (script on stdin). Key in `data/now_playing/id_ed25519` (gitignored, per-Pi), own `known_hosts`, ControlMaster keeps polling cheap. Only touches Music if it's already running. First run needs the Mac's Automation prompt ("sshd-keygen-wrapper wants to control Music") approved — until then osascript blocks and the source times out. Artwork is fetched only when the track's persistent ID changes.
+  - `lastfm.py` — `user.getrecenttracks` "now playing" (catch-all for scrobbling devices, e.g. iPhone Apple Music via a scrobbler app). No progress data → no bar. Grey-star placeholder art is ignored.
+- There is **no public live now-playing API for Apple Music on iPhone**; that's why Mac (live) + Last.fm exist. Don't add a background helper on the Mac — the user rejected that.
+- `manager.first_playing()` / `attach_art()` are shared with `POST /api/now_playing/test`. Artwork is cached per track (30 entries).
+
 ### Web UI (`web/`)
 
 Flask app created by `web/app.py:create_app()`. Two blueprints:
@@ -179,7 +189,10 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
   "owm_api_key": "",
   "cta_train_api_key": "",
   "cta_bus_api_key": "",
-  "mta_api_key": ""
+  "mta_api_key": "",
+  "spotify_client_id": "",
+  "spotify_refresh_token": "",
+  "lastfm_api_key": ""
 }
 ```
 

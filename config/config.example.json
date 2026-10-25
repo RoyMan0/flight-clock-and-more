@@ -30,7 +30,7 @@
       "br_y": 0.0
     }
   },
-  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing"],
   "plugins": {
     "clock_weather": {
       "enabled": false,
@@ -163,6 +163,17 @@
       "display_duration": 20,
       "scroll_speed": 1,
       "cities": []
+    },
+    "now_playing": {
+      "enabled": false,
+      "display_duration": 20,
+      "update_interval": 5,
+      "scroll_speed": 1,
+      "source_order": ["spotify", "mac", "lastfm"],
+      "sources": {"spotify": true, "mac": false, "lastfm": false},
+      "mac_host": "",
+      "mac_user": "",
+      "lastfm_user": ""
     }
   },
   "web": {

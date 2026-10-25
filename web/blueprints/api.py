@@ -670,6 +670,75 @@ def world_clock_preview():
 
 
 # ------------------------------------------------------------------
+# Now Playing — Spotify connect, Mac SSH key, test/preview
+# ------------------------------------------------------------------
+
+@api_bp.get("/now_playing/spotify/auth_url")
+def now_playing_spotify_auth_url():
+    from plugins.now_playing.sources import spotify
+    try:
+        return jsonify({"ok": True, "url": spotify.auth_url(), "redirect_uri": spotify.REDIRECT_URI})
+    except spotify.SpotifyError as e:
+        return jsonify({"ok": False, "message": str(e)}), 400
+
+
+@api_bp.post("/now_playing/spotify/callback")
+def now_playing_spotify_callback():
+    from plugins.now_playing.sources import spotify
+    data = request.get_json(force=True) or {}
+    try:
+        return jsonify({"ok": True, "user": spotify.complete_auth(data.get("url", ""))})
+    except spotify.SpotifyError as e:
+        return jsonify({"ok": False, "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Sign-in failed: {e}"}), 502
+
+
+@api_bp.get("/now_playing/spotify/status")
+def now_playing_spotify_status():
+    from plugins.now_playing.sources import spotify
+    if not spotify.is_connected():
+        return jsonify({"connected": False, "has_client_id": bool(spotify.client_id())})
+    try:
+        return jsonify({"connected": True, "has_client_id": True, "user": spotify.account_name()})
+    except Exception as e:
+        return jsonify({"connected": False, "has_client_id": True, "message": str(e)})
+
+
+@api_bp.get("/now_playing/mac/key")
+def now_playing_mac_key():
+    from plugins.now_playing.sources import mac_music
+    try:
+        key = mac_music.ensure_key()
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"Could not create an SSH key: {e}"}), 500
+    cmd = f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '{key}' >> ~/.ssh/authorized_keys"
+    return jsonify({"ok": True, "key": key, "command": cmd})
+
+
+@api_bp.post("/now_playing/test")
+def now_playing_test():
+    """Check each enabled source for an unsaved config; render the frame that would show."""
+    from PIL import Image
+    from plugins.now_playing.manager import first_playing
+    from plugins.now_playing.render import make_marquees, render_frame
+
+    data = request.get_json(force=True) or {}
+    statuses = []
+    track = first_playing(data, statuses)
+    image = None
+    if track:
+        dur, pos = track.get("duration_ms"), track.get("progress_ms")
+        frame = render_frame(*make_marquees(track), track.get("art"),
+                             (pos / dur) if dur and pos is not None else None)
+        buf = io.BytesIO()
+        frame.resize((64 * 6, 32 * 6), Image.NEAREST).save(buf, format="PNG")
+        image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    return jsonify({"statuses": statuses, "image": image,
+                    "playing": f"{track['title']} — {track['artist']}" if track else None})
+
+
+# ------------------------------------------------------------------
 # Flight data (for dashboard panel)
 # ------------------------------------------------------------------
 
