@@ -623,5 +623,113 @@
     </div>
   </div>
 
+  <!-- ── Transit Arrivals/Departures ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secTransit">
+      <i class="bi bi-train-front section-icon"></i>
+      <span class="fw-bold fs-5">Transit Arrivals/Departures</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secTransit" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          A station-style board showing the next trains or buses at the stops you choose, with columns for the
+          line (<strong>Ln</strong>), destination (<strong>Dest</strong>) and minutes away (<strong>Min</strong>).
+          Times count down live between refreshes. Pick as many stops as you like — each with its own line, station and direction.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-geo-alt me-2"></i>Supported Agencies</div>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">Chicago CTA 'L' Trains</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">Chicago CTA Buses</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">Denver RTD (bus &amp; rail)</span>
+          <span class="stat-chip" style="background:rgba(127,249,170,.1);border-color:#7df9aa;color:#7df9aa">New York MTA Subway</span>
+        </div>
+        <p class="text-muted small mb-3">Chicago needs free CTA Train Tracker / Bus Tracker API keys. Denver and New York need no key — the first time you pick one, its schedule data downloads in the background (the config page shows "preparing…").</p>
+
+        <div class="subsection-title"><i class="bi bi-layout-text-sidebar me-2"></i>Reading the Board</div>
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Column</th><th>Shows</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Ln</strong></td><td class="text-muted small">A colour block for rail lines known by colour (e.g. CTA Red Line), or the line's name/number in its colour (e.g. <code>A</code>, <code>W</code>, <code>22</code>).</td></tr>
+            <tr><td><strong>Dest</strong></td><td class="text-muted small">Where the train or bus is headed, shortened to fit (e.g. "95th/Dan Ryan" → <code>95th/Ryan</code>). Add your own short names in the config page.</td></tr>
+            <tr><td><strong>Min</strong></td><td class="text-muted small">Minutes until it arrives. <code>Due</code> = 1 minute or less; <code>Dly</code> = the agency reports a delay.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="subsection-title"><i class="bi bi-palette me-2"></i>Colours</div>
+        <div class="d-flex flex-wrap gap-4 mb-3">
+          <div class="color-row"><span class="color-dot" style="background:rgb(255,150,0)"></span><span><strong>Amber</strong> — live arrival</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(255,210,0)"></span><span><strong>Yellow</strong> — <code>Due</code></span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(140,82,0)"></span><span><strong>Dim amber</strong> — scheduled time (no live tracking)</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(90,90,90)"></span><span><strong>Grey</strong> — too soon to make it with your walk time</span></div>
+        </div>
+
+        <div class="subsection-title"><i class="bi bi-collection me-2"></i>Multiple Stops</div>
+        <p class="text-muted small mb-1"><strong>Combined</strong> — the next three across all your stops, soonest first.</p>
+        <p class="text-muted small mb-0"><strong>Scroll</strong> — the next three for each stop, scrolling up under the fixed Ln / Dest / Min header (like Breaking News), with a faint line between stops. Speed is adjustable.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── World Clock ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secWorldClock">
+      <i class="bi bi-clock section-icon"></i>
+      <span class="fw-bold fs-5">World Clock</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secWorldClock" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          The current time in the cities you pick, four at a time — city on the left, time on the right, in the order you arrange them.
+          With more than four cities the list scrolls up continuously, and a faint dashed line marks where it starts over.
+          About 230 cities are available, covering every time zone (including half- and quarter-hour zones like India and Nepal).
+          Times follow your 12hr/24hr setting and adjust for daylight saving automatically. No internet or API key needed.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-palette me-2"></i>Colours</div>
+        <div class="d-flex flex-wrap gap-4 mb-3">
+          <div class="color-row"><span class="color-dot" style="background:rgb(254,167,39)"></span><span><strong>Orange</strong> — the sun is up in that city</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(40,183,246)"></span><span><strong>Blue</strong> — it's night there</span></div>
+        </div>
+        <p class="text-muted small mb-1">Same colours as the main clock. Day or night is worked out from the sun's real position over each city, so it tracks actual sunrise and sunset.</p>
+        <p class="text-muted small mb-0"><strong><code>+1</code> / <code>-1</code></strong> — that city is already on tomorrow's date, or still on yesterday's, compared with yours.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Now Playing ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secNowPlaying">
+      <i class="bi bi-music-note-beamed section-icon"></i>
+      <span class="fw-bold fs-5">Now Playing</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secNowPlaying" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          The song playing right now: the title scrolls across the top in green, the album artwork sits bottom-left, and the
+          artist and album appear beside it (scrolling if they're long). A thin green bar along the bottom shows how far into the song you are.
+          It shows during its turn in the rotation while music is playing and is skipped otherwise.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-broadcast me-2"></i>Sources</div>
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Source</th><th>Picks up</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Spotify</strong></td><td class="text-muted small">Any of your Spotify devices — phone, computer, speakers, car.</td><td class="text-muted small">Spotify Premium (for the developer app). Free alternative: Last.fm.</td></tr>
+            <tr><td><strong>Mac Music app</strong></td><td class="text-muted small">Apple Music and your iTunes library playing on your Mac. Live, with progress bar.</td><td class="text-muted small">Remote Login turned on, plus a one-time key and permission on the Mac.</td></tr>
+            <tr><td><strong>Last.fm</strong></td><td class="text-muted small">Anything that scrobbles to Last.fm — including Spotify on a free account.</td><td class="text-muted small">Free Last.fm account and API key. No progress bar.</td></tr>
+          </tbody>
+        </table>
+        <p class="text-muted small mb-0">
+          Sources are checked in the order you set, and the first one playing is shown.
+          Apple doesn't offer a live "now playing" feed for Apple Music on iPhone; it only appears through a Last.fm scrobbler app.
+        </p>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /accordion -->
 {% endblock %}

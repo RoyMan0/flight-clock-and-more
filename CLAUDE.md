@@ -155,6 +155,16 @@ The config page (`web/templates/config.html`) is a single Alpine.js app. All sec
 
 The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` has a `_pollTimer` guard to prevent double-initialization.
 
+### Adding a new plugin — checklist
+
+Every new module must ship with all of these (the owner asked for this explicitly):
+1. `plugins/<id>/manager.py` + guarded import and `pm.register()` block in `main.py`.
+2. A `plugins.<id>` block and `plugin_order` entry in `config/config.example.json`; any keys in `config/secrets.example.json` and the Secrets Schema below (and excluded from the generic "Other Secrets" card).
+3. A hand-written config card in `config.html` (its Save also posts `pluginOrder` so existing installs pick it up), plus the display name in the rotation-list map (`config.html`) and `dashboard.html`'s `names`.
+4. **An About section in `web/templates/about.html`** — a collapsible card in `#aboutAccordion` (same markup as the others: icon, one-paragraph overview, then `subsection-title` blocks for colours/legends/sources) written for end users, not developers.
+5. A section in this file describing the design and any gotchas.
+6. No personal values (hostnames, usernames, keys) in examples or placeholders — the repo is public.
+
 ## Known States / Gotchas
 
 - **`snow_report` plugin** — disabled/hidden in the web UI until it's fixed. It is filtered out of both the Plugin Order list and the config cards. Do not re-expose it without fixing the underlying issues.

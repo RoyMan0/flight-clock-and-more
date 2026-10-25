@@ -1146,6 +1146,12 @@
                   <span class="small ms-2" :class="nowPlaying.spotify.connected ? 'text-success' : 'text-warning'"
                         x-text="nowPlaying.spotify.connected ? ('Connected as ' + nowPlaying.spotify.user) : 'Not connected'"></span>
                 </div>
+                <div class="alert alert-warning py-2 px-3 small mb-2">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  Connecting Spotify directly needs a <strong>Spotify Premium</strong> subscription (Spotify requires it for developer apps).
+                  <strong>No Premium? It's free through Last.fm:</strong> link Spotify to Last.fm, then turn on the <strong>Last.fm</strong>
+                  source below instead — it picks up Spotify from all your devices (no progress bar).
+                </div>
                 <ol class="small text-muted mb-2 ps-3">
                   <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> → <strong>Create app</strong>. Any name. Redirect URI: <code>http://127.0.0.1:8888/callback</code> (add it exactly). Tick <strong>Web API</strong>.</li>
                   <li>Copy the app's <strong>Client ID</strong> below and save it.</li>
@@ -1193,13 +1199,13 @@
                   <div class="col-md-5">
                     <label class="form-label small mb-1">Mac hostname or IP</label>
                     <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
-                           x-model="pluginConfigs.now_playing.mac_host" placeholder="e.g. Roys-MacBook.local">
+                           x-model="pluginConfigs.now_playing.mac_host" placeholder="e.g. My-MacBook.local">
                     <div class="form-text text-muted">Shown under Sharing → Local hostname.</div>
                   </div>
                   <div class="col-md-4">
                     <label class="form-label small mb-1">Mac username</label>
                     <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
-                           x-model="pluginConfigs.now_playing.mac_user" placeholder="short name, e.g. royman">
+                           x-model="pluginConfigs.now_playing.mac_user" placeholder="short name, e.g. jsmith">
                   </div>
                   <div class="col-md-3 d-flex align-items-start pt-4">
                     <button class="btn btn-outline-light btn-sm" @click="showMacKey()"><i class="bi bi-key me-1"></i>Show key</button>
@@ -1222,10 +1228,21 @@
               <div class="border border-secondary rounded p-3">
                 <div class="fw-semibold mb-2"><i class="bi bi-broadcast me-1" style="color:#D51007"></i>Last.fm</div>
                 <div class="small text-muted mb-2">
-                  Shows whatever Last.fm says you're scrobbling right now — any device that scrobbles. Apple Music on iPhone needs a
-                  scrobbler app to appear. Free API key: <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>.
-                  No progress bar for this source (Last.fm doesn't report it).
+                  Shows whatever Last.fm says you're scrobbling right now — any device that scrobbles. This is the free way to show
+                  Spotify (no Premium needed). No progress bar for this source (Last.fm doesn't report it).
                 </div>
+                <ol class="small text-muted mb-2 ps-3">
+                  <li>Create a free account at <a href="https://www.last.fm/join" target="_blank" rel="noopener">last.fm</a> if you don't have one.</li>
+                  <li><strong>To show Spotify</strong>, link it to Last.fm either way (once — then every Spotify device scrobbles):
+                    <ul class="mb-0">
+                      <li><strong>From Last.fm:</strong> <a href="https://www.last.fm/settings/applications" target="_blank" rel="noopener">last.fm → Settings → Applications</a> → Spotify Scrobbling → <strong>Connect</strong>.</li>
+                      <li><strong>From Spotify:</strong> desktop app → Settings → Social → <strong>Connect to Last.fm</strong>.</li>
+                    </ul>
+                  </li>
+                  <li>Get a free API key at <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>
+                      (any app name/description; leave callback and homepage blank). Paste the <strong>API key</strong> below (the shared secret isn't needed).</li>
+                  <li>Enter your Last.fm username, then <strong>Test</strong>. Apple Music on iPhone only appears through a scrobbler app.</li>
+                </ol>
                 <div class="row g-2">
                   <div class="col-md-6">
                     <label class="form-label small mb-1">API key</label>

@@ -10,7 +10,7 @@ One-time auth setup (run on a Mac with a browser, NOT the headless Pi):
       '/tmp/schwab_token.json'
   )
   "
-  Then: scp /tmp/schwab_token.json royman@Flights.local:/home/royman/schwab_token.json
+  Then: scp /tmp/schwab_token.json <pi-user>@<pi-hostname>.local:/home/<pi-user>/schwab_token.json
 
 At runtime on the Pi, get_client() loads the saved token directly — no browser needed.
 """

@@ -7,7 +7,7 @@ API call once a day via cron so the token stays alive even when the main
 its-a-plane service is stopped for an extended period.
 
 Crontab entry (run daily at 6am):
-  0 6 * * * /usr/bin/python3 /home/royman/its-a-plane-python/scripts/keep_schwab_alive.py >> /home/royman/schwab_keepalive.log 2>&1
+  0 6 * * * /usr/bin/python3 /home/<pi-user>/its-a-plane-python/scripts/keep_schwab_alive.py >> /home/<pi-user>/schwab_keepalive.log 2>&1
 """
 
 import json
