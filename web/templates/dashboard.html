@@ -40,7 +40,13 @@
               </span>
             </template>
           </div>
-          <div class="mt-3 text-muted small">Click a plugin to force-show it immediately.</div>
+          <div x-show="held"><!-- x-show can't hide Bootstrap d-flex (display:!important), so it lives on a wrapper -->
+            <div class="alert alert-warning small py-2 mt-3 mb-0 d-flex flex-wrap align-items-center gap-2">
+              <span><i class="bi bi-pin-angle me-1"></i><strong x-text="pluginLabel(held)"></strong> is pinned from the Display page.</span>
+              <button class="btn btn-sm btn-outline-dark ms-auto" @click="returnToRotation()">Return to Rotation</button>
+            </div>
+          </div>
+          <div class="mt-3 text-muted small">Tap a module to show it now — the rotation then carries on from there. To keep one on screen, pin it on the <a href="/display">Display</a> page.</div>
         </div>
       </div>
     </div>
@@ -166,6 +172,7 @@ function dashboard() {
   return {
     snapshot: '',
     activePlugin: '',
+    held: null,
     rotation: [],
     hasLive: false,
     sys: {},
@@ -193,6 +200,7 @@ function dashboard() {
         const d = JSON.parse(e.data);
         this.activePlugin = d.active_plugin || '';
         this.rotation = d.rotation || [];
+        this.held = d.held || null;
         this.sys = d.sys || {};
         this.hasLive = d.plugins?.flight_tracker?.has_live || false;
         if (d.snapshot) this.snapshot = d.snapshot;
@@ -207,9 +215,13 @@ function dashboard() {
     },
 
     forcePlugin(pid) {
-      fetch(`/api/display/show/${pid}`, {method: 'POST'})
+      fetch(`/api/display/show/${pid}?pin=0`, {method: 'POST'})
         .then(r => r.json())
-        .then(d => { if (d.ok) this.activePlugin = pid; });
+        .then(d => { if (d.ok) { this.activePlugin = pid; this.held = null; } });
+    },
+
+    returnToRotation() {
+      fetch('/api/display/return', {method: 'POST'}).then(() => { this.held = null; });
     },
 
     async toggleBtPicker() {

@@ -70,21 +70,87 @@
       </div>
       <div class="col">
         <h5 class="mb-1 fw-bold">LED Matrix Display</h5>
-        <p class="mb-1 text-muted" style="max-width:700px">
-          A Raspberry Pi drives a 64×32 pixel RGB LED matrix that continuously rotates through
-          configured plugins — clock &amp; weather, overhead flights, stocks, sports, and more.
-          Each plugin occupies the full display for a configurable duration before cycling to the next.
-        </p>
-        <p class="mb-0 text-muted" style="max-width:700px">
-          Use the <a href="/config" class="text-decoration-none" style="color:#7df9aa">Config</a> page
-          to set plugin order and durations, enter API keys, and tune all settings.
-          The <a href="/display" class="text-decoration-none" style="color:#7df9aa">Display</a> page
-          lets you jump to any plugin on demand.
+        <p class="mb-0 text-muted" style="max-width:820px">
+          A Raspberry Pi drives a 64×32 pixel RGB LED panel that rotates through the modules you turn on —
+          clock &amp; weather, overhead flights, transit, world clock, now playing, sports, news and more.
+          Each module fills the panel for the number of seconds you choose, then it moves to the next.
+          When a plane flies overhead, the flight tracker can jump in and show it.
+          Everything is managed from these web pages, on a laptop, tablet or phone.
         </p>
       </div>
     </div>
   </div>
 </div>
+
+<!-- What each tab does -->
+<div class="subsection-title mb-3"><i class="bi bi-window-stack me-2"></i>The Tabs</div>
+<div class="row g-3 mb-4 about-tabs">
+  <div class="col-12 col-md-6 col-xxl-4">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-speedometer2 me-2" style="color:#7df9aa"></i><a href="/" class="text-decoration-none" style="color:#e0e0e0">Dashboard</a></h6>
+      <p class="text-muted small mb-2">The at-a-glance home page.</p>
+      <ul class="small text-muted mb-0 ps-3">
+        <li><strong>Live Preview</strong> — exactly what the panel is showing right now. A badge lights up when a plane is overhead.</li>
+        <li><strong>Plugin Rotation</strong> — which module is on now and what's coming up. Tap one to show it immediately.</li>
+        <li><strong>Overhead Now</strong> — planes currently nearby: airline, aircraft, route, distance and direction.</li>
+        <li><strong>System</strong> — the Pi's CPU temperature, uptime and memory, plus buttons to check for and install updates, reconnect a Bluetooth speaker, restart the app, reboot or shut down.</li>
+      </ul>
+    </div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xxl-4">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-sliders me-2" style="color:#7df9aa"></i><a href="/config" class="text-decoration-none" style="color:#e0e0e0">Config</a></h6>
+      <p class="text-muted small mb-2">Where everything is set up. Two tabs:</p>
+      <ul class="small text-muted mb-2 ps-3">
+        <li><strong>Config</strong>:
+          <ul class="ps-3">
+            <li><strong>Plugin Order &amp; Duration</strong> — turn modules on or off, reorder them, and set how long each one shows.</li>
+            <li><strong>System Settings</strong> — 12/24-hour clock, time zone, units, day and night brightness, quiet hours ("clock only"), clock alerts, and LED panel options.</li>
+            <li><strong>WiFi &amp; Bluetooth</strong> — join a network or pair a speaker.</li>
+            <li>A card for each module (stops, cities, teams, music sources…), most with a <strong>Test</strong> button that previews the result.</li>
+            <li><strong>Backup &amp; Restore</strong> for your settings.</li>
+          </ul>
+        </li>
+        <li><strong>API &amp; Metrics</strong> — API keys for the flight and weather services, and how much of each service's free allowance you've used.</li>
+      </ul>
+      <p class="text-muted small mb-0">Click a card's <strong>Save</strong> to apply its changes. Most apply immediately; a few system settings restart the app automatically.</p>
+    </div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xxl-4">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-display me-2" style="color:#7df9aa"></i><a href="/display" class="text-decoration-none" style="color:#e0e0e0">Display</a></h6>
+      <p class="text-muted small mb-2">A large live view of the panel, with remote control.</p>
+      <ul class="small text-muted mb-0 ps-3">
+        <li>The preview is drawn LED by LED and sized to your screen.</li>
+        <li><strong>Tap a module to pin it</strong> — it stays on the panel (even if a plane flies over) until you tap <strong>Return to Rotation</strong>. Handy for checking a module after changing its settings.</li>
+        <li>Modules that are turned off can still be pinned for a look; they're marked "(off)".</li>
+      </ul>
+    </div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xxl-4">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-airplane me-2" style="color:#7df9aa"></i><a href="/flights" class="text-decoration-none" style="color:#e0e0e0">Flights</a></h6>
+      <p class="text-muted small mb-2">History of every plane the tracker has logged overhead.</p>
+      <ul class="small text-muted mb-0 ps-3">
+        <li><strong>Flight Statistics</strong> — daily average, busiest day, peak hour and peak day of the week. Charts show traffic by hour and day, top airlines, local vs flyover traffic, and aircraft types. The daily log at the bottom lists each day; click a date to see every flight from that day.</li>
+        <li><strong>Closest Flights</strong> — the planes that passed nearest to you, with a map.</li>
+        <li><strong>Farthest Routes</strong> — the longest-distance flights seen overhead, with a map.</li>
+      </ul>
+    </div></div>
+  </div>
+  <div class="col-12 col-md-6 col-xxl-4">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-2" style="color:#7df9aa"></i>About</h6>
+      <p class="text-muted small mb-2">This page.</p>
+      <ul class="small text-muted mb-0 ps-3">
+        <li>Below is a guide to every module: what's on screen, and what the colours, symbols and abbreviations mean.</li>
+        <li>Tap a module's heading to open its section.</li>
+      </ul>
+    </div></div>
+  </div>
+</div>
+
+<div class="subsection-title mb-3"><i class="bi bi-collection-play me-2"></i>The Modules</div>
 
 <!-- Accordion -->
 <div class="accordion about-section" id="aboutAccordion">

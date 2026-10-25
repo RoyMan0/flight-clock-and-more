@@ -29,7 +29,7 @@
         <div class="card-body p-0">
           <ul class="list-group list-group-flush" id="rotation-list">
             <template x-for="(pid, idx) in pluginOrder" :key="pid">
-              <li x-show="pid !== 'snow_report'" class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-2 gap-sm-3 px-2 px-sm-3">
+              <li :class="{'d-none': pid === 'snow_report'}" class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-2 gap-sm-3 px-2 px-sm-3">
                 <div class="d-flex flex-column gap-1">
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveUp(idx)" :disabled="idx===0">▲</button>
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveDown(idx)" :disabled="idx===pluginOrder.length-1">▼</button>
@@ -564,7 +564,8 @@
           </div>
           <div class="mt-3">
             <label class="form-label">Favorite Teams</label>
-            <div class="mb-2 d-flex flex-wrap gap-1" x-show="(pluginConfigs.sports.favorite_teams||[]).length || (pluginConfigs.sports.show_all_leagues||[]).length">
+            <div x-show="(pluginConfigs.sports.favorite_teams||[]).length || (pluginConfigs.sports.show_all_leagues||[]).length">
+            <div class="mb-2 d-flex flex-wrap gap-1">
               <template x-for="league in (pluginConfigs.sports.show_all_leagues||[])" :key="'all:'+league">
                 <span class="badge bg-secondary d-flex align-items-center gap-1">
                   <span x-text="league + ' - All'"></span>
@@ -579,6 +580,7 @@
                           @click="pluginConfigs.sports.favorite_teams = pluginConfigs.sports.favorite_teams.filter(x=>x!==t)"></button>
                 </span>
               </template>
+            </div>
             </div>
             <p class="text-muted small mb-2" x-show="!(pluginConfigs.sports.favorite_teams||[]).length && !(pluginConfigs.sports.show_all_leagues||[]).length">No favorites set — all games shown.</p>
             <button class="btn btn-outline-secondary btn-sm" @click="toggleTeamBrowser()">

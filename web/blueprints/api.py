@@ -226,8 +226,9 @@ def force_show(plugin_id):
     pm = _pm()
     if pm is None:
         return jsonify({"error": "plugin manager not available"}), 503
-    ok = pm.force_plugin(plugin_id)
-    return jsonify({"ok": ok})
+    pin = request.args.get("pin", "1") != "0"     # Dashboard sends pin=0: show once, keep rotating
+    ok = pm.force_plugin(plugin_id, pin=pin)
+    return jsonify({"ok": ok, "pinned": pin and ok})
 
 
 @api_bp.post("/display/return")

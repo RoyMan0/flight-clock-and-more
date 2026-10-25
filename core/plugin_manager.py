@@ -295,14 +295,20 @@ class PluginManager:
     # On-demand control (web dashboard)
     # ------------------------------------------------------------------
 
-    def force_plugin(self, plugin_id: str) -> bool:
-        """Pin a plugin on screen (Display page) until release_hold()/reload_rotation().
-        Returns False if unknown."""
+    def force_plugin(self, plugin_id: str, pin: bool = True) -> bool:
+        """Show a plugin now. pin=True (Display page) keeps it on screen until
+        release_hold(); pin=False (Dashboard) shows it once and the rotation
+        continues from there. Returns False if unknown."""
         if plugin_id not in self._plugins:
             return False
         with self._lock:
-            self._held = plugin_id
             self._update_last[plugin_id] = 0.0      # fetch fresh data right away
+            if pin:
+                self._held = plugin_id
+            else:
+                self._held = None
+                if plugin_id in self._rotation:
+                    self._rotation_index = self._rotation.index(plugin_id)
             self._switch_to(plugin_id)
         return True
 
