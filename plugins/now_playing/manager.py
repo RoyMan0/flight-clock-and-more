@@ -36,7 +36,7 @@ SOURCE_NAMES = {"spotify": "Spotify", "mac": "Mac Music app", "lastfm": "Last.fm
 STALE_SECS = 30                 # forget a track if updates stop arriving
 DEFAULT_SCROLL_SPEED = 1.0
 
-_art_cache: "OrderedDict[str, object]" = OrderedDict()   # art_key → 22×22 image (or None)
+_art_cache: "OrderedDict[str, object]" = OrderedDict()   # art_key → 21×21 image (or None)
 _art_lock = threading.Lock()
 
 
@@ -69,7 +69,7 @@ def fetch_source(config: dict, source: str):
 
 
 def attach_art(config: dict, track: dict):
-    """Fill track["art"] (22×22 image or None), fetching each track's artwork only once."""
+    """Fill track["art"] (21×21 image or None), fetching each track's artwork only once."""
     key = f"{track['source']}:{track.get('art_key', '')}"
     with _art_lock:
         if key in _art_cache:

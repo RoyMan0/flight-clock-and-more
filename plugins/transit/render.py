@@ -27,6 +27,8 @@ CHAR_W = 4
 ROW_Y = (9, 17, 25)
 MIN_COL_W = 3 * CHAR_W          # "Due", "Dly", "12", "99+"
 MAX_LABEL_CHARS = 4
+LEFT_PAD = 1                    # 1 px margin on the left edge
+HEADER_Y = 1                    # 1 px margin above the header
 
 COL_HEADER = (200, 20, 0)
 COL_TEXT   = (255, 150, 0)
@@ -144,9 +146,12 @@ def label_column_width(arrivals) -> int:
     return w
 
 
+def dest_x_for(ln_w: int) -> int:
+    return LEFT_PAD + ln_w + 2
+
+
 def dest_max_chars(ln_w: int) -> int:
-    dest_x = ln_w + 2
-    return (MATRIX_W - MIN_COL_W - 1 - dest_x) // CHAR_W
+    return (MATRIX_W - MIN_COL_W - 1 - dest_x_for(ln_w)) // CHAR_W
 
 
 def minutes_text(a, now: float) -> str:
@@ -191,11 +196,11 @@ COL_DIVIDER = (50, 50, 50)
 
 def _draw_header(img: Image.Image, ln_w: int, title: str = None):
     if title:
-        _bdf_draw(img, 0, 0, title[:HEADER_MAX_CHARS], _FONT, COL_HEADER)
+        _bdf_draw(img, LEFT_PAD, HEADER_Y, title[:HEADER_MAX_CHARS], _FONT, COL_HEADER)
     else:
-        _bdf_draw(img, 0, 0, "Ln", _FONT, COL_HEADER)
-        _bdf_draw(img, ln_w + 2, 0, "Dest", _FONT, COL_HEADER)
-    _bdf_draw(img, MATRIX_W - _bdf_width("Min", _FONT), 0, "Min", _FONT, COL_HEADER)
+        _bdf_draw(img, LEFT_PAD, HEADER_Y, "Ln", _FONT, COL_HEADER)
+        _bdf_draw(img, dest_x_for(ln_w), HEADER_Y, "Dest", _FONT, COL_HEADER)
+    _bdf_draw(img, MATRIX_W - _bdf_width("Min", _FONT), HEADER_Y, "Min", _FONT, COL_HEADER)
 
 
 def _draw_row(img: Image.Image, y: int, ln_w: int, row: dict):
@@ -206,11 +211,11 @@ def _draw_row(img: Image.Image, y: int, ln_w: int, row: dict):
         text_col = COL_TEXT if row["realtime"] else _dim(COL_TEXT, 0.55)
     if row["block"]:
         for by in range(y, y + 5):
-            for bx in range(0, ln_w - 2):
+            for bx in range(LEFT_PAD, LEFT_PAD + ln_w - 2):
                 px[bx, by] = row["color"]
     else:
-        _bdf_draw(img, 0, y, row["label"], _FONT, row["color"])
-    _bdf_draw(img, ln_w + 2, y, row["dest"], _FONT, text_col)
+        _bdf_draw(img, LEFT_PAD, y, row["label"], _FONT, row["color"])
+    _bdf_draw(img, dest_x_for(ln_w), y, row["dest"], _FONT, text_col)
     m = row["min"]
     mcol = COL_DUE if m == "Due" and not row.get("missable") else text_col
     _bdf_draw(img, MATRIX_W - _bdf_width(m, _FONT), y, m, _FONT, mcol)

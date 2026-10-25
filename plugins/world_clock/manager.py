@@ -38,6 +38,7 @@ CHAR_W = 4
 ROW_H = 8
 VISIBLE_ROWS = MATRIX_H // ROW_H       # 4
 LOOP_GAP_H = 4                          # dashed divider where the scroll loops
+LEFT_PAD = 1                            # 1 px margin on the left edge
 
 COL_DAY     = (254, 167, 39)    # LIGHT_ORANGE — clock DAY_COLOUR
 COL_NIGHT   = (40, 183, 246)    # LIGHT_BLUE   — clock NIGHT_COLOUR
@@ -136,10 +137,10 @@ def _draw_row(img: Image.Image, y: int, row: dict):
     if row["marker"]:
         mx = time_x - 4 - _mini_width(row["marker"])   # clear gap so "+1" never reads as part of the time
         _mini_draw(img, mx, ty, row["marker"], COL_MARKER)
-        max_chars = mx // CHAR_W               # name ink ends ≥1 px before the marker
+        max_chars = (mx - 1) // CHAR_W         # name ink ends ≥1 px before the marker
     else:
-        max_chars = (time_x - 1) // CHAR_W     # ≥2 px before the time
-    _bdf_draw(img, 0, ty, shorten(row["name"], max(1, max_chars)), _FONT, COL_CITY)
+        max_chars = (time_x - 2) // CHAR_W     # ≥2 px before the time
+    _bdf_draw(img, LEFT_PAD, ty, shorten(row["name"], max(1, max_chars)), _FONT, COL_CITY)
 
 
 def render_board(rows: list) -> Image.Image:

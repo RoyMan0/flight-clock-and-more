@@ -137,7 +137,7 @@ Current time in any number of user-chosen cities: four 8 px rows (no header), ci
 
 ### Now Playing Plugin (`plugins/now_playing/`)
 
-Current song: title marquee across the top (green, 5x7 font), 22×22 artwork bottom-left, artist/album to its right (each scrolls if > 40 px), 1 px progress bar on row 31. Takes its normal rotation turn; `has_content()` is False when nothing is playing (or no update for 30 s).
+Current song: title marquee across the top (green, 5x7 font), 21×21 artwork bottom-left (1 px margin on top and left; progress bar full width), artist/album to its right (each scrolls if > 40 px), 1 px progress bar on row 31. Takes its normal rotation turn; `has_content()` is False when nothing is playing (or no update for 30 s).
 - Sources are checked in the user's `source_order`; the **first one playing wins**. Each source lives in `sources/`:
   - `spotify.py` — Web API `currently-playing` (any of the user's devices). Auth is **PKCE with a paste-back flow**: redirect URI `http://127.0.0.1:8888/callback` (Spotify only allows plain-http redirects to loopback IPs, and the Pi is reached by LAN IP), so the user pastes the failed-to-load callback URL into the config page. `spotify_refresh_token` is rewritten whenever Spotify rotates it.
   - `mac_music.py` — Music app on the user's Mac via `ssh … osascript -` (script on stdin). Key in `data/now_playing/id_ed25519` (gitignored, per-Pi), own `known_hosts`, ControlMaster keeps polling cheap. Only touches Music if it's already running. First run needs the Mac's Automation prompt ("sshd-keygen-wrapper wants to control Music") approved — until then osascript blocks and the source times out. Artwork is fetched only when the track's persistent ID changes.

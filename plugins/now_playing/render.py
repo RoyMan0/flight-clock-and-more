@@ -1,8 +1,8 @@
 """
 Now Playing rendering (64×32, 5x7 BDF font):
 
-  y0-6    song title — green, marquee-scrolls when wider than the panel
-  y8-29   22×22 artwork  |  x24-63: artist (white) / album (grey), each scrolls if needed
+  y1-7    song title — green, marquee-scrolls when wider than the panel
+  y9-29   21×21 artwork  |  x24-63: artist (white) / album (grey), each scrolls if needed
   y31     progress bar (omitted when the source has no duration, e.g. Last.fm)
 """
 
@@ -16,14 +16,15 @@ from plugins.transit.render import _bdf_draw, _bdf_width, _parse_bdf
 MATRIX_W = 64
 MATRIX_H = 32
 
-ART_SIZE = 22
-ART_X, ART_Y = 0, 8
+LEFT_PAD = 1                         # 1 px margin on the left (title, artwork)
+ART_SIZE = 21
+ART_X, ART_Y = LEFT_PAD, 9           # 1 px gap under the title and above the progress bar
 TEXT_X = 24
 TEXT_W = MATRIX_W - TEXT_X           # 40 px
-TITLE_Y = 0
-ARTIST_Y = 11
-ALBUM_Y = 20
-BAR_Y = 31
+TITLE_Y = 1                          # 1 px margin on top
+ARTIST_Y = 12
+ALBUM_Y = 21
+BAR_Y = 31                           # progress bar spans the full width
 
 COL_TITLE  = (0, 200, 0)
 COL_ARTIST = (230, 230, 230)
@@ -82,7 +83,7 @@ class Marquee:
 
 
 def prepare_art(data: bytes):
-    """Image bytes → 22×22 RGB, slightly boosted so it reads on the LED panel. None on failure."""
+    """Image bytes → 21×21 RGB, slightly boosted so it reads on the LED panel. None on failure."""
     if not data:
         return None
     try:
@@ -117,7 +118,7 @@ def _draw_note(img: Image.Image):
 def render_frame(title: Marquee, artist: Marquee, album: Marquee, art, progress) -> Image.Image:
     """progress: 0..1, or None to omit the bar."""
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
-    title.paste_into(img, 0, TITLE_Y)
+    title.paste_into(img, LEFT_PAD, TITLE_Y)
     if art is not None:
         img.paste(art, (ART_X, ART_Y))
     else:
@@ -133,6 +134,6 @@ def render_frame(title: Marquee, artist: Marquee, album: Marquee, art, progress)
 
 
 def make_marquees(track: dict):
-    return (Marquee(track.get("title", ""), COL_TITLE, MATRIX_W),
+    return (Marquee(track.get("title", ""), COL_TITLE, MATRIX_W - LEFT_PAD),
             Marquee(track.get("artist", ""), COL_ARTIST, TEXT_W),
             Marquee(track.get("album", ""), COL_ALBUM, TEXT_W))
