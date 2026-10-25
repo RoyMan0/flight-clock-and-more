@@ -27,8 +27,21 @@
     .plugin-pill:hover { background: #1e2128; }
     .stat-value { font-size: 1.4rem; font-weight: 700; color: #7df9aa; }
     .stat-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: .5px; }
-    #preview-img { width: 256px; height: 128px; }
+    #preview-img, .matrix-live { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; }
+    .matrix-live { image-rendering: auto; border: 2px solid #2a2d35; border-radius: 10px; background: #000; }
   </style>
+  <script>
+    // Display names for every plugin — the one list shared by Dashboard, Config and Display.
+    window.PLUGIN_NAMES = {
+      clock_weather: 'Clock & Weather', flight_tracker: 'Flight Tracker',
+      specific_flight_tracker: 'Specific Flight Tracker', stock_ticker: 'Stock Ticker',
+      snow_report: 'Snow Report', sports: 'Sports', world_daylight: 'World Daylight',
+      ap_news: 'Breaking News', event_countdown: 'Event Countdown',
+      transit: 'Transit Arrivals/Departures', world_clock: 'World Clock', now_playing: 'Now Playing',
+    };
+    window.pluginName = (pid) => window.PLUGIN_NAMES[pid]
+      || String(pid).split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  </script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -51,7 +64,7 @@
   </div>
 </nav>
 
-<div class="container-fluid px-4">
+<div class="container-fluid px-3 px-md-4">
   {% block content %}{% endblock %}
 </div>
 

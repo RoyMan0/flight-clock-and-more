@@ -1,36 +1,65 @@
 {% extends "base.html" %}
 {% block title %}Display Control — LED Matrix{% endblock %}
 
+{% block head %}
+<style>
+  .module-btn { width: 100%; text-align: left; white-space: normal; }
+  .module-btn .bi { width: 1.25rem; }
+  .preview-status { min-height: 1.5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div x-data="displayPage()" x-init="init()">
+<div x-data="displayPage()" x-init="init()" @beforeunload.window="stop()">
   <div class="row g-4">
-    <div class="col-md-6">
+    <!-- Live preview -->
+    <div class="col-12 col-xl-8">
       <div class="card">
-        <div class="card-header"><i class="bi bi-display me-2"></i>On-Demand Control</div>
+        <div class="card-header d-flex flex-wrap align-items-center gap-2">
+          <i class="bi bi-eye"></i><span>Live Preview</span>
+          <span class="badge ms-auto" :class="held ? 'bg-warning text-dark' : 'bg-secondary'"
+                x-text="held ? 'Pinned' : 'Rotating'"></span>
+        </div>
         <div class="card-body">
-          <p class="text-muted">Force a specific plugin to show immediately. Normal rotation resumes when you click Return.</p>
-          <div class="d-flex flex-wrap gap-2 mb-4">
-            <template x-for="p in plugins" :key="p.id">
-              <button class="btn btn-outline-success"
-                      :class="{'btn-success text-dark': p.id === active}"
-                      @click="forcePlugin(p.id)"
-                      x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports'}[p.id] || p.id.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' '))">
-              </button>
-            </template>
+          <img :src="snapshot || '/static/blank.png'" class="matrix-live" width="640" height="320" alt="What the LED panel is showing">
+          <div class="preview-status d-flex flex-wrap align-items-center gap-2 mt-3">
+            <span class="text-muted small">Showing:</span>
+            <strong x-text="active ? pluginName(active) : '—'"></strong>
+            <span class="small text-muted" x-show="!connected">· reconnecting…</span>
+            <button class="btn btn-sm btn-outline-warning ms-auto" x-show="held" @click="returnToRotation()">
+              <i class="bi bi-arrow-repeat me-1"></i>Return to Rotation
+            </button>
           </div>
-          <button class="btn btn-outline-secondary" @click="returnToRotation()">
-            <i class="bi bi-arrow-clockwise me-1"></i>Return to Rotation
-          </button>
+          <div class="alert alert-secondary small py-2 mt-2 mb-0" x-show="held && heldHasContent === false">
+            <i class="bi bi-info-circle me-1"></i>
+            <span x-text="pluginName(held)"></span> has nothing to show right now
+            (for example, no music playing or no flights overhead), so the panel is blank until it does.
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header"><i class="bi bi-eye me-2"></i>Live Preview</div>
-        <div class="card-body d-flex justify-content-center">
-          <img :src="snapshot" class="matrix-preview" width="256" height="128"
-               alt="Display" style="image-rendering:pixelated">
+    <!-- Module picker -->
+    <div class="col-12 col-xl-4">
+      <div class="card h-100">
+        <div class="card-header"><i class="bi bi-display me-2"></i>Show a Module</div>
+        <div class="card-body">
+          <p class="text-muted small">Tap a module to pin it on the panel. It stays there until you return to the normal rotation.</p>
+          <div class="row g-2">
+            <template x-for="p in plugins" :key="p.id">
+              <div class="col-6 col-md-4 col-xl-12">
+                <button class="btn module-btn"
+                        :class="p.id === held ? 'btn-success text-dark' : (p.id === active ? 'btn-outline-success' : 'btn-outline-secondary')"
+                        @click="forcePlugin(p.id)">
+                  <span x-text="pluginName(p.id)"></span>
+                  <span class="small opacity-75" x-show="!p.enabled"> (off)</span>
+                </button>
+              </div>
+            </template>
+          </div>
+          <button class="btn btn-outline-light w-100 mt-3" @click="returnToRotation()" :disabled="!held">
+            <i class="bi bi-arrow-repeat me-1"></i>Return to Rotation
+          </button>
         </div>
       </div>
     </div>
@@ -44,30 +73,56 @@ function displayPage() {
   return {
     plugins: [],
     active: '',
+    held: null,
+    heldHasContent: null,
     snapshot: '',
+    connected: false,
     _es: null,
+    _retry: null,
 
     async init() {
-      this.plugins = await fetch('/api/plugins').then(r=>r.json());
+      if (this._es) return;      // guard against double init
+      try {
+        const all = await fetch('/api/plugins').then(r => r.json());
+        this.plugins = all.filter(p => p.id !== 'snow_report');   // hidden until fixed
+      } catch (e) { this.plugins = []; }
       this.startSSE();
     },
 
     startSSE() {
+      if (this._es) this._es.close();
       this._es = new EventSource('/api/stream/status');
+      this._es.onopen = () => { this.connected = true; };
       this._es.onmessage = (e) => {
         const d = JSON.parse(e.data);
+        this.connected = true;
         this.active = d.active_plugin || '';
+        this.held = d.held || null;
+        this.heldHasContent = d.held_has_content;
         if (d.snapshot) this.snapshot = d.snapshot;
+      };
+      this._es.onerror = () => {
+        this.connected = false;
+        this._es.close();
+        this._es = null;
+        clearTimeout(this._retry);
+        this._retry = setTimeout(() => this.startSSE(), 3000);
       };
     },
 
-    forcePlugin(pid) {
-      fetch(`/api/display/show/${pid}`, {method:'POST'})
-        .then(r=>r.json()).then(d=>{ if(d.ok) this.active=pid; });
+    stop() {
+      if (this._es) this._es.close();
+      clearTimeout(this._retry);
     },
 
-    returnToRotation() {
-      fetch('/api/display/return', {method:'POST'});
+    async forcePlugin(pid) {
+      const d = await fetch(`/api/display/show/${pid}`, {method: 'POST'}).then(r => r.json());
+      if (d.ok) { this.held = pid; this.active = pid; }
+    },
+
+    async returnToRotation() {
+      await fetch('/api/display/return', {method: 'POST'});
+      this.held = null;
     },
   };
 }

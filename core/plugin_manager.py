@@ -32,6 +32,7 @@ class PluginManager:
         self._active_id: Optional[str] = None
         self._active_start: float = 0.0
         self._rotation_index: int = 0
+        self._held: Optional[str] = None   # plugin pinned from the web Display page
         self._lock = threading.Lock()
 
         # Background update thread
@@ -116,6 +117,18 @@ class PluginManager:
         return now >= start or now < end
 
     def _dispatch(self):
+        # --- Pinned from the Display page: stay on it until "Return to Rotation" ---
+        if self._held:
+            if self._active_id != self._held:
+                self._switch_to(self._held)
+            held = self._plugins.get(self._held)
+            try:
+                if held is not None and held.draw():
+                    self.display.swap()
+            except Exception as e:
+                log.error(f"[plugins] Draw error ({self._held}): {e}")
+            return
+
         # --- Clock-only mode: show clock_weather only, no API calls ---
         if self._is_clock_only():
             if self._active_id != "clock_weather":
@@ -255,9 +268,10 @@ class PluginManager:
             now = time.monotonic()
             clock_only = self._is_clock_only()
             for pid, plugin in list(self._plugins.items()):
-                if not plugin.enabled:
+                held = pid == self._held        # a pinned plugin always gets fresh data
+                if not plugin.enabled and not held:
                     continue
-                if clock_only and pid != "clock_weather":
+                if clock_only and pid != "clock_weather" and not held:
                     continue  # suppress all API calls during clock-only period
                 last = self._update_last.get(pid, 0)
                 if now - last >= plugin.update_interval:
@@ -273,23 +287,41 @@ class PluginManager:
     # ------------------------------------------------------------------
 
     def force_plugin(self, plugin_id: str) -> bool:
-        """Switch to a specific plugin immediately. Returns False if unknown."""
+        """Pin a plugin on screen (Display page) until release_hold()/reload_rotation().
+        Returns False if unknown."""
         if plugin_id not in self._plugins:
             return False
         with self._lock:
+            self._held = plugin_id
+            self._update_last[plugin_id] = 0.0      # fetch fresh data right away
             self._switch_to(plugin_id)
         return True
 
+    def release_hold(self):
+        """Unpin and resume normal rotation from the start."""
+        self._held = None
+        self.reload_rotation()
+
     def reload_rotation(self):
         """Re-read plugin_order from config and rebuild rotation."""
+        if self._held:
+            self.build_rotation()      # config saved while pinned: keep showing the pinned plugin
+            return
         self.build_rotation()
         if self._rotation:
             self._rotation_index = 0
             self._switch_to(self._rotation[0])
 
     def get_status(self) -> dict:
+        held = self._plugins.get(self._held) if self._held else None
+        try:
+            held_has_content = bool(held.has_content()) if held else None
+        except Exception:
+            held_has_content = None
         return {
             "active_plugin": self._active_id,
+            "held": self._held,
+            "held_has_content": held_has_content,
             "rotation": self._rotation,
             "rotation_index": self._rotation_index,
             "active_since": self._active_start,

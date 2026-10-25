@@ -29,7 +29,7 @@
         <div class="card-body p-0">
           <ul class="list-group list-group-flush" id="rotation-list">
             <template x-for="(pid, idx) in pluginOrder" :key="pid">
-              <li x-show="pid !== 'snow_report'" class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-3">
+              <li x-show="pid !== 'snow_report'" class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-2 gap-sm-3 px-2 px-sm-3">
                 <div class="d-flex flex-column gap-1">
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveUp(idx)" :disabled="idx===0">▲</button>
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveDown(idx)" :disabled="idx===pluginOrder.length-1">▼</button>
@@ -39,8 +39,8 @@
                          :checked="pluginConfigs[pid]?.enabled !== false"
                          @change="togglePlugin(pid, $event.target.checked)">
                 </div>
-                <span class="flex-grow-1 fw-semibold" x-text="({ap_news:'Breaking News',event_countdown:'Event Countdown',clock_weather:'Clock & Weather',world_daylight:'World Daylight',snow_report:'Snow Report',stock_ticker:'Stock Ticker',specific_flight_tracker:'Specific Flight Tracker',flight_tracker:'Flight Tracker',sports:'Sports',transit:'Transit Arrivals/Departures',world_clock:'World Clock',now_playing:'Now Playing'}[pid] || pid.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()))"></span>
-                <div class="d-flex align-items-center gap-1" style="width:120px">
+                <span class="flex-grow-1 fw-semibold" style="min-width:0;overflow-wrap:anywhere" x-text="pluginName(pid)"></span>
+                <div class="d-flex align-items-center gap-1 flex-shrink-0">
                   <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
                          style="width:65px"
                          :value="pluginConfigs[pid]?.display_duration || 30"
@@ -1132,8 +1132,10 @@
                     <div class="form-check form-switch mb-0">
                       <input class="form-check-input" type="checkbox" :id="'nps_'+src" x-model="pluginConfigs.now_playing.sources[src]">
                     </div>
-                    <label class="fw-semibold mb-0 flex-grow-1" :for="'nps_'+src" x-text="nowPlaying.labels[src]"></label>
-                    <span class="small text-muted" x-text="nowPlaying.hints[src]"></span>
+                    <label class="mb-0 flex-grow-1" style="min-width:0" :for="'nps_'+src">
+                      <span class="fw-semibold d-block" x-text="nowPlaying.labels[src]"></span>
+                      <span class="small text-muted d-block" x-text="nowPlaying.hints[src]"></span>
+                    </label>
                   </li>
                 </template>
               </ul>
@@ -1230,6 +1232,24 @@
                 <div class="small text-muted mb-2">
                   Shows whatever Last.fm says you're scrobbling right now — any device that scrobbles. This is the free way to show
                   Spotify (no Premium needed). No progress bar for this source (Last.fm doesn't report it).
+                </div>
+                <div class="small mb-2">
+                  <span class="text-muted">Works with:</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Spotify (free or Premium)</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Tidal</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Deezer</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">SoundCloud</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Bandcamp</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">YouTube &amp; YouTube Music</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Pandora</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Amazon Music</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Apple Music</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Sonos</span>
+                  <span class="badge rounded-pill text-bg-dark border border-secondary fw-normal me-1 mb-1">Plex</span>
+                  <span class="text-muted">&amp; more.</span>
+                  <div class="text-muted mt-1">Spotify, Tidal and Deezer connect from their own settings (or from Last.fm → Settings → Applications).
+                    Most others scrobble through the free <a href="https://web-scrobbler.com" target="_blank" rel="noopener">Web Scrobbler</a>
+                    browser extension or a scrobbler app on your phone.</div>
                 </div>
                 <ol class="small text-muted mb-2 ps-3">
                   <li>Create a free account at <a href="https://www.last.fm/join" target="_blank" rel="noopener">last.fm</a> if you don't have one.</li>

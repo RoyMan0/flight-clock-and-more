@@ -11,6 +11,10 @@ import threading
 from typing import Optional
 from PIL import Image, ImageDraw
 
+from core import canvas_mirror
+
+canvas_mirror.install()
+
 
 class DisplayManager:
     WIDTH = 64
@@ -21,14 +25,17 @@ class DisplayManager:
         self._brightness = int(config.get("brightness", 100))
         self._lock = threading.Lock()
 
-        # PIL mirror — always maintained for web dashboard snapshots
+        # Legacy PIL image some plugins still paste into; the live preview now comes
+        # from the canvas mirror below, which sees every pixel drawn on the panel.
         self._pil_image = Image.new("RGB", (self.WIDTH, self.HEIGHT), (0, 0, 0))
 
         if software_mode:
             self.matrix = None
-            self.canvas = _SoftwareCanvas(self.WIDTH, self.HEIGHT, self._pil_image)
+            real = _SoftwareCanvas(self.WIDTH, self.HEIGHT, self._pil_image)
         else:
-            self._init_hardware(config)
+            real = self._init_hardware(config)
+        # Plugins draw on this wrapper; it forwards to the panel and keeps a copy for the web preview
+        self.canvas = canvas_mirror.MirrorCanvas(real, self.WIDTH, self.HEIGHT)
 
     def _init_hardware(self, config: dict):
         try:
@@ -60,8 +67,9 @@ class DisplayManager:
         options.drop_privileges = True
 
         self.matrix = RGBMatrix(options=options)
-        self.canvas = self.matrix.CreateFrameCanvas()
-        self.canvas.Clear()
+        canvas = self.matrix.CreateFrameCanvas()
+        canvas.Clear()
+        return canvas
 
     # ------------------------------------------------------------------
     # Frame control
@@ -78,9 +86,9 @@ class DisplayManager:
         update one buffer per N frames.
         """
         if self.software_mode:
-            self.canvas._flush_to_pil(self._pil_image)
+            self.canvas.real._flush_to_pil(self._pil_image)
         else:
-            self.matrix.SwapOnVSync(self.canvas)
+            self.matrix.SwapOnVSync(self.canvas.real)
 
     def clear(self):
         self.canvas.Clear()
@@ -108,8 +116,8 @@ class DisplayManager:
     # ------------------------------------------------------------------
 
     def get_snapshot(self) -> Image.Image:
-        with self._lock:
-            return self._pil_image.copy()
+        """Exactly what's on the panel right now (from the canvas mirror)."""
+        return self.canvas.snapshot()
 
 
 

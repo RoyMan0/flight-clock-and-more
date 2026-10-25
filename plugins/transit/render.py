@@ -105,12 +105,13 @@ _FONT = _parse_bdf(os.path.join(_FONTS_DIR, "4x6.bdf"))
 
 def push_pil_to_canvas(img: Image.Image, display_manager):
     canvas = display_manager.canvas
+    if hasattr(canvas, "SetImage"):
+        canvas.SetImage(img)            # one C call on the Pi; mirrored for the web preview
+        return
     for y in range(MATRIX_H):
         for x in range(MATRIX_W):
             r, g, b = img.getpixel((x, y))
             canvas.SetPixel(x, y, r, g, b)
-    with display_manager._lock:
-        display_manager._pil_image.paste(img, (0, 0))
 
 
 # ------------------------------------------------------------------

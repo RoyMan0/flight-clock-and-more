@@ -69,6 +69,10 @@ def main():
 
     # Import all modules BEFORE hardware init — RGBMatrix drops privileges after
     # init, and root-owned __pycache__ files block imports that happen afterwards.
+    # Live-preview mirror: must wrap rgbmatrix.graphics before any Font is created
+    # (setup/fonts.py loads fonts at import time).
+    from core import canvas_mirror
+    canvas_mirror.install()
     from core.config_manager import get_config
     from core.display_manager import DisplayManager
     from core.plugin_manager import PluginManager

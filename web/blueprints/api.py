@@ -63,19 +63,57 @@ def system_info():
 # Display snapshot (for live preview)
 # ------------------------------------------------------------------
 
+_LED_SCALE = 10                      # preview px per LED
+_led_masks = {}
+_preview_cache = {"key": None, "data": ""}
+_preview_lock = threading.Lock()
+
+
+def _led_tiles(w, h):
+    """White LED dots (for colouring lit pixels) and faint grey dots (unlit pixels)."""
+    key = (w, h)
+    if key not in _led_masks:
+        from PIL import Image, ImageDraw
+        s = _LED_SCALE
+        dot = Image.new("L", (s, s), 0)
+        ImageDraw.Draw(dot).ellipse((1, 1, s - 2, s - 2), fill=255)
+        lit = Image.new("RGB", (w * s, h * s), (0, 0, 0))
+        unlit = Image.new("RGB", (w * s, h * s), (0, 0, 0))
+        white = Image.new("RGB", (s, s), (255, 255, 255))
+        grey = Image.new("RGB", (s, s), (24, 24, 26))
+        for y in range(h):
+            for x in range(w):
+                lit.paste(white, (x * s, y * s), dot)
+                unlit.paste(grey, (x * s, y * s), dot)
+        _led_masks[key] = (lit, unlit)
+    return _led_masks[key]
+
+
+def _preview_data_url(img) -> str:
+    """The panel frame drawn as round LEDs (PNG data URL). Identical frames reuse the cache."""
+    from PIL import Image, ImageChops
+    raw = img.tobytes()
+    with _preview_lock:
+        if _preview_cache["key"] == raw:
+            return _preview_cache["data"]
+    lit, unlit = _led_tiles(img.width, img.height)
+    big = img.resize((img.width * _LED_SCALE, img.height * _LED_SCALE), Image.NEAREST)
+    frame = ImageChops.lighter(ImageChops.multiply(big, lit), unlit)
+    buf = io.BytesIO()
+    frame.save(buf, format="PNG", optimize=False, compress_level=3)
+    data = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    with _preview_lock:
+        _preview_cache.update(key=raw, data=data)
+    return data
+
+
 @api_bp.get("/display/snapshot")
 def display_snapshot():
     d = _display()
     if d is None:
         return jsonify({"error": "display not available"}), 503
     try:
-        img = d.get_snapshot()
-        # Scale up 4× for visibility in the browser
-        img = img.resize((img.width * 4, img.height * 4), resample=0)  # NEAREST
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode()
-        return jsonify({"image": f"data:image/png;base64,{b64}"})
+        return jsonify({"image": _preview_data_url(d.get_snapshot())})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -96,11 +134,7 @@ def stream_status():
             img_data = ""
             if d:
                 try:
-                    img = d.get_snapshot()
-                    img = img.resize((img.width * 4, img.height * 4), resample=0)
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    img_data = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+                    img_data = _preview_data_url(d.get_snapshot())
                 except Exception:
                     pass
 
@@ -201,7 +235,7 @@ def return_to_rotation():
     pm = _pm()
     if pm is None:
         return jsonify({"error": "plugin manager not available"}), 503
-    pm.reload_rotation()
+    pm.release_hold()
     return jsonify({"ok": True})
 
 

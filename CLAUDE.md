@@ -153,6 +153,10 @@ Flask app created by `web/app.py:create_app()`. Two blueprints:
 
 The config page (`web/templates/config.html`) is a single Alpine.js app. All sections load from `/api/system_config`, `/api/secrets` (masked), and `/api/metrics`. Saves are atomic JSON writes.
 
+**Live preview (Dashboard + Display page).** The rgbmatrix canvas can't be read back, so `core/canvas_mirror.py` wraps it: `DisplayManager.canvas` is a `MirrorCanvas` that forwards every `SetPixel`/`Clear`/`Fill`/`SetImage` to the panel and keeps a 64×32 copy, and `install()` (called first thing in `main.py`, before `setup/fonts.py` creates fonts) wraps `rgbmatrix.graphics.DrawText/DrawLine/DrawCircle/Font` so the C library still draws to the real canvas while the same glyphs/lines are drawn into the copy (glyph placement from `utilities/textclip.ClipFont`). Mirror errors are swallowed — the panel must never be affected. `get_snapshot()` returns the copy; `/api/stream/status` renders it as round LEDs (`_preview_data_url`, cached per frame). PIL-based plugins should push frames with `canvas.SetImage(img)` (one C call) rather than 2048 `SetPixel`s — see `plugins/transit/render.push_pil_to_canvas`.
+
+**Display page pinning.** `PluginManager.force_plugin()` pins a plugin (`_held`): `_dispatch` draws only it (ignoring duration, flight priority and clock-only) and the update loop keeps refreshing it even if disabled. `release_hold()` (`POST /api/display/return`) unpins; config saves call `reload_rotation()`, which keeps the pin.
+
 The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` has a `_pollTimer` guard to prevent double-initialization.
 
 ### Adding a new plugin — checklist
@@ -160,10 +164,11 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
 Every new module must ship with all of these (the owner asked for this explicitly):
 1. `plugins/<id>/manager.py` + guarded import and `pm.register()` block in `main.py`.
 2. A `plugins.<id>` block and `plugin_order` entry in `config/config.example.json`; any keys in `config/secrets.example.json` and the Secrets Schema below (and excluded from the generic "Other Secrets" card).
-3. A hand-written config card in `config.html` (its Save also posts `pluginOrder` so existing installs pick it up), plus the display name in the rotation-list map (`config.html`) and `dashboard.html`'s `names`.
+3. A hand-written config card in `config.html` (its Save also posts `pluginOrder` so existing installs pick it up), plus its display name in `window.PLUGIN_NAMES` in `web/templates/base.html` (the one list used by Dashboard, Config and Display).
 4. **An About section in `web/templates/about.html`** — a collapsible card in `#aboutAccordion` (same markup as the others: icon, one-paragraph overview, then `subsection-title` blocks for colours/legends/sources) written for end users, not developers.
 5. A section in this file describing the design and any gotchas.
 6. No personal values (hostnames, usernames, keys) in examples or placeholders — the repo is public.
+7. Works on a phone: no horizontal page scroll at 390 px wide (wrap wide tables in `.table-responsive`, give flex rows `min-width:0` on text and `flex-shrink-0` on controls). Friends configure their Pis from phones.
 
 ## Known States / Gotchas
 

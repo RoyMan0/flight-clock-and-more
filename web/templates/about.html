@@ -133,7 +133,7 @@
         <!-- Date & Moon Phase -->
         <div class="subsection-title"><i class="bi bi-moon-stars me-2"></i>Date &amp; Moon Phase</div>
         <p class="text-muted small mb-2">The date (e.g., "Jun 04") is displayed top-right below the temperature. Its <strong>text gradient reflects the current moon phase</strong>.</p>
-        <table class="table about-table table-sm table-striped mb-3">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped mb-3">
           <thead><tr><th>Phase</th><th>Gradient</th><th>Visual</th></tr></thead>
           <tbody>
             <tr>
@@ -177,7 +177,7 @@
               <td><span class="phase-bar" style="background:linear-gradient(to right,rgb(199,146,212),rgb(60,0,80))"></span></td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
 
         <!-- Forecast -->
         <div class="subsection-title"><i class="bi bi-calendar3 me-2"></i>3-Day Forecast</div>
@@ -197,7 +197,7 @@
         </p>
 
         <p class="fw-semibold mb-1 small" style="color:#ccc">NWS Weather Alerts</p>
-        <table class="table about-table table-sm table-striped mb-3">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped mb-3">
           <thead><tr><th>Color</th><th>Severity</th><th>Examples</th></tr></thead>
           <tbody>
             <tr>
@@ -226,10 +226,10 @@
               <td class="text-muted small">Tornado Watch, Severe Thunderstorm Watch, Winter Storm Watch, Hurricane Watch</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
 
         <p class="fw-semibold mb-1 small" style="color:#ccc">Other Alerts</p>
-        <table class="table about-table table-sm table-striped">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped">
           <thead><tr><th>Alert</th><th>Color</th><th>Details</th></tr></thead>
           <tbody>
             <tr>
@@ -306,7 +306,7 @@
                     <tr><td class="py-0" style="color:rgb(0,210,210);font-family:monospace;white-space:nowrap">Leon</td><td class="py-0 text-muted">Leonids &nbsp;(Nov 17)</td><td class="py-0" style="color:rgb(0,210,210);font-family:monospace;white-space:nowrap">Gmnd</td><td class="py-0 text-muted">Geminids &nbsp;(Dec 14)</td></tr>
                     <tr><td class="py-0" style="color:rgb(0,210,210);font-family:monospace;white-space:nowrap">Ursd</td><td class="py-0 text-muted">Ursids &nbsp;(Dec 22)</td><td class="py-0"></td><td class="py-0"></td></tr>
                   </tbody>
-                </table>
+                </table></div>
               </td>
             </tr>
           </tbody>
@@ -354,7 +354,7 @@
           Airport and airline delay data colors the flight display. Departure and arrival delays use
           similar thresholds (arrival is slightly stricter — green cutoff is 15 min instead of 20).
         </p>
-        <table class="table about-table table-sm table-striped mb-3">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped mb-3">
           <thead><tr><th>Color</th><th>Departure delay</th><th>Arrival delay</th></tr></thead>
           <tbody>
             <tr>
@@ -392,7 +392,7 @@
               <td colspan="2">Delay unknown / no data</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
 
         <div class="subsection-title"><i class="bi bi-map me-2"></i>Radar Mode</div>
         <p class="text-muted small">Optional full-screen radar view showing all tracked aircraft overhead plotted on a map within the configured search radius.</p>
@@ -425,7 +425,7 @@
 
         <div class="subsection-title"><i class="bi bi-list-ul me-2"></i>Scrolling Stats</div>
         <p class="text-muted small mb-2">A row of statistics scrolls across the bottom of the display.</p>
-        <table class="table about-table table-sm table-striped mb-3">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped mb-3">
           <thead><tr><th>Stat</th><th>Color</th><th>Notes</th></tr></thead>
           <tbody>
             <tr>
@@ -477,7 +477,7 @@
               <td class="text-muted small">Nearby national park or landmark</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
 
         <div class="subsection-title"><i class="bi bi-hourglass-split me-2"></i>Delay Color Coding</div>
         <p class="text-muted small">Same color scale as Overhead Flights — see that section for the full table.</p>
@@ -564,7 +564,7 @@
         </div>
 
         <div class="subsection-title"><i class="bi bi-clock-history me-2"></i>Sport-Specific Status Formats</div>
-        <table class="table about-table table-sm table-striped">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped">
           <thead><tr><th>Sport</th><th>Example</th><th>Meaning</th></tr></thead>
           <tbody>
             <tr>
@@ -598,7 +598,7 @@
               <td class="text-muted small">First half, 45 minutes + 2 of stoppage time. <code>PKS</code> for penalty shootout.</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
 
       </div>
     </div>
@@ -648,14 +648,14 @@
         <p class="text-muted small mb-3">Chicago needs free CTA Train Tracker / Bus Tracker API keys. Denver and New York need no key — the first time you pick one, its schedule data downloads in the background (the config page shows "preparing…").</p>
 
         <div class="subsection-title"><i class="bi bi-layout-text-sidebar me-2"></i>Reading the Board</div>
-        <table class="table about-table table-sm table-striped">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped">
           <thead><tr><th>Column</th><th>Shows</th></tr></thead>
           <tbody>
             <tr><td><strong>Ln</strong></td><td class="text-muted small">A colour block for rail lines known by colour (e.g. CTA Red Line), or the line's name/number in its colour (e.g. <code>A</code>, <code>W</code>, <code>22</code>).</td></tr>
             <tr><td><strong>Dest</strong></td><td class="text-muted small">Where the train or bus is headed, shortened to fit (e.g. "95th/Dan Ryan" → <code>95th/Ryan</code>). Add your own short names in the config page.</td></tr>
             <tr><td><strong>Min</strong></td><td class="text-muted small">Minutes until it arrives. <code>Due</code> = 1 minute or less; <code>Dly</code> = the agency reports a delay.</td></tr>
           </tbody>
-        </table>
+        </table></div>
 
         <div class="subsection-title"><i class="bi bi-palette me-2"></i>Colours</div>
         <div class="d-flex flex-wrap gap-4 mb-3">
@@ -715,14 +715,14 @@
         </p>
 
         <div class="subsection-title"><i class="bi bi-broadcast me-2"></i>Sources</div>
-        <table class="table about-table table-sm table-striped">
+        <div class="table-responsive"><table class="table about-table table-sm table-striped">
           <thead><tr><th>Source</th><th>Picks up</th><th>Needs</th></tr></thead>
           <tbody>
             <tr><td><strong>Spotify</strong></td><td class="text-muted small">Any of your Spotify devices — phone, computer, speakers, car.</td><td class="text-muted small">Spotify Premium (for the developer app). Free alternative: Last.fm.</td></tr>
             <tr><td><strong>Mac Music app</strong></td><td class="text-muted small">Apple Music and your iTunes library playing on your Mac. Live, with progress bar.</td><td class="text-muted small">Remote Login turned on, plus a one-time key and permission on the Mac.</td></tr>
-            <tr><td><strong>Last.fm</strong></td><td class="text-muted small">Anything that scrobbles to Last.fm — including Spotify on a free account.</td><td class="text-muted small">Free Last.fm account and API key. No progress bar.</td></tr>
+            <tr><td><strong>Last.fm</strong></td><td class="text-muted small">Anything that scrobbles to Last.fm — Spotify (free or Premium), Tidal, Deezer, SoundCloud, Bandcamp, YouTube &amp; YouTube Music, Pandora, Amazon Music, Apple Music, Sonos, Plex and more. Spotify, Tidal and Deezer connect from their own settings; most others through the free Web Scrobbler browser extension or a phone scrobbler app.</td><td class="text-muted small">Free Last.fm account and API key. No progress bar.</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <p class="text-muted small mb-0">
           Sources are checked in the order you set, and the first one playing is shown.
           Apple doesn't offer a live "now playing" feed for Apple Music on iPhone; it only appears through a Last.fm scrobbler app.
