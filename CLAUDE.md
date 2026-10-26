@@ -107,7 +107,7 @@ All route results go through `_route_makes_sense()` sanity checking. Bad routes 
 
 ### Transit Arrivals/Departures Plugin (`plugins/transit/`)
 
-Shows upcoming arrivals, station-sign style (header `Ln | Dest | Min`), for a list of watched stops in `plugins.transit.stops` (each: agency, routes, stop_id, direction, min_minutes, optional header `label`). Stops can be from different agencies.
+Shows upcoming arrivals, station-sign style (header `Ln | Dest | Min`), for a list of watched stops in `plugins.transit.stops` (each: agency, routes, stop_id, direction, min_minutes, optional header `label`). Stops can be from different agencies. A grey separator (`SEPARATOR_Y = 7`, same as AI Usage) runs under the header in both modes; scroll mode's window starts at `SCROLL_Y = 9`.
 - `display_mode: "combined"` — static board: next 3 across all stops by time. `"scroll"` — fixed `Ln | Dest | Min` header with every stop's next 3 rows (faint divider between stops, no stop-name line) scrolling bottom-to-top underneath (like `ap_news`), `scroll_speed` px/frame; loops for `display_duration`, which is raised to at least one full pass. A single stop always uses the static board. `"cycle"` (old page-flip mode) is read as `"scroll"`.
 - Config page: each stop panel picks one line and one stop from matching list boxes (add panels for more). `routes` stays a list in config; older panels with several lines keep them until a new line is picked.
 - `min_minutes` (walk time) never hides arrivals: ones you can't reach are drawn grey (`Arrival.missable`). If all of the next 3 are too soon, the last row shows the next catchable one (`_pick_rows`).

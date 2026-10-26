@@ -187,14 +187,19 @@ def build_rows(arrivals, now: float = None, alias_set: str = "",
 
 HEADER_MAX_CHARS = (MATRIX_W - MIN_COL_W - 2) // CHAR_W
 
-# Scroll mode: fixed header row, schedule scrolls in rows 8–31
-SCROLL_Y = 8
+# Scroll mode: fixed header row + separator, schedule scrolls in rows 9–31
+SCROLL_Y = 9
 SCROLL_H = MATRIX_H - SCROLL_Y
 LINE_H = 8                       # 6 px glyph cell + 2 px gap
 COL_DIVIDER = (50, 50, 50)
+SEPARATOR_Y = 7                  # grey line under the header (same as AI Usage)
+COL_SEPARATOR = (60, 60, 60)
 
 
 def _draw_header(img: Image.Image, ln_w: int, title: str = None):
+    px = img.load()
+    for x in range(MATRIX_W):
+        px[x, SEPARATOR_Y] = COL_SEPARATOR
     if title:
         _bdf_draw(img, LEFT_PAD, HEADER_Y, title[:HEADER_MAX_CHARS], _FONT, COL_HEADER)
     else:
