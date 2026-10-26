@@ -28,6 +28,9 @@ BAR_W = MATRIX_W - 2 * LEFT
 HEADER_Y = 1                # 1 px margin above the title
 
 _TINY = _parse_bdf(os.path.join(_FONTS_DIR, "tom-thumb.bdf"))
+# tom-thumb pads ':' to a full 4 px cell (2 px gap each side); tighten to 1 px
+if ord(":") in _TINY:
+    _TINY[ord(":")] = {**_TINY[ord(":")], "xoff": 0, "dw": 2}
 
 COL_LABEL   = (170, 170, 170)
 COL_VALUE   = (240, 240, 240)
@@ -80,9 +83,11 @@ def time_labels(current_reset, weekly_reset, clock_format: str) -> tuple:
     left_opts = [_clock(cur, clock_format, True), _clock(cur, clock_format, cur.minute != 0),
                  _clock(cur, clock_format, cur.minute != 0, True)] if cur else ["--"]
     right_opts = [f"{wk:%a} {_clock(wk, clock_format, wk.minute != 0)}".upper(),
+                  f"{wk:%a} {_clock(wk, clock_format, wk.minute != 0, True)}".upper(),
                   f"{wk:%a} {_clock(wk, clock_format, False, True)}".upper()] if wk else ["--"]
-    for left in left_opts:
-        for right in right_opts:
+    # Shorten the session time (":00" carries no information) before the weekly one
+    for right in right_opts:
+        for left in left_opts:
             if _bdf_width(left, _TINY) + _bdf_width(right, _TINY) + 4 <= MATRIX_W - 2 * LEFT:
                 return left, right
     return left_opts[-1], right_opts[-1]
