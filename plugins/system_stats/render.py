@@ -1,7 +1,8 @@
 """
 System Stats rendering (64×32, 4x6 BDF font, 1 px top/left margin).
 
-Each machine is a section: a hostname line, then one 8 px row per stat:
+Each machine is a section: a hostname line (with uptime right-aligned, if
+enabled), then one 8 px row per stat:
   rows 0-4  text — label (coloured) · value (white) · temperature (teal → orange → red)
   row  5    gap
   row  6    1 px bar: % for CPU/GPU/MEM; for DSK/NET the combined read+write
@@ -15,6 +16,7 @@ import math
 
 from PIL import Image
 
+from plugins.transit.abbrev import shorten
 from plugins.transit.render import _FONT, _bdf_draw, _bdf_width
 
 MATRIX_W, MATRIX_H = 64, 32
@@ -26,6 +28,7 @@ TEMP_RIGHT = MATRIX_W       # right edge of the right column (temp, write/up)
 BAR_W = MATRIX_W - LEFT
 
 COL_HOST    = (160, 160, 160)
+COL_UPTIME  = (110, 110, 110)
 COL_VALUE   = (240, 240, 240)
 COL_DIM     = (110, 110, 110)
 COL_TRACK   = (34, 34, 34)
@@ -38,7 +41,6 @@ STATS = {
     "cpu":    ("CPU", (80, 220, 220)),
     "gpu":    ("GPU", (160, 160, 255)),
     "mem":    ("MEM", (250, 210, 120)),
-    "uptime": ("UP",  (170, 170, 170)),
     "disk":   ("DSK", (255, 150, 60)),
     "net":    ("NET", (90, 220, 90)),
 }
@@ -144,10 +146,13 @@ def available_stats(conn: dict, stats: dict) -> list:
     return [k for k in keys if have.get(k)]
 
 
-def draw_host_line(img, y, name: str, offline_msg: str = None):
-    _bdf_draw(img, LEFT, y + 1, name[:15] if not offline_msg else name[:7], _FONT, COL_HOST)
-    if offline_msg:
-        _right(img, TEMP_RIGHT, y + 1, offline_msg, COL_OFFLINE)
+def draw_host_line(img, y, name: str, right_text: str = "", right_colour=COL_UPTIME):
+    """Machine name on the left; uptime (or OFFLINE) right-aligned on the same line."""
+    room = MATRIX_W - LEFT
+    if right_text:
+        room -= _bdf_width(right_text, _FONT) + 3          # keep a gap before the right text
+        _right(img, TEMP_RIGHT, y + 1, right_text, right_colour)
+    _bdf_draw(img, LEFT, y + 1, shorten(name, max(1, room // 4)), _FONT, COL_HOST)
 
 
 def draw_stat_row(img, y, key: str, stats: dict, conn: dict, units: str):
@@ -161,8 +166,6 @@ def draw_stat_row(img, y, key: str, stats: dict, conn: dict, units: str):
         if temp is not None:
             _right(img, TEMP_RIGHT, y, fmt_temp(temp, units), temp_colour(temp))
         _bar(img, bar_y, (pct or 0) / 100.0, colour)
-    elif key == "uptime":
-        _right(img, TEMP_RIGHT, y, fmt_uptime(stats.get("uptime_s")), COL_VALUE)
     else:
         a, b = ("disk_r", "disk_w") if key == "disk" else ("net_rx", "net_tx")
         full = float(conn.get("disk_max" if key == "disk" else "net_max")
@@ -190,12 +193,14 @@ def build_sections(results: list, units: str) -> list:
     for conn, stats, error in results:
         name = (conn.get("name") or "").strip() or (stats or {}).get("host") or conn.get("host") or "This Pi"
         if error or stats is None:
-            sections.append((ROW_H, lambda img, y, n=name: draw_host_line(img, y, n, "OFFLINE")))
+            sections.append((ROW_H, lambda img, y, n=name: draw_host_line(img, y, n, "OFFLINE", COL_OFFLINE)))
             continue
-        keys = available_stats(conn, stats)
+        avail = available_stats(conn, stats)
+        keys = [k for k in avail if k != "uptime"]          # uptime lives on the hostname line
+        up = fmt_uptime(stats.get("uptime_s")) if "uptime" in avail else ""
 
-        def draw(img, y, n=name, k=keys, s=stats, c=conn):
-            draw_host_line(img, y, n)
+        def draw(img, y, n=name, k=keys, s=stats, c=conn, u=up):
+            draw_host_line(img, y, n, u)
             for i, key in enumerate(k):
                 draw_stat_row(img, y + ROW_H * (i + 1), key, s, c, units)
         sections.append((section_height(len(keys)), draw))

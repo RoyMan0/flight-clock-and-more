@@ -808,8 +808,8 @@
       <div class="card-body">
         <p class="text-muted small mb-3">
           Live health of this Pi and any other computers you add — a Mac, a NAS, a Linux server.
-          Each machine shows its name, then one line per stat with a bar underneath.
-          One machine with up to three stats fits on one screen; with more machines or stats the list scrolls up continuously,
+          Each machine shows its name — with its uptime (time since it last restarted, e.g. <code>12d 04h</code>) on the right, if turned on — then one line per stat with a bar underneath.
+          One machine with up to three stats (plus uptime) fits on one screen; with more machines or stats the list scrolls up continuously,
           with a faint dashed line between machines. Values refresh every few seconds.
         </p>
 
@@ -821,7 +821,6 @@
             <tr><td><span style="color:rgb(80,220,220)"><strong>CPU</strong></span></td><td class="text-muted small">Processor usage and temperature.</td><td class="text-muted small">Usage %</td></tr>
             <tr><td><span style="color:rgb(160,160,255)"><strong>GPU</strong></span></td><td class="text-muted small">Graphics usage and temperature (Macs and NVIDIA graphics cards; the Pi has no GPU usage meter).</td><td class="text-muted small">Usage %</td></tr>
             <tr><td><span style="color:rgb(250,210,120)"><strong>MEM</strong></span></td><td class="text-muted small">Memory in use.</td><td class="text-muted small">Usage %</td></tr>
-            <tr><td><span style="color:rgb(170,170,170)"><strong>UP</strong></span></td><td class="text-muted small">Time since the machine last restarted, e.g. <code>12d 04h</code>.</td><td class="text-muted small">—</td></tr>
             <tr><td><span style="color:rgb(255,150,60)"><strong>DSK</strong></span></td><td class="text-muted small">Disk activity: <code>R</code> read and <code>W</code> write, per second.</td><td class="text-muted small">Combined speed</td></tr>
             <tr><td><span style="color:rgb(90,220,90)"><strong>NET</strong></span></td><td class="text-muted small">Network traffic: ▼ download and ▲ upload, per second.</td><td class="text-muted small">Combined speed</td></tr>
           </tbody>
