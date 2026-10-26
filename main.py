@@ -79,7 +79,7 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = WorldClockPlugin = NowPlayingPlugin = SystemStatsPlugin = AiUsagePlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = WorldClockPlugin = NowPlayingPlugin = SystemStatsPlugin = AiUsagePlugin = CalendarPlugin = create_app = None
     try:
         from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
     except Exception as e:
@@ -128,6 +128,10 @@ def main():
         from plugins.ai_usage.manager import AiUsagePlugin
     except Exception as e:
         log.warning(f"AI usage plugin failed to import: {e}")
+    try:
+        from plugins.calendar.manager import CalendarPlugin
+    except Exception as e:
+        log.warning(f"Calendar plugin failed to import: {e}")
     try:
         from web.app import create_app
     except Exception as e:
@@ -275,6 +279,14 @@ def main():
             ))
         except Exception as e:
             log.warning(f"AI usage plugin failed to load: {e}")
+
+    if CalendarPlugin:
+        try:
+            pm.register("calendar", CalendarPlugin(
+                display, cfg.get_plugin_config("calendar"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"Calendar plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)

@@ -7,9 +7,14 @@ Lifecycle:
   3. draw()      — called every frame (~10fps) when this plugin is active
   4. reset()     — called each time this plugin becomes the active display
 
-Priority interrupt (flight tracker overrides all):
-  plugin_manager checks has_live_priority() AND has_live_content() each frame.
-  When both are True the plugin preempts whatever is currently showing.
+Live priority (see core/plugin_manager.py):
+  plugin_manager checks has_live_priority() AND has_live_content() each frame
+  (flight tracker first, then plugin_order). live_priority_mode() decides how a
+  live plugin interrupts:
+    "takeover"    preempts the rotation for as long as both stay True. For a
+                  one-off alert, clear has_live_content() after one pass.
+    "interleave"  is shown between every normal module while live.
+  on_priority_view(True) is called before reset() when shown as a priority.
 
 Cycling:
   is_cycle_complete() returning True signals the manager to advance to the
@@ -66,6 +71,14 @@ class BasePlugin(ABC):
     def has_live_content(self) -> bool:
         """True if there is actually live content to display right now."""
         return False
+
+    def live_priority_mode(self) -> str:
+        """"takeover" (preempt while live) or "interleave" (between modules)."""
+        return "takeover"
+
+    def on_priority_view(self, active: bool):
+        """Called before reset(): True when shown as a live priority, False
+        for a normal rotation turn. Override to show a priority-only view."""
 
     # ------------------------------------------------------------------
     # Cycling control

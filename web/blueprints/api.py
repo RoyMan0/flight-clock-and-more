@@ -865,6 +865,75 @@ def ai_usage_test():
 
 
 # ------------------------------------------------------------------
+# Calendar — test sources with the (unsaved) settings, find CalDAV calendars
+# ------------------------------------------------------------------
+
+def _calendar_secret(typed: str, key: str) -> str:
+    """A field left masked/blank on the config page means "use the saved value"."""
+    if typed and typed != "********":
+        return typed
+    cfg = _cfg()
+    return (cfg.get_secret(key, "") if cfg else "") or ""
+
+
+@api_bp.post("/calendar/test")
+def calendar_test():
+    from PIL import Image
+    from plugins.calendar import render as R
+    from plugins.calendar.manager import clock_format, fetch_all, secret_key, upcoming
+
+    data = request.get_json(force=True) or {}
+    conf = data.get("config") or {}
+    typed = data.get("secrets") or {}
+    overrides = {secret_key(s): _calendar_secret(typed.get(secret_key(s), ""), secret_key(s))
+                 for s in conf.get("sources") or []}
+    results, errors = fetch_all(conf, overrides)
+
+    statuses = []
+    for src in conf.get("sources") or []:
+        if not src.get("enabled", True):
+            continue
+        uid, name = src.get("uid"), src.get("name") or "Calendar"
+        if uid in errors:
+            statuses.append({"uid": uid, "name": name, "ok": False, "text": errors[uid]})
+        else:
+            n = len(upcoming(results.get(uid, []), int(conf.get("days_ahead", 3)), 999))
+            statuses.append({"uid": uid, "name": name, "ok": True,
+                             "text": f"{n} upcoming event{'s' if n != 1 else ''} in the next {conf.get('days_ahead', 3)} day(s)"})
+
+    events = upcoming([e for evs in results.values() for e in evs],
+                      int(conf.get("days_ahead", 3)), int(conf.get("max_events", 20)))
+    image = None
+    if events:
+        fmt = clock_format()
+        if conf.get("display_mode") == "compact":
+            rows = R.compact_rows(events)
+            if R.compact_fits(rows):
+                img = R.render_compact_static(events, rows, fmt)
+            else:
+                img = R.render_compact_frame(events, R.build_compact_strip(rows, fmt), 0)
+        else:
+            img = R.render_detailed(events[0], [R.render_panel(events[0], fmt)])
+        buf = io.BytesIO()
+        img.resize((64 * 6, 32 * 6), Image.NEAREST).save(buf, format="PNG")
+        image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    return jsonify({"statuses": statuses, "image": image, "count": len(events)})
+
+
+@api_bp.post("/calendar/caldav/calendars")
+def calendar_caldav_calendars():
+    from plugins.calendar import sources
+
+    data = request.get_json(force=True) or {}
+    password = _calendar_secret(data.get("password", ""), f"calendar_pw_{data.get('uid', '')}")
+    try:
+        cals = sources.list_caldav_calendars(data.get("server_url", ""), data.get("username", ""), password)
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+    return jsonify({"ok": True, "calendars": cals})
+
+
+# ------------------------------------------------------------------
 # Flight data (for dashboard panel)
 # ------------------------------------------------------------------
 

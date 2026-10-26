@@ -641,6 +641,15 @@
             <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.live_priority">
             <label class="form-check-label">Live game priority (interrupts rotation)</label>
           </div>
+          <div class="mt-2 ms-4" x-show="pluginConfigs.sports.live_priority">
+            <select class="form-select form-select-sm bg-dark text-light border-secondary" style="max-width:22rem"
+                    x-model="pluginConfigs.sports.live_priority_mode">
+              <option value="alert">Score alerts: jump in when a live game starts or scores</option>
+              <option value="interleave">Every other slot: live games between every module</option>
+              <option value="takeover">Full takeover: stay on live games until they end</option>
+            </select>
+            <div class="form-text text-muted">Overhead flights always come first.</div>
+          </div>
           <div class="form-check form-switch mt-2">
             <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.show_only_today_completed">
             <label class="form-check-label">Show only today's completed games</label>
@@ -1550,6 +1559,219 @@
         </div>
       </div>
 
+      <!-- Calendar Config -->
+      <div class="card mb-4" x-show="'calendar' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-calendar-event me-2"></i>Calendar</div>
+        <div class="card-body" x-show="'calendar' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.calendar.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">Upcoming events from Google, Outlook, iCloud or any calendar link. Skipped in the rotation when there's nothing coming up.</div>
+            </div>
+            <div class="col-md-6">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small mb-1">Display</label>
+                  <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="pluginConfigs.calendar.display_mode">
+                    <option value="detailed">Detailed (one event at a time)</option>
+                    <option value="compact">Compact (list)</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1">Show events for</label>
+                  <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model.number="pluginConfigs.calendar.days_ahead">
+                    <template x-for="d in [1, 2, 3, 4, 5, 7, 14]" :key="d">
+                      <option :value="d" :selected="d === pluginConfigs.calendar.days_ahead"
+                              x-text="d === 1 ? 'Today only' : d === 2 ? 'Today + tomorrow' : d + ' days'"></option>
+                    </template>
+                  </select>
+                </div>
+                <template x-if="pluginConfigs.calendar.display_mode !== 'compact'">
+                  <div class="col-12">
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <label class="form-label small mb-1">Events per turn</label>
+                        <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model.number="pluginConfigs.calendar.events_per_visit">
+                          <template x-for="n in [1, 2, 3, 4, 5, 6, 8, 10]" :key="n">
+                            <option :value="n" :selected="n === pluginConfigs.calendar.events_per_visit" x-text="n"></option>
+                          </template>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label small mb-1 d-flex justify-content-between">
+                          <span>Seconds each</span><span class="text-muted" x-text="pluginConfigs.calendar.seconds_per_event + ' s'"></span>
+                        </label>
+                        <input type="range" class="form-range" min="3" max="15" step="1" x-model.number="pluginConfigs.calendar.seconds_per_event">
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="pluginConfigs.calendar.display_mode === 'compact'">
+                  <div class="col-12">
+                    <label class="form-label small mb-1 d-flex justify-content-between">
+                      <span>Scroll Speed <span class="text-muted">(when it doesn't fit)</span></span>
+                      <span class="text-muted" x-text="pluginConfigs.calendar.scroll_speed + ' px/frame'"></span>
+                    </label>
+                    <input type="range" class="form-range" min="0.5" max="5" step="0.5" x-model.number="pluginConfigs.calendar.scroll_speed">
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" x-model="pluginConfigs.calendar.reminders">
+                  <label class="form-check-label">Reminders: interrupt the rotation when an event is about to start</label>
+                </div>
+                <select class="form-select form-select-sm bg-dark text-light border-secondary" style="width:auto"
+                        x-show="pluginConfigs.calendar.reminders" x-model.number="pluginConfigs.calendar.reminder_minutes">
+                  <template x-for="m in [5, 10, 15, 30]" :key="m">
+                    <option :value="m" :selected="m === pluginConfigs.calendar.reminder_minutes" x-text="m + ' min before'"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="form-text text-muted">Shows the event for 15 seconds, once. Overhead flights still come first.</div>
+            </div>
+
+            <!-- Sources -->
+            <template x-for="(src, i) in (pluginConfigs.calendar.sources || [])" :key="src.uid">
+              <div class="col-12">
+                <div class="border border-secondary rounded p-2 p-sm-3">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="btn-group btn-group-sm flex-shrink-0">
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveCalSource(i, -1)" :disabled="i===0">▲</button>
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveCalSource(i, 1)"
+                              :disabled="i===pluginConfigs.calendar.sources.length-1">▼</button>
+                    </div>
+                    <div class="form-check form-switch mb-0 flex-shrink-0">
+                      <input class="form-check-input" type="checkbox" x-model="src.enabled" title="Show this calendar">
+                    </div>
+                    <span class="flex-shrink-0 rounded" style="width:12px;height:12px" :style="{ background: src.color }"></span>
+                    <button class="btn btn-link text-light text-decoration-none p-0 flex-grow-1 text-start text-truncate" style="min-width:0"
+                            @click="calendar.open[src.uid] = !calendar.open[src.uid]">
+                      <i class="bi me-1" :class="calendar.open[src.uid] ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                      <strong x-text="src.name || 'New calendar'"></strong>
+                      <span class="small text-muted ms-1" x-text="src.type === 'caldav' ? 'login' : 'link'"></span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger flex-shrink-0" @click="removeCalSource(i)" title="Remove"><i class="bi bi-trash"></i></button>
+                  </div>
+
+                  <div class="row g-2 mt-1" x-show="calendar.open[src.uid]">
+                    <div class="col-8 col-sm-6">
+                      <label class="form-label small mb-1">Name on display</label>
+                      <input type="text" maxlength="20" class="form-control form-control-sm bg-dark text-light border-secondary"
+                             x-model="src.name" placeholder="e.g. Google Cal">
+                    </div>
+                    <div class="col-4 col-sm-2">
+                      <label class="form-label small mb-1">Colour</label>
+                      <input type="color" class="form-control form-control-sm form-control-color bg-dark border-secondary w-100" x-model="src.color">
+                    </div>
+
+                    <!-- ICS link -->
+                    <template x-if="src.type !== 'caldav'">
+                      <div class="col-12">
+                        <label class="form-label small mb-1">Calendar link <span class="text-muted">(.ics or webcal://; kept private)</span></label>
+                        <input type="password" autocomplete="off" class="form-control form-control-sm bg-dark text-light border-secondary"
+                               :value="secrets[calSecretKey(src)] || ''" @change="secrets[calSecretKey(src)] = $event.target.value.trim()"
+                               placeholder="paste the calendar's link">
+                        <details class="small text-muted mt-1">
+                          <summary>Where do I find my link?</summary>
+                          <ul class="ps-3 mb-0 mt-1">
+                            <li><strong>Google:</strong> calendar.google.com → ⚙ Settings → pick the calendar under "Settings for my calendars" → <em>Integrate calendar</em> → copy <em>Secret address in iCal format</em> (private).</li>
+                            <li><strong>Outlook:</strong> outlook.com → ⚙ Settings → Calendar → Shared calendars → <em>Publish a calendar</em> → choose the calendar and "Can view all details" → Publish → copy the <em>ICS</em> link (private).</li>
+                            <li><strong>iCloud (public):</strong> Calendar app → right-click the calendar → Share → tick <em>Public Calendar</em> → copy the webcal:// link. Anyone with the link can view it; for a private iCloud calendar use <em>Add calendar login</em> instead.</li>
+                            <li><strong>Anything else:</strong> holidays, sports schedules and school calendars usually have an "iCal" or "Subscribe" link.</li>
+                          </ul>
+                        </details>
+                      </div>
+                    </template>
+
+                    <!-- CalDAV login -->
+                    <template x-if="src.type === 'caldav'">
+                      <div class="col-12">
+                        <div class="row g-2">
+                          <div class="col-sm-4">
+                            <label class="form-label small mb-1">Service</label>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                                    @change="if ($event.target.value) src.server_url = $event.target.value">
+                              <template x-for="p in calendar.presets" :key="p.url">
+                                <option :value="p.url" :selected="p.url === src.server_url || (!p.url && !calendar.presets.some(q => q.url && q.url === src.server_url))" x-text="p.name"></option>
+                              </template>
+                            </select>
+                          </div>
+                          <div class="col-sm-8">
+                            <label class="form-label small mb-1">Server address</label>
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                   x-model="src.server_url" placeholder="https://…">
+                          </div>
+                          <div class="col-sm-6">
+                            <label class="form-label small mb-1">Username <span class="text-muted">(Apple ID email for iCloud)</span></label>
+                            <input type="text" autocomplete="off" class="form-control form-control-sm bg-dark text-light border-secondary" x-model="src.username">
+                          </div>
+                          <div class="col-sm-6">
+                            <label class="form-label small mb-1">App-specific password</label>
+                            <input type="password" autocomplete="off" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                   :value="secrets[calSecretKey(src)] || ''" @change="secrets[calSecretKey(src)] = $event.target.value.trim()">
+                          </div>
+                          <div class="col-12 form-text text-muted mt-0">
+                            iCloud: make an app-specific password at <span class="text-light">account.apple.com</span> → Sign-In and Security → App-Specific Passwords. Your normal Apple ID password won't work.
+                          </div>
+                          <div class="col-12">
+                            <button class="btn btn-outline-info btn-sm" @click="findCalendars(src)" :disabled="calendar.finding[src.uid]">
+                              <span class="spinner-border spinner-border-sm me-1" x-show="calendar.finding[src.uid]"></span>
+                              <i class="bi bi-search me-1" x-show="!calendar.finding[src.uid]"></i>Find calendars
+                            </button>
+                            <span class="small ms-2" :class="calendar.findOk[src.uid] ? 'text-muted' : 'text-danger'" x-text="calendar.findMsg[src.uid] || ''"></span>
+                          </div>
+                          <div class="col-12" x-show="(src.calendars || []).length">
+                            <div class="d-flex flex-wrap gap-3">
+                              <template x-for="c in (src.calendars || [])" :key="c.href">
+                                <label class="form-check mb-0 small" style="min-width:0">
+                                  <input class="form-check-input" type="checkbox" x-model="c.enabled">
+                                  <span class="d-inline-block rounded me-1" style="width:10px;height:10px" :style="{ background: c.color || src.color }"></span>
+                                  <span x-text="c.name"></span>
+                                </label>
+                              </template>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-light btn-sm" @click="addCalSource('ics')"><i class="bi bi-link-45deg me-1"></i>Add calendar link</button>
+              <button class="btn btn-outline-light btn-sm" @click="addCalSource('caldav')"><i class="bi bi-person-lock me-1"></i>Add calendar login (iCloud…)</button>
+            </div>
+
+            <!-- Test results -->
+            <div class="col-12" x-show="calendar.test">
+              <ul class="list-unstyled small mb-2">
+                <template x-for="s in (calendar.test?.statuses || [])" :key="s.uid">
+                  <li><strong x-text="s.name + ': '"></strong><span :class="s.ok ? 'text-light' : 'text-danger'" x-text="s.text"></span></li>
+                </template>
+                <li class="text-muted" x-show="!(calendar.test?.statuses || []).length">No calendars are turned on.</li>
+              </ul>
+              <img x-show="calendar.test?.image" :src="calendar.test?.image" alt="Calendar preview"
+                   class="border border-secondary rounded" style="image-rendering:pixelated;max-width:100%;width:384px">
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-success btn-sm" @click="saveCalendar()"><i class="bi bi-save me-1"></i>Save</button>
+            <button class="btn btn-outline-info btn-sm" @click="testCalendar()" :disabled="calendar.testing">
+              <span class="spinner-border spinner-border-sm me-1" x-show="calendar.testing"></span><i class="bi bi-eye me-1" x-show="!calendar.testing"></i>Test
+            </button>
+            <span class="small text-success" x-show="calendar.saved">Saved.</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1732,7 +1954,7 @@
           <div class="card-header"><i class="bi bi-key me-2"></i>Other Secrets</div>
           <div class="card-body">
             <div class="row g-3">
-              <template x-for="[k, v] in Object.entries(secrets).filter(([k]) => !k.startsWith('airlabs') && !k.startsWith('flightaware') && !['cta_train_api_key','cta_bus_api_key','mta_api_key','spotify_client_id','spotify_refresh_token','lastfm_api_key'].includes(k))" :key="k">
+              <template x-for="[k, v] in Object.entries(secrets).filter(([k]) => !k.startsWith('airlabs') && !k.startsWith('flightaware') && !k.startsWith('calendar_') && !['cta_train_api_key','cta_bus_api_key','mta_api_key','spotify_client_id','spotify_refresh_token','lastfm_api_key'].includes(k))" :key="k">
                 <div class="col-md-6">
                   <label class="form-label text-muted small" x-text="k"></label>
                   <input type="password" class="form-control bg-dark text-light border-secondary"
@@ -1773,6 +1995,7 @@ function configPage() {
       transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
       world_clock:             { cities: [], scroll_speed: 1 },
       system_stats:            { connections: [], scroll_speed: 1 },
+      calendar:                { display_mode: 'detailed', days_ahead: 3, events_per_visit: 5, seconds_per_event: 6, scroll_speed: 1, reminders: false, reminder_minutes: 10, sources: [] },
       ai_usage:                { seconds_per_provider: 10, reset_format: 'times', providers: { claude: { enabled: true, credentials_path: '' }, codex: { enabled: false, credentials_path: '' } } },
       now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
     },
@@ -1798,6 +2021,15 @@ function configPage() {
                     { v: 14000000000, label: 'NVMe Gen5 (14 GB/s)' } ],
       netScales:  [ { v: 125000000, label: '1 Gb/s' }, { v: 312500000, label: '2.5 Gb/s' }, { v: 625000000, label: '5 Gb/s' },
                     { v: 1250000000, label: '10 Gb/s' }, { v: 3125000000, label: '25 Gb/s' } ],
+    },
+    calendar: {
+      saved: false, testing: false, test: null, open: {}, finding: {}, findMsg: {}, findOk: {},
+      presets: [
+        { name: 'iCloud', url: 'https://caldav.icloud.com/' },
+        { name: 'Fastmail', url: 'https://caldav.fastmail.com/dav/' },
+        { name: 'Yahoo', url: 'https://caldav.calendar.yahoo.com/' },
+        { name: 'Other (enter address)', url: '' },
+      ],
     },
     aiUsage: {
       saved: false, testing: false, test: null,
@@ -1898,6 +2130,7 @@ function configPage() {
         cfgs.transit = t;
       }
       if (cfgs.world_clock) cfgs.world_clock = { cities: [], scroll_speed: 1, ...cfgs.world_clock };
+      if (cfgs.sports) cfgs.sports = { live_priority_mode: 'alert', ...cfgs.sports };
       if (cfgs.system_stats) {
         const ss = { scroll_speed: 1, ...cfgs.system_stats };
         const base = this._newSysConn('local');
@@ -1905,6 +2138,12 @@ function configPage() {
           .map(c => ({ ...this._newSysConn(c.type || 'local'), ...c,
                        metrics: { ...base.metrics, ...(c.metrics || {}) } }));
         cfgs.system_stats = ss;
+      }
+      if (cfgs.calendar) {
+        cfgs.calendar = { display_mode: 'detailed', days_ahead: 3, events_per_visit: 5, seconds_per_event: 6,
+                          scroll_speed: 1, reminders: false, reminder_minutes: 10, ...cfgs.calendar };
+        cfgs.calendar.sources = (Array.isArray(cfgs.calendar.sources) ? cfgs.calendar.sources : [])
+          .map(src => ({ ...this._newCalSource(src.type || 'ics'), ...src, calendars: src.calendars || [] }));
       }
       if (cfgs.ai_usage) {
         const au = { seconds_per_provider: 10, reset_format: 'times', ...cfgs.ai_usage };
@@ -2477,6 +2716,96 @@ function configPage() {
       }
       this.sysStats.saved = true;
       setTimeout(() => this.sysStats.saved = false, 2000);
+    },
+
+    // ---------------- Calendar ----------------
+
+    _newCalSource(type = 'ics') {
+      const caldav = type === 'caldav';
+      return { uid: Math.random().toString(36).slice(2, 10), type, enabled: true,
+               name: caldav ? 'iCloud' : '', color: caldav ? '#ff9500' : '#4285f4',
+               server_url: caldav ? 'https://caldav.icloud.com/' : '', username: '', calendars: [] };
+    },
+
+    calSecretKey(src) {
+      return `calendar_${src.type === 'caldav' ? 'pw' : 'url'}_${src.uid}`;
+    },
+
+    addCalSource(type) {
+      const c = this.pluginConfigs.calendar;
+      const src = this._newCalSource(type);
+      c.sources = [...(c.sources || []), src];
+      this.calendar.open[src.uid] = true;
+    },
+
+    removeCalSource(i) {
+      const c = this.pluginConfigs.calendar;
+      if (!confirm(`Remove ${c.sources[i].name || 'this calendar'}?`)) return;
+      c.sources = c.sources.filter((_, k) => k !== i);
+    },
+
+    moveCalSource(i, delta) {
+      const c = this.pluginConfigs.calendar;
+      const j = i + delta;
+      if (j < 0 || j >= c.sources.length) return;
+      const arr = [...c.sources];
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      c.sources = arr;
+    },
+
+    async findCalendars(src) {
+      this.calendar.finding[src.uid] = true;
+      this.calendar.findMsg[src.uid] = '';
+      try {
+        const r = await fetch('/api/calendar/caldav/calendars', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ uid: src.uid, server_url: src.server_url, username: src.username,
+                                 password: this.secrets[this.calSecretKey(src)] || '' }),
+        }).then(r => r.json());
+        this.calendar.findOk[src.uid] = r.ok;
+        if (r.ok) {
+          const old = Object.fromEntries((src.calendars || []).map(c => [c.href, c]));
+          src.calendars = r.calendars.map(c => ({ ...c, enabled: old[c.href] ? old[c.href].enabled !== false : true }));
+          this.calendar.findMsg[src.uid] = r.calendars.length
+            ? `${r.calendars.length} calendar${r.calendars.length === 1 ? '' : 's'} found. Untick any to hide them, then Save.`
+            : 'Signed in, but no event calendars were found.';
+        } else {
+          this.calendar.findMsg[src.uid] = r.message;
+        }
+      } catch (e) {
+        this.calendar.findOk[src.uid] = false;
+        this.calendar.findMsg[src.uid] = String(e);
+      } finally {
+        this.calendar.finding[src.uid] = false;
+      }
+    },
+
+    async saveCalendar() {
+      await this.saveSecrets();                 // links/passwords first, so the plugin's refresh can use them
+      await this.savePluginConfig('calendar');
+      // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
+      if (this.pluginConfigs.calendar.enabled) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.calendar.saved = true;
+      setTimeout(() => this.calendar.saved = false, 2000);
+    },
+
+    async testCalendar() {
+      this.calendar.testing = true;
+      try {
+        this.calendar.test = await fetch('/api/calendar/test', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ config: this.pluginConfigs.calendar, secrets: this.secrets }),
+        }).then(r => r.json());
+      } catch (e) {
+        this.calendar.test = { statuses: [{ uid: 'x', name: 'Test', ok: false, text: String(e) }] };
+      } finally {
+        this.calendar.testing = false;
+      }
     },
 
     // ---------------- AI Usage ----------------

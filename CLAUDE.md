@@ -47,9 +47,12 @@ sudo systemctl cat its-a-plane   # view service file
 
 The main loop runs at 10 fps. Every frame, `_dispatch()` is called:
 
+0. **Pinned plugin** (Display page) wins over everything below.
 1. **Clock-only mode check** — if `display.clock_only` is enabled and time is in range, forces `clock_weather` and suppresses all other plugin updates (no API calls)
-2. **Priority interrupt** — if `FlightTrackerPlugin.has_live_priority()` AND `has_live_content()` are both True, immediately switches to the flight tracker
-3. **Normal rotation** — cycles through `plugin_order` plugins; skips any whose `has_content()` returns False
+2. **Live priority takeover** — `_find_live("takeover")` checks the flight tracker first, then `plugin_order`, then any other registered plugin. The first enabled plugin whose `has_live_priority()` and `has_live_content()` are both True and whose `live_priority_mode()` is `"takeover"` preempts the rotation for as long as both stay True (`_priority_id`; `display_duration` is ignored meanwhile). When it ends, the rotation resumes with the module it interrupted. An **alert** is a takeover whose plugin clears `has_live_content()` itself after one pass (sports score alerts, calendar reminders).
+3. **Normal rotation** — cycles through `plugin_order` plugins and skips any whose `has_content()` returns False. When a module finishes, `_advance_rotation` first slots in a live `"interleave"` plugin (`_interleaving`) without moving `_rotation_index`. The interleaved plugin's own turn right after that is skipped, so it isn't shown twice in a row.
+   - A plugin shown as a priority (takeover or interleave) gets `on_priority_view(True)` before `reset()`; normal turns get `False`. Sports uses this to show only live games; Calendar uses it to show the reminder card.
+   - `has_live_content()` runs every frame for plugins with priority on, so keep it cheap (Calendar caches its check for 1 s).
 4. **draw() contract** — `draw()` must return `True` if content was drawn, `False` if nothing to show; the manager only calls `display.swap()` when `draw()` returns True
 
 `_update_loop()` runs in a background thread, calling each plugin's `update()` at its configured `update_interval`. During clock-only mode, only `clock_weather` gets updated.
@@ -155,6 +158,38 @@ CPU/GPU %+temp, memory % (optional uptime, disk and network I/O) for this Pi and
 - Disk/net bars: log scale from 1 KB/s to the connection's full-scale (defaults 7 GB/s disk, 10 Gb/s network).
 - SSH is the shared `utilities/ssh_remote.py` (key `data/ssh/id_ed25519`, migrated from `data/now_playing/` so already-trusted machines keep working; `GET /api/ssh/key`). Now Playing's Mac source uses the same helper.
 
+### Sports live priority (`plugins/sports/manager.py`)
+
+`live_priority` (on/off) plus `live_priority_mode`:
+- `"alert"` (default): a game starting or a score changing sets `_alert_pending`, reusing the existing `_prev_scores` detection that drives the ESPN sound. Games already live at startup don't count (`_first_update`). Any full pass that started while an alert was pending clears it (`_pass_clears_alert`).
+- `"interleave"`: live while any game is live; `live_priority_mode()` returns `"interleave"`.
+- `"takeover"`: live while any game is live.
+
+In priority view `draw()` shows only the live games. Before this change, `has_live_priority`/`has_live_content` existed but were never called: the manager only knew about the flight tracker.
+
+### Calendar Plugin (`plugins/calendar/`)
+
+Upcoming events from `plugins.calendar.sources`. Each source is `{uid, type: "ics"|"caldav", name, color, enabled, server_url, username, calendars:[{href,name,color,enabled}]}`.
+- **Secrets:** the ICS link or CalDAV app password lives in **secrets.json** as `calendar_url_<uid>` / `calendar_pw_<uid>`, never in config. Read it at fetch time via `get_config().get_secret()`. The config page hides `calendar_*` from "Other Secrets". `/api/calendar/*` treats a masked or blank field as "use the saved value". Removing a source leaves its secret behind (`save_secrets` never deletes keys); harmless.
+- **`sources.py` — ICS:** `webcal://` is fetched as `https://`.
+- **`sources.py` — CalDAV:** written by hand with requests + ElementTree, so lxml isn't needed on the Pi.
+  - Discovery runs principal → `calendar-home-set` → Depth-1 calendar list (VEVENT calendars only, `apple:calendar-color`), then a `calendar-query` REPORT with a time range.
+  - Redirects are followed manually, because requests turns a 302 PROPFIND into a GET and drops auth on iCloud's `pNN-` shard redirect.
+  - The calendar-home URL is cached per (server, user).
+  - Presets: iCloud `https://caldav.icloud.com/` (Apple ID plus app-specific password), Fastmail, Yahoo.
+- **Parsing:** both paths go through `parse_ics`, where `icalendar` + `recurring_ical_events` expand RRULE, EXDATE and RECURRENCE-ID overrides within `window(days_ahead)` (local midnight + N days). Cancelled events are dropped. Timed events become aware local datetimes; all-day events keep `date` with an exclusive end. The libraries are imported lazily, so a Pi that hasn't run pip gets a readable error.
+- **`manager.upcoming()`:** drops ended events, de-dupes (uid, start, title), sorts all-day first within each day, caps at `max_events`. `update()` runs one thread per source and keeps the last good events on error. `on_config_change` refetches immediately. `enabled` defaults to False.
+- **Detailed mode (`render.py`):** header (7×5 icon in the calendar colour plus the calendar name; for CalDAV the calendar's own name) and 24 px panels.
+  - Time column x1–20: `4:00`/`PM`, `ALL`/`DAY`, or `NOW`/end time.
+  - Bar at x22; text from x24, with the title wrapped to 2 lines, then the location if there's room, then TODAY/TOMORROW/`FRI 10/30`.
+  - `events_per_visit` events per turn, each held `seconds_per_event`, sliding 2 px/frame between them. `display_duration` = n × hold + (n−1) × slide.
+- **Compact mode:** header `CALENDAR` plus the date, 8 px rows (coloured time, title from x26), and a dim divider row per new day (the first only if it isn't today). Static if ≤3 rows; otherwise a looping strip like transit with `scroll_speed`.
+- **Reminders** (`reminders`, `reminder_minutes`): takeover alert.
+  - `has_live_content()` is True for an unreminded timed event starting within N minutes (or up to 1 min late).
+  - The card's header reads `IN N MIN` in yellow for `REMINDER_SECONDS` (15). The event is then recorded in `_reminded` (pruned after 2 days) and the plugin goes un-live.
+- **Endpoints:** `POST /api/calendar/test` (statuses plus a preview) and `POST /api/calendar/caldav/calendars` (the Find calendars button).
+- **Dependencies:** `icalendar` and `recurring-ical-events` are in `requirements.txt`. The web Update button pip-installs them when requirements change; a manual `git pull` needs `pip install -r requirements.txt` in the service's venv.
+
 ### AI Usage Plugin (`plugins/ai_usage/`)
 
 Claude and ChatGPT Codex subscription limits: one page per enabled provider (`seconds_per_provider` each). Each page shows a 5×5 logo with a header, `Current` (the 5-hour window) and `Weekly`, each with a 2 px bar, and a tom-thumb reset line. `reset_format` is `times`, `countdown`, `both` (alternates every 3 s) or `off` (3 px bars, more spacing). Bar colours are `render.BAR_LEVELS`: green <50, yellow 50–74, orange 75–89, red ≥90.
@@ -235,5 +270,7 @@ Every new module must ship with all of these (the owner asked for this explicitl
 `cta_*` keys are required for Chicago; `mta_api_key` is optional (subway feeds currently work without one).
 
 **Never commit API keys** — the GitHub repo is public. Keys live only in each device's gitignored `config/secrets.json`, entered through the web config page (the transit card has its own key fields; transit keys are hidden from the generic "Other Secrets" card). The owner reuses one pair of CTA keys across their own and friends' Pis, so if a key gets revoked or rate-limited, every one of those Pis is affected.
+
+Per-calendar secrets are added dynamically: `calendar_url_<uid>` (ICS link) and `calendar_pw_<uid>` (CalDAV app-specific password), where `<uid>` is the source's id in `plugins.calendar.sources`.
 
 `flightaware_reset_days` is no longer used — FlightAware always resets on the 1st. The field may exist in older installs but is ignored.

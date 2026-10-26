@@ -30,7 +30,7 @@
       "br_y": 0.0
     }
   },
-  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing", "system_stats", "ai_usage"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing", "system_stats", "ai_usage", "calendar"],
   "plugins": {
     "clock_weather": {
       "enabled": false,
@@ -86,6 +86,7 @@
       "display_duration": 20,
       "seconds_per_game": 7,
       "live_priority": false,
+      "live_priority_mode": "alert",
       "show_upcoming": false,
       "show_only_today_completed": false,
       "favorite_teams": [],
@@ -203,6 +204,20 @@
         "claude": {"enabled": true, "credentials_path": ""},
         "codex": {"enabled": false, "credentials_path": ""}
       }
+    },
+    "calendar": {
+      "enabled": false,
+      "display_mode": "detailed",
+      "days_ahead": 3,
+      "max_events": 20,
+      "events_per_visit": 5,
+      "seconds_per_event": 6,
+      "display_duration": 20,
+      "scroll_speed": 1,
+      "update_interval": 900,
+      "reminders": false,
+      "reminder_minutes": 10,
+      "sources": []
     }
   },
   "web": {

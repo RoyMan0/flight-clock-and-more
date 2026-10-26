@@ -235,12 +235,22 @@ class SportsPlugin(BasePlugin):
         self._sound_pending = False
         self._data_version: int = 0
         self._last_game_key: Optional[tuple] = None  # (idx, data_version)
+        # Live priority (live_priority_mode: "alert" | "interleave" | "takeover")
+        self._first_update = True     # games already live at startup aren't "new"
+        self._alert_pending = False   # a live game started or scored since last shown
+        self._pass_clears_alert = False
+        self._priority_view = False   # shown as a live priority → live games only
 
     def reset(self):
         self._current_idx = 0
         self._idx_start = time.monotonic()
         self._cycle_done = False
         self._last_game_key = None  # force re-render on next draw
+        # Any full pass (live games come first) covers an alert raised before it started
+        self._pass_clears_alert = self._alert_pending
+
+    def on_priority_view(self, active: bool):
+        self._priority_view = active
 
     def update(self):
         leagues_cfg = self.config.get("leagues", {})
@@ -330,12 +340,17 @@ class SportsPlugin(BasePlugin):
             self._data_version += 1
             if sound_needed:
                 self._sound_pending = True
+                if not self._first_update:
+                    self._alert_pending = True
+            self._first_update = False
 
         log.debug(f"[sports] Updated: {len(games)} games ({len(live)} live)")
 
     def draw(self) -> bool:
         with self._lock:
             games = list(self._games)
+            if self._priority_view:
+                games = [g for g in games if g["state"] == "in"] or games
             if self._sound_pending:
                 self._sound_pending = False
                 play_espn_sound()
@@ -352,6 +367,10 @@ class SportsPlugin(BasePlugin):
             if self._current_idx >= len(games):
                 self._cycle_done = True
                 self._current_idx = 0
+                if self._pass_clears_alert:
+                    with self._lock:
+                        self._alert_pending = False
+                    self._pass_clears_alert = False
 
         game_key = (self._current_idx, self._data_version)
         if game_key != self._last_game_key:
@@ -370,7 +389,18 @@ class SportsPlugin(BasePlugin):
     def has_live_priority(self) -> bool:
         return self.config.get("live_priority", False)
 
+    def _live_mode(self) -> str:
+        mode = self.config.get("live_priority_mode", "alert")
+        return mode if mode in ("alert", "interleave", "takeover") else "alert"
+
+    def live_priority_mode(self) -> str:
+        return "interleave" if self._live_mode() == "interleave" else "takeover"
+
     def has_live_content(self) -> bool:
+        """alert: a live game started or scored and hasn't been shown yet (cleared
+        after one pass); interleave/takeover: any game is live."""
+        if self._live_mode() == "alert":
+            return self._alert_pending
         return self._has_live
 
 

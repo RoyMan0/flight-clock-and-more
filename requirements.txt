@@ -12,3 +12,6 @@ hpack
 # fr24's protobuf<7 pin — keep 2.0.0 until fr24 supports protobuf 7.
 gtfs-realtime-bindings==2.0.0
 protobuf>=6.33,<7
+# Calendar plugin: parse ICS feeds and expand repeating events
+icalendar>=5.0
+recurring-ical-events>=2.1
