@@ -1,7 +1,7 @@
 """
 AI Usage rendering (64×32).
 
-  y0-5    5×5 logo · "CLAUDE USAGE"          4x6 font
+  y1-5    5×5 logo · "CLAUDE USAGE"          4x6 font (row 0 left as a margin)
   y7      separator
   y9      Current ................ 50%        4x6 font
   y15-16  2 px bar
@@ -25,6 +25,7 @@ MATRIX_W, MATRIX_H = 64, 32
 LEFT = 1
 RIGHT = MATRIX_W - 1        # right edge for right-aligned text (exclusive)
 BAR_W = MATRIX_W - 2 * LEFT
+HEADER_Y = 1                # 1 px margin above the title
 
 _TINY = _parse_bdf(os.path.join(_FONTS_DIR, "tom-thumb.bdf"))
 
@@ -152,8 +153,8 @@ def _header(img, provider: str):
     for r, line in enumerate(logo):
         for c, bit in enumerate(line):
             if bit == "#":
-                px[LEFT + c, r] = logo_col
-    _bdf_draw(img, LEFT + 7, 0, text, _FONT, text_col)
+                px[LEFT + c, HEADER_Y + r] = logo_col
+    _bdf_draw(img, LEFT + 7, HEADER_Y, text, _FONT, text_col)
     for x in range(MATRIX_W):
         px[x, 7] = COL_SEP
 
