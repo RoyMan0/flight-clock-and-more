@@ -155,6 +155,15 @@ CPU/GPU %+temp, memory % (optional uptime, disk and network I/O) for this Pi and
 - Disk/net bars: log scale from 1 KB/s to the connection's full-scale (defaults 7 GB/s disk, 10 Gb/s network).
 - SSH is the shared `utilities/ssh_remote.py` (key `data/ssh/id_ed25519`, migrated from `data/now_playing/` so already-trusted machines keep working; `GET /api/ssh/key`). Now Playing's Mac source uses the same helper.
 
+### AI Usage Plugin (`plugins/ai_usage/`)
+
+Claude and ChatGPT Codex subscription limits: one page per enabled provider (`seconds_per_provider` each). Each page shows a 5×5 logo with a header, `Current` (the 5-hour window) and `Weekly`, each with a 2 px bar, and a tom-thumb reset line. `reset_format` is `times`, `countdown`, `both` (alternates every 3 s) or `off` (3 px bars, more spacing). Bar colours are `render.BAR_LEVELS`: green <50, yellow 50–74, orange 75–89, red ≥90.
+- **Data is free but undocumented.** Claude uses `GET api.anthropic.com/api/oauth/usage` (header `anthropic-beta: oauth-2025-04-20`, fields `five_hour`/`seven_day` → `utilization`, ISO `resets_at`). Codex uses `GET chatgpt.com/backend-api/wham/usage` (`ChatGPT-Account-Id` header, `rate_limit.primary_window`/`secondary_window` → `used_percent`, epoch `reset_at`). Constants are in `providers.py`. The Claude token URL and client ID were taken from the Claude Code binary (`platform.claude.com/v1/oauth/token`); re-check there if refresh starts failing.
+- **Auth = the CLIs' own login files on the Pi:** `~/.claude/.credentials.json` (`claude auth login`) and `~/.codex/auth.json` (`codex login --device-auth`). If the configured path is blank, it uses `~` and then `/home/*/…`, since the service may run as root. `claude setup-token` tokens **can't** be used because they lack the `user:profile` scope.
+- **Refresh tokens rotate on every refresh.** `providers.py` refreshes when <5 min remain (Claude: `expiresAt` in ms; Codex: JWT `exp`) or on a 401. It then writes the new tokens back atomically, keeping the file's mode and owner. A per-provider lock stops the plugin poll and the config page's Test button from refreshing at the same time. Never point it at a credentials file copied from another machine that's still in use: the two would invalidate each other.
+- The plugin overrides `enabled` to default **False**, because existing installs have no `ai_usage` block and the update loop polls every enabled plugin. `update()` runs one fire-and-forget thread per provider. On errors it keeps the last good values. The cache is `data/ai_usage.json`. A window whose `resets_at` has passed shows 0 %.
+- `POST /api/ai_usage/test` fetches with the unsaved settings and returns statuses plus previews.
+
 ### Web UI (`web/`)
 
 Flask app created by `web/app.py:create_app()`. Two blueprints:

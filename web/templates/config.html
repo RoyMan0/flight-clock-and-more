@@ -1481,6 +1481,75 @@
         </div>
       </div>
 
+      <!-- AI Usage Config -->
+      <div class="card mb-4" x-show="'ai_usage' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-stars me-2"></i>AI Usage</div>
+        <div class="card-body" x-show="'ai_usage' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.ai_usage.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">Your Claude and ChatGPT Codex subscription limits: the 5-hour "Current" window and the weekly limit, with reset times. Free: it reads the login you make on this Pi, no API key needed.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Reset Times</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="pluginConfigs.ai_usage.reset_format">
+                <option value="times">Clock times (11:00PM · WED 8AM)</option>
+                <option value="countdown">Countdowns (2h14m · 4d6h)</option>
+                <option value="both">Both, alternating every 3 s</option>
+                <option value="off">Off (bigger bars)</option>
+              </select>
+              <label class="form-label mt-2 d-flex justify-content-between">
+                <span>Seconds per Provider</span>
+                <span class="text-muted small" x-text="pluginConfigs.ai_usage.seconds_per_provider + ' s'"></span>
+              </label>
+              <input type="range" class="form-range" min="5" max="30" step="1"
+                     x-model.number="pluginConfigs.ai_usage.seconds_per_provider">
+            </div>
+
+            <template x-for="p in aiUsage.providers" :key="p.id">
+              <div class="col-md-6">
+                <div class="border border-secondary rounded p-2 h-100">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" x-model="pluginConfigs.ai_usage.providers[p.id].enabled">
+                    <label class="form-check-label fw-semibold" x-text="p.name"></label>
+                  </div>
+                  <div class="form-text text-muted mb-2">
+                    Set up once over SSH on the Pi: <code class="text-break" x-text="p.install"></code> then <code class="text-break" x-text="p.login"></code>
+                  </div>
+                  <label class="form-label small mb-1">Credentials file <span class="text-muted">(blank = default)</span></label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                         :placeholder="p.defaultPath" x-model="pluginConfigs.ai_usage.providers[p.id].credentials_path">
+                </div>
+              </div>
+            </template>
+
+            <!-- Test results -->
+            <div class="col-12" x-show="aiUsage.test">
+              <ul class="list-unstyled small mb-2">
+                <template x-for="s in (aiUsage.test?.statuses || [])" :key="s.provider">
+                  <li><strong x-text="s.name + ': '"></strong><span :class="s.ok ? 'text-light' : 'text-danger'" x-text="s.text"></span></li>
+                </template>
+                <li class="text-muted" x-show="!(aiUsage.test?.statuses || []).length">No providers are turned on.</li>
+              </ul>
+              <template x-for="s in (aiUsage.test?.statuses || []).filter(s => s.image)" :key="'img' + s.provider">
+                <img :src="s.image" :alt="s.name + ' preview'" class="border border-secondary rounded me-2 mb-2"
+                     style="image-rendering:pixelated;max-width:100%;width:384px">
+              </template>
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-success btn-sm" @click="saveAiUsage()"><i class="bi bi-save me-1"></i>Save</button>
+            <button class="btn btn-outline-info btn-sm" @click="testAiUsage()" :disabled="aiUsage.testing">
+              <span class="spinner-border spinner-border-sm me-1" x-show="aiUsage.testing"></span><i class="bi bi-eye me-1" x-show="!aiUsage.testing"></i>Test
+            </button>
+            <span class="small text-success" x-show="aiUsage.saved">Saved.</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1704,6 +1773,7 @@ function configPage() {
       transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
       world_clock:             { cities: [], scroll_speed: 1 },
       system_stats:            { connections: [], scroll_speed: 1 },
+      ai_usage:                { seconds_per_provider: 10, reset_format: 'times', providers: { claude: { enabled: true, credentials_path: '' }, codex: { enabled: false, credentials_path: '' } } },
       now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
@@ -1728,6 +1798,15 @@ function configPage() {
                     { v: 14000000000, label: 'NVMe Gen5 (14 GB/s)' } ],
       netScales:  [ { v: 125000000, label: '1 Gb/s' }, { v: 312500000, label: '2.5 Gb/s' }, { v: 625000000, label: '5 Gb/s' },
                     { v: 1250000000, label: '10 Gb/s' }, { v: 3125000000, label: '25 Gb/s' } ],
+    },
+    aiUsage: {
+      saved: false, testing: false, test: null,
+      providers: [
+        { id: 'claude', name: 'Claude', defaultPath: '~/.claude/.credentials.json',
+          install: 'curl -fsSL https://claude.ai/install.sh | bash', login: 'claude auth login' },
+        { id: 'codex', name: 'ChatGPT Codex', defaultPath: '~/.codex/auth.json',
+          install: 'npm install -g @openai/codex', login: 'codex login --device-auth' },
+      ],
     },
     nowPlaying: {
       labels: { spotify: 'Spotify', mac: 'Mac Music app', lastfm: 'Last.fm' },
@@ -1826,6 +1905,15 @@ function configPage() {
           .map(c => ({ ...this._newSysConn(c.type || 'local'), ...c,
                        metrics: { ...base.metrics, ...(c.metrics || {}) } }));
         cfgs.system_stats = ss;
+      }
+      if (cfgs.ai_usage) {
+        const au = { seconds_per_provider: 10, reset_format: 'times', ...cfgs.ai_usage };
+        const pv = au.providers || {};
+        au.providers = {
+          claude: { enabled: true, credentials_path: '', ...(pv.claude || {}) },
+          codex:  { enabled: false, credentials_path: '', ...(pv.codex || {}) },
+        };
+        cfgs.ai_usage = au;
       }
       if (cfgs.now_playing) {
         const np = { scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '', ...cfgs.now_playing };
@@ -2389,6 +2477,35 @@ function configPage() {
       }
       this.sysStats.saved = true;
       setTimeout(() => this.sysStats.saved = false, 2000);
+    },
+
+    // ---------------- AI Usage ----------------
+
+    async saveAiUsage() {
+      await this.savePluginConfig('ai_usage');
+      // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
+      if (this.pluginConfigs.ai_usage.enabled) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.aiUsage.saved = true;
+      setTimeout(() => this.aiUsage.saved = false, 2000);
+    },
+
+    async testAiUsage() {
+      this.aiUsage.testing = true;
+      try {
+        this.aiUsage.test = await fetch('/api/ai_usage/test', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginConfigs.ai_usage),
+        }).then(r => r.json());
+      } catch (e) {
+        this.aiUsage.test = { statuses: [{ provider: 'x', name: 'Test', ok: false, text: String(e) }] };
+      } finally {
+        this.aiUsage.testing = false;
+      }
     },
 
     async toggleTeamBrowser() {

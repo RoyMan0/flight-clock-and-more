@@ -30,7 +30,7 @@
       "br_y": 0.0
     }
   },
-  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing", "system_stats"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing", "system_stats", "ai_usage"],
   "plugins": {
     "clock_weather": {
       "enabled": false,
@@ -193,6 +193,16 @@
           "net_max": 1250000000
         }
       ]
+    },
+    "ai_usage": {
+      "enabled": false,
+      "seconds_per_provider": 10,
+      "update_interval": 300,
+      "reset_format": "times",
+      "providers": {
+        "claude": {"enabled": true, "credentials_path": ""},
+        "codex": {"enabled": false, "credentials_path": ""}
+      }
     }
   },
   "web": {

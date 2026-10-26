@@ -831,6 +831,40 @@ def system_stats_test():
 
 
 # ------------------------------------------------------------------
+# AI Usage — fetch each enabled provider with the (unsaved) settings
+# ------------------------------------------------------------------
+
+@api_bp.post("/ai_usage/test")
+def ai_usage_test():
+    from PIL import Image
+    from plugins.ai_usage import providers
+    from plugins.ai_usage.manager import clock_format, credentials_path, enabled_providers
+    from plugins.ai_usage.render import render
+
+    cfg = request.get_json(force=True) or {}
+    names = {"claude": "Claude", "codex": "ChatGPT Codex"}
+    statuses = []
+    for p in enabled_providers(cfg):
+        status = {"provider": p, "name": names[p], "ok": False, "image": None}
+        try:
+            usage = providers.fetch(p, credentials_path(cfg, p))
+        except providers.LoginNeeded as e:
+            status["text"] = f"Login needed: {e}"
+        except Exception as e:
+            status["text"] = f"Fetch failed: {e}"
+        else:
+            def pct(v):
+                return "--" if v is None else f"{round(v)}%"
+            status.update(ok=True, text=f"Current {pct(usage.get('current_pct'))} · Weekly {pct(usage.get('weekly_pct'))}")
+            img = render(p, usage, cfg.get("reset_format", "times"), clock_format())
+            buf = io.BytesIO()
+            img.resize((64 * 6, 32 * 6), Image.NEAREST).save(buf, format="PNG")
+            status["image"] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        statuses.append(status)
+    return jsonify({"statuses": statuses})
+
+
+# ------------------------------------------------------------------
 # Flight data (for dashboard panel)
 # ------------------------------------------------------------------
 

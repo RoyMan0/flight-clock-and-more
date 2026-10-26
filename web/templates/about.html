@@ -852,5 +852,44 @@
     </div>
   </div>
 
+  <!-- ── AI Usage ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secAiUsage">
+      <i class="bi bi-stars section-icon"></i>
+      <span class="fw-bold fs-5">AI Usage</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secAiUsage" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          How much of your Claude and ChatGPT Codex subscription limits you've used. Each service gets its own page:
+          a header with its logo, then <strong>Current</strong> (the rolling 5-hour session limit) and <strong>Weekly</strong> (the 7-day limit), each with a bar.
+          The bottom line shows when each one resets: clock times (<code>11:00PM</code> · <code>WED 8AM</code>), countdowns (<code>2h14m</code> · <code>4d6h</code>),
+          both alternating every 3 seconds, or nothing, which gives the bars more room. Usage refreshes every 5 minutes.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-palette me-2"></i>Bar Colours</div>
+        <div class="d-flex flex-wrap gap-4 mb-3">
+          <div class="color-row"><span class="color-dot" style="background:rgb(60,200,90)"></span><span><strong>Green</strong>: under 50%</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(240,210,40)"></span><span><strong>Yellow</strong>: 50–74%</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(255,140,30)"></span><span><strong>Orange</strong>: 75–89%</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(240,50,40)"></span><span><strong>Red</strong>: 90% and over</span></div>
+        </div>
+
+        <div class="subsection-title"><i class="bi bi-key me-2"></i>Setup</div>
+        <ul class="text-muted small mb-0 ps-3">
+          <li>No API key or extra cost. The Pi reads the same usage numbers the official apps show, using a login you make on the Pi itself, so your computer's login isn't affected.</li>
+          <li><strong>Claude:</strong> over SSH on the Pi, install Claude Code (<code class="text-break">curl -fsSL https://claude.ai/install.sh | bash</code>), then run <code>claude auth login</code> and sign in.
+            The long-lived <code>claude setup-token</code> does <em>not</em> work, because it isn't allowed to read usage.</li>
+          <li><strong>ChatGPT Codex:</strong> install the Codex CLI (<code>npm install -g @openai/codex</code>), then run <code>codex login --device-auth</code>.
+            Only Codex has usage limits that can be read. Regular ChatGPT chat doesn't show a usage meter.</li>
+          <li>The Pi keeps the login fresh on its own. If it ever shows <span style="color:rgb(230,60,40)"><strong>LOGIN NEEDED</strong></span>, run the login command again.</li>
+          <li>Use the <strong>Test</strong> button on the config page to check each login and preview the board.</li>
+          <li>These usage feeds aren't official public APIs, so a change on Anthropic's or OpenAI's side could break them until the app is updated. The board keeps showing the last good numbers in the meantime.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /accordion -->
 {% endblock %}
