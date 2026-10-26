@@ -740,15 +740,16 @@ def now_playing_spotify_status():
         return jsonify({"connected": False, "has_client_id": True, "message": str(e)})
 
 
-@api_bp.get("/now_playing/mac/key")
-def now_playing_mac_key():
-    from plugins.now_playing.sources import mac_music
+@api_bp.get("/ssh/key")
+@api_bp.get("/now_playing/mac/key")          # older name, kept for compatibility
+def ssh_key():
+    """This Pi's public SSH key + a command to authorise it on another machine."""
+    from utilities import ssh_remote
     try:
-        key = mac_music.ensure_key()
+        key = ssh_remote.ensure_key()
     except Exception as e:
         return jsonify({"ok": False, "message": f"Could not create an SSH key: {e}"}), 500
-    cmd = f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '{key}' >> ~/.ssh/authorized_keys"
-    return jsonify({"ok": True, "key": key, "command": cmd})
+    return jsonify({"ok": True, "key": key, "command": ssh_remote.authorize_command(key)})
 
 
 @api_bp.post("/now_playing/test")
@@ -771,6 +772,62 @@ def now_playing_test():
         image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     return jsonify({"statuses": statuses, "image": image,
                     "playing": f"{track['title']} — {track['artist']}" if track else None})
+
+
+# ------------------------------------------------------------------
+# System Stats — test one connection (live values + preview)
+# ------------------------------------------------------------------
+
+@api_bp.post("/system_stats/test")
+def system_stats_test():
+    """Poll one (unsaved) connection twice ~2 s apart so rates show, and render it."""
+    from PIL import Image
+    from plugins.system_stats.collect import Collector
+    from plugins.system_stats.manager import units
+    from plugins.system_stats.render import (
+        available_stats, build_sections, build_strip, fmt_rate, fmt_temp, fmt_uptime,
+        needs_scroll, render_static,
+    )
+
+    conn = request.get_json(force=True) or {}
+    collector = Collector(conn)              # fresh: the test never disturbs the live poller
+    try:
+        collector.sample()
+        time.sleep(2)
+        stats = collector.sample()
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)})
+
+    u = units()
+    sections = build_sections([(conn, stats, None)], u)
+    img = build_strip(sections) if needs_scroll(sections) else render_static(sections)
+    buf = io.BytesIO()
+    img.resize((img.width * 6, img.height * 6), Image.NEAREST).save(buf, format="PNG")
+
+    def pct(v):
+        return None if v is None else f"{round(v)}%"
+    values = {
+        "cpu": " ".join(x for x in (pct(stats.get("cpu_pct")), fmt_temp(stats.get("cpu_temp"), u)) if x),
+        "gpu": " ".join(x for x in (pct(stats.get("gpu_pct")), fmt_temp(stats.get("gpu_temp"), u)) if x),
+        "mem": pct(stats.get("mem_pct")),
+        "uptime": fmt_uptime(stats.get("uptime_s")),
+        "disk": f"read {fmt_rate(stats.get('disk_r'))}/s · write {fmt_rate(stats.get('disk_w'))}/s",
+        "net": f"down {fmt_rate(stats.get('net_rx'))}/s · up {fmt_rate(stats.get('net_tx'))}/s",
+    }
+    notes = stats.get("notes", {})
+    shown = set(available_stats(conn, stats))
+    missing = {k: notes.get(k) or notes.get(f"{k}_temp") or "not available on this machine"
+               for k, on in (conn.get("metrics") or {}).items() if on and k not in shown}
+    temp_notes = {k: notes[f"{k}_temp"] for k in ("cpu", "gpu") if f"{k}_temp" in notes and k in shown}
+    return jsonify({
+        "ok": True,
+        "host": stats.get("host"),
+        "os": {"linux": "Linux", "mac": "macOS"}.get(stats.get("os"), stats.get("os")),
+        "values": {k: values[k] for k in shown},
+        "missing": missing,
+        "temp_notes": temp_notes,
+        "image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+    })
 
 
 # ------------------------------------------------------------------

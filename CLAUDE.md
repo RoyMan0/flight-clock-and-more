@@ -145,6 +145,16 @@ Current song: title marquee across the top (green, 5x7 font), 21×21 artwork bot
 - There is **no public live now-playing API for Apple Music on iPhone**; that's why Mac (live) + Last.fm exist. Don't add a background helper on the Mac — the user rejected that.
 - `manager.first_playing()` / `attach_art()` are shared with `POST /api/now_playing/test`. Artwork is cached per track (30 entries).
 
+### System Stats Plugin (`plugins/system_stats/`)
+
+CPU/GPU %+temp, memory % (optional uptime, disk and network I/O) for this Pi and any number of machines over SSH (`plugins.system_stats.connections`, each with its own `metrics`, `disk_max`/`net_max`). Layout: hostname line + 8 px stat rows (text rows 0–4, gap, 1 px bar on row 6); one machine with ≤3 stats is static, otherwise a scrolling strip with dividers.
+- `collect.py`: one read-only shell script per poll (`sh -s` locally or over SSH), parsed into cumulative counters; `compute()` turns two snapshots into CPU % and bytes/s, so rates are averages over the refresh interval and the first poll has none. Counter resets clamp to 0.
+  - Linux: physical disks only (`sd*`, `nvme*n*`, `mmcblk*`, `vd*` — no partitions/`md`/`dm`), only NICs with `/sys/class/net/<if>/device`; CPU temp prefers `x86_pkg_temp` → hwmon coretemp/k10temp/cpu_thermal → CPU thermal zone (ignores `acpitz`, drive sensors). GPU only via `nvidia-smi` (the Pi has none).
+  - macOS: `top -l 2` (≈1.8 s), `memory_pressure`, ioreg block-storage read/write bytes, `netstat -ibn` en* (parse byte columns from the right — Address can be blank), ioreg GPU utilisation. **No temperatures without admin** unless `smctemp`/`osx-cpu-temp` is installed.
+- `manager.update()` is **fire-and-forget**: it submits one background poll per machine and returns at once (the plugin manager runs every plugin's update on a single thread). A machine with a poll still running is skipped.
+- Disk/net bars: log scale from 1 KB/s to the connection's full-scale (defaults 7 GB/s disk, 10 Gb/s network).
+- SSH is the shared `utilities/ssh_remote.py` (key `data/ssh/id_ed25519`, migrated from `data/now_playing/` so already-trusted machines keep working; `GET /api/ssh/key`). Now Playing's Mac source uses the same helper.
+
 ### Web UI (`web/`)
 
 Flask app created by `web/app.py:create_app()`. Two blueprints:

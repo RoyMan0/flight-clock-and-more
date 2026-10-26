@@ -797,5 +797,61 @@
     </div>
   </div>
 
+  <!-- ── System Stats ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secSysStats">
+      <i class="bi bi-cpu section-icon"></i>
+      <span class="fw-bold fs-5">System Stats</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secSysStats" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Live health of this Pi and any other computers you add — a Mac, a NAS, a Linux server.
+          Each machine shows its name, then one line per stat with a bar underneath.
+          One machine with up to three stats fits on one screen; with more machines or stats the list scrolls up continuously,
+          with a faint dashed line between machines. Values refresh every few seconds.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-list-ul me-2"></i>The Stats</div>
+        <div class="table-responsive">
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Line</th><th>Shows</th><th>Bar</th></tr></thead>
+          <tbody>
+            <tr><td><span style="color:rgb(80,220,220)"><strong>CPU</strong></span></td><td class="text-muted small">Processor usage and temperature.</td><td class="text-muted small">Usage %</td></tr>
+            <tr><td><span style="color:rgb(160,160,255)"><strong>GPU</strong></span></td><td class="text-muted small">Graphics usage and temperature (Macs and NVIDIA graphics cards; the Pi has no GPU usage meter).</td><td class="text-muted small">Usage %</td></tr>
+            <tr><td><span style="color:rgb(250,210,120)"><strong>MEM</strong></span></td><td class="text-muted small">Memory in use.</td><td class="text-muted small">Usage %</td></tr>
+            <tr><td><span style="color:rgb(170,170,170)"><strong>UP</strong></span></td><td class="text-muted small">Time since the machine last restarted, e.g. <code>12d 04h</code>.</td><td class="text-muted small">—</td></tr>
+            <tr><td><span style="color:rgb(255,150,60)"><strong>DSK</strong></span></td><td class="text-muted small">Disk activity: <code>R</code> read and <code>W</code> write, per second.</td><td class="text-muted small">Combined speed</td></tr>
+            <tr><td><span style="color:rgb(90,220,90)"><strong>NET</strong></span></td><td class="text-muted small">Network traffic: ▼ download and ▲ upload, per second.</td><td class="text-muted small">Combined speed</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="text-muted small mb-3">
+          Speeds use <code>B</code>, <code>K</code>, <code>M</code> and <code>G</code> (bytes, kilobytes, megabytes, gigabytes per second), averaged over each refresh so they don't jump around.
+          The disk and network bars use a <strong>log scale</strong>, so a trickle and a big transfer both register: 1&nbsp;KB/s is empty, and the bar is full at the speed you pick for that machine
+          (up to NVMe-class disks and 25&nbsp;Gb networking).
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-palette me-2"></i>Temperature Colours</div>
+        <div class="d-flex flex-wrap gap-4 mb-3">
+          <div class="color-row"><span class="color-dot" style="background:rgb(80,220,200)"></span><span><strong>Teal</strong> — normal (under 70°C / 158°F)</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(255,150,0)"></span><span><strong>Orange</strong> — warm (70–85°C / 158–185°F)</span></div>
+          <div class="color-row"><span class="color-dot" style="background:rgb(255,50,40)"></span><span><strong>Red</strong> — hot (over 85°C / 185°F)</span></div>
+        </div>
+        <p class="text-muted small mb-3">Shown in °F or °C to match your system units setting.</p>
+
+        <div class="subsection-title"><i class="bi bi-hdd-network me-2"></i>Machines</div>
+        <ul class="text-muted small mb-0 ps-3">
+          <li><strong>This Pi</strong> works out of the box.</li>
+          <li><strong>Other computers</strong> are read over SSH with this Pi's own key; nothing is installed on them. Turn on SSH (Remote Login on a Mac; Terminal &amp; SNMP on a TerraMaster), then run the one-line command from the config page once.</li>
+          <li>Linux machines (NAS boxes, servers, other Pis) report every stat. Macs report everything except temperatures, which macOS only shares with admin tools; install the free <code>smctemp</code> tool to add them.</li>
+          <li>A machine that can't be reached shows <span style="color:rgb(230,40,40)"><strong>OFFLINE</strong></span> next to its name.</li>
+          <li>Turn machines on or off and change their order in the config page; each machine can show a different set of stats.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /accordion -->
 {% endblock %}

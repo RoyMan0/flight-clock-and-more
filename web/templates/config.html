@@ -1305,6 +1305,182 @@
         </div>
       </div>
 
+      <!-- System Stats Config -->
+      <div class="card mb-4" x-show="'system_stats' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-cpu me-2"></i>System Stats</div>
+        <div class="card-body" x-show="'system_stats' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.system_stats.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">CPU, GPU and memory (plus optional uptime, disk and network) for this Pi and any other machines you add. One machine with up to 3 stats fits on one screen; more scroll.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label d-flex justify-content-between">
+                <span>Scroll Speed <span class="text-muted small">(when it doesn't fit)</span></span>
+                <span class="text-muted small" x-text="pluginConfigs.system_stats.scroll_speed + ' px/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="0.5" max="5" step="0.5"
+                     x-model.number="pluginConfigs.system_stats.scroll_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem"><span>Slow</span><span>Fast</span></div>
+            </div>
+
+            <!-- Connections -->
+            <template x-for="(conn, i) in (pluginConfigs.system_stats.connections || [])" :key="sysStatsUi(i).uid">
+              <div class="col-12">
+                <div class="border border-secondary rounded p-2 p-sm-3">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="btn-group btn-group-sm flex-shrink-0">
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveSysConn(i, -1)" :disabled="i===0">▲</button>
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveSysConn(i, 1)"
+                              :disabled="i===pluginConfigs.system_stats.connections.length-1">▼</button>
+                    </div>
+                    <div class="form-check form-switch mb-0 flex-shrink-0">
+                      <input class="form-check-input" type="checkbox" x-model="conn.enabled" title="Show this machine">
+                    </div>
+                    <button class="btn btn-link text-light text-decoration-none p-0 flex-grow-1 text-start" style="min-width:0"
+                            @click="sysStatsUi(i).open = !sysStatsUi(i).open">
+                      <i class="bi me-1" :class="sysStatsUi(i).open ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                      <strong x-text="sysConnTitle(conn)"></strong>
+                      <span class="small text-muted d-block d-sm-inline ms-sm-1" x-text="conn.type === 'ssh' ? (conn.user ? conn.user + '@' : '') + (conn.host || 'remote') : 'this Pi'"></span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger flex-shrink-0" @click="removeSysConn(i)" title="Remove"><i class="bi bi-trash"></i></button>
+                  </div>
+
+                  <div class="row g-2 mt-1" x-show="sysStatsUi(i).open">
+                    <div class="col-sm-6">
+                      <label class="form-label small mb-1">Name on display <span class="text-muted">(optional)</span></label>
+                      <input type="text" maxlength="15" class="form-control form-control-sm bg-dark text-light border-secondary"
+                             x-model="conn.name" placeholder="defaults to the machine's name">
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label small mb-1">Machine</label>
+                      <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="conn.type">
+                        <option value="local" :selected="conn.type === 'local'">This Pi</option>
+                        <option value="ssh" :selected="conn.type === 'ssh'">Another computer / NAS (SSH)</option>
+                      </select>
+                    </div>
+                    <template x-if="conn.type === 'ssh'">
+                      <div class="col-12">
+                        <div class="row g-2">
+                          <div class="col-sm-5">
+                            <label class="form-label small mb-1">Hostname or IP</label>
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                   x-model="conn.host" placeholder="e.g. my-nas.local or 192.168.1.20">
+                          </div>
+                          <div class="col-8 col-sm-4">
+                            <label class="form-label small mb-1">Username</label>
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                   x-model="conn.user" placeholder="e.g. admin">
+                          </div>
+                          <div class="col-4 col-sm-3">
+                            <label class="form-label small mb-1">SSH port</label>
+                            <input type="number" min="1" max="65535" class="form-control form-control-sm bg-dark text-light border-secondary"
+                                   x-model.number="conn.port" placeholder="22">
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <div class="col-12">
+                      <label class="form-label small mb-1">Stats to show</label>
+                      <div class="d-flex flex-wrap gap-3">
+                        <template x-for="m in sysStats.metricList" :key="m.key">
+                          <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" :id="'ssm_'+i+'_'+m.key" x-model="conn.metrics[m.key]">
+                            <label class="form-check-label small" :for="'ssm_'+i+'_'+m.key" x-text="m.label"></label>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                    <div class="col-sm-6" x-show="conn.metrics.disk">
+                      <label class="form-label small mb-1">Disk bar full at</label>
+                      <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model.number="conn.disk_max">
+                        <template x-for="o in sysStats.diskScales" :key="o.v">
+                          <option :value="o.v" x-text="o.label" :selected="o.v == conn.disk_max"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="col-sm-6" x-show="conn.metrics.net">
+                      <label class="form-label small mb-1">Network bar full at</label>
+                      <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model.number="conn.net_max">
+                        <template x-for="o in sysStats.netScales" :key="o.v">
+                          <option :value="o.v" x-text="o.label" :selected="o.v == conn.net_max"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <button class="btn btn-outline-info btn-sm" @click="testSysConn(i)" :disabled="sysStatsUi(i).testing">
+                        <span class="spinner-border spinner-border-sm me-1" x-show="sysStatsUi(i).testing"></span>
+                        <i class="bi bi-eye me-1" x-show="!sysStatsUi(i).testing"></i>Test this machine
+                      </button>
+                      <span class="small text-muted ms-2" x-show="sysStatsUi(i).testing">Taking two readings…</span>
+                    </div>
+                    <div class="col-12" x-show="sysStatsUi(i).result">
+                      <template x-if="sysStatsUi(i).result && !sysStatsUi(i).result.ok">
+                        <div class="small text-danger" x-text="sysStatsUi(i).result.message"></div>
+                      </template>
+                      <template x-if="sysStatsUi(i).result && sysStatsUi(i).result.ok">
+                        <div class="d-flex flex-wrap gap-3 align-items-start">
+                          <img :src="sysStatsUi(i).result.image" alt="Preview" class="border border-secondary rounded"
+                               style="image-rendering:pixelated;max-width:100%;width:384px">
+                          <div class="small" style="min-width:0">
+                            <div class="mb-1"><strong x-text="sysStatsUi(i).result.host"></strong>
+                              <span class="text-muted" x-text="'(' + sysStatsUi(i).result.os + ')'"></span></div>
+                            <template x-for="(v, k) in sysStatsUi(i).result.values" :key="k">
+                              <div><span class="text-muted" x-text="sysStatLabel(k) + ':'"></span> <span x-text="v"></span></div>
+                            </template>
+                            <template x-for="(why, k) in sysStatsUi(i).result.missing" :key="'m'+k">
+                              <div class="text-warning"><span x-text="sysStatLabel(k)"></span> not shown — <span x-text="why"></span></div>
+                            </template>
+                            <template x-for="(why, k) in sysStatsUi(i).result.temp_notes" :key="'t'+k">
+                              <div class="text-muted"><span x-text="sysStatLabel(k)"></span> temperature: <span x-text="why"></span></div>
+                            </template>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <div class="col-12">
+              <button class="btn btn-outline-light btn-sm" @click="addSysConn()"><i class="bi bi-plus-lg me-1"></i>Add Machine</button>
+            </div>
+
+            <!-- SSH setup -->
+            <div class="col-12">
+              <div class="border border-secondary rounded p-2 p-sm-3">
+                <div class="fw-semibold mb-2"><i class="bi bi-key me-1"></i>Connecting another machine (one-time)</div>
+                <p class="small text-muted mb-2">The Pi reads stats over SSH using its own key — nothing is installed on the other machine.
+                  Turn on SSH there, then add this Pi's key by running the command below once in that machine's terminal (logged in as the user you'll enter above).
+                  It's the same key Now Playing uses, so a Mac set up there already works.</p>
+                <ul class="small text-muted mb-2 ps-3">
+                  <li><strong>Mac:</strong> System Settings → General → Sharing → <strong>Remote Login</strong> on. Temperatures need the free <code>smctemp</code> tool (<code>brew install narugit/tap/smctemp</code>); everything else works without it.</li>
+                  <li><strong>TerraMaster (TOS):</strong> Control Panel → <strong>Terminal &amp; SNMP</strong> → enable SSH. Log in with an <strong>admin</strong> account (e.g. via the Mac's Terminal: <code>ssh admin@your-nas</code>) and run the command.</li>
+                  <li><strong>Other Linux (Synology, QNAP, Unraid, servers):</strong> enable SSH in its settings, log in, run the command.</li>
+                </ul>
+                <button class="btn btn-outline-light btn-sm" @click="showSysKey()"><i class="bi bi-key me-1"></i>Show key</button>
+                <div class="mt-2" x-show="sysStats.sshCommand">
+                  <div class="d-flex gap-2">
+                    <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" rows="3" readonly
+                              x-text="sysStats.sshCommand"></textarea>
+                    <button class="btn btn-outline-secondary btn-sm flex-shrink-0" @click="navigator.clipboard?.writeText(sysStats.sshCommand)">Copy</button>
+                  </div>
+                </div>
+                <div class="small text-danger mt-1" x-show="sysStats.sshError" x-text="sysStats.sshError"></div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-success btn-sm" @click="saveSysStats()"><i class="bi bi-save me-1"></i>Save</button>
+            <span class="small text-success" x-show="sysStats.saved">Saved.</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1527,6 +1703,7 @@ function configPage() {
       event_countdown:         { event_title: '', event_datetime: '' },
       transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
       world_clock:             { cities: [], scroll_speed: 1 },
+      system_stats:            { connections: [], scroll_speed: 1 },
       now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
@@ -1542,6 +1719,16 @@ function configPage() {
     teamTab: '',
     transit: { agencies: [], ui: [], routesCache: {}, status: '', statusError: false, loading: false, preview: null },
     worldClock: { cities: [], filter: '', preview: null, status: '', saved: false },
+    sysStats: {
+      ui: [], sshCommand: '', sshError: '', saved: false,
+      metricList: [ { key: 'cpu', label: 'CPU' }, { key: 'gpu', label: 'GPU' }, { key: 'mem', label: 'Memory' },
+                    { key: 'uptime', label: 'Uptime' }, { key: 'disk', label: 'Disk I/O' }, { key: 'net', label: 'Network I/O' } ],
+      diskScales: [ { v: 250000000, label: 'Hard drive (250 MB/s)' }, { v: 550000000, label: 'SATA SSD (550 MB/s)' },
+                    { v: 3500000000, label: 'NVMe Gen3 (3.5 GB/s)' }, { v: 7000000000, label: 'NVMe Gen4 (7 GB/s)' },
+                    { v: 14000000000, label: 'NVMe Gen5 (14 GB/s)' } ],
+      netScales:  [ { v: 125000000, label: '1 Gb/s' }, { v: 312500000, label: '2.5 Gb/s' }, { v: 625000000, label: '5 Gb/s' },
+                    { v: 1250000000, label: '10 Gb/s' }, { v: 3125000000, label: '25 Gb/s' } ],
+    },
     nowPlaying: {
       labels: { spotify: 'Spotify', mac: 'Mac Music app', lastfm: 'Last.fm' },
       hints: { spotify: 'any of your devices', mac: 'Apple Music / iTunes on the Mac', lastfm: 'anything that scrobbles' },
@@ -1632,6 +1819,14 @@ function configPage() {
         cfgs.transit = t;
       }
       if (cfgs.world_clock) cfgs.world_clock = { cities: [], scroll_speed: 1, ...cfgs.world_clock };
+      if (cfgs.system_stats) {
+        const ss = { scroll_speed: 1, ...cfgs.system_stats };
+        const base = this._newSysConn('local');
+        ss.connections = (Array.isArray(ss.connections) && ss.connections.length ? ss.connections : [base])
+          .map(c => ({ ...this._newSysConn(c.type || 'local'), ...c,
+                       metrics: { ...base.metrics, ...(c.metrics || {}) } }));
+        cfgs.system_stats = ss;
+      }
       if (cfgs.now_playing) {
         const np = { scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '', ...cfgs.now_playing };
         const all = ['spotify', 'mac', 'lastfm'];
@@ -2113,6 +2308,87 @@ function configPage() {
       } finally {
         this.nowPlaying.testing = false;
       }
+    },
+
+    // ---------------- System Stats ----------------
+
+    _newSysConn(type = 'local') {
+      return { name: '', type, host: '', user: '', port: 22, enabled: true,
+               metrics: { cpu: true, gpu: true, mem: true, uptime: false, disk: false, net: false },
+               disk_max: 7000000000, net_max: 1250000000 };
+    },
+
+    sysStatsUi(i) {
+      while (this.sysStats.ui.length <= i) {
+        this.sysStats.ui.push({ uid: Math.random().toString(36).slice(2), open: false, testing: false, result: null });
+      }
+      return this.sysStats.ui[i];
+    },
+
+    sysConnTitle(conn) {
+      return conn.name || (conn.type === 'ssh' ? (conn.host || 'New machine') : 'This Pi');
+    },
+
+    sysStatLabel(k) {
+      return (this.sysStats.metricList.find(m => m.key === k) || { label: k }).label;
+    },
+
+    addSysConn() {
+      const t = this.pluginConfigs.system_stats;
+      t.connections = [...(t.connections || []), this._newSysConn('ssh')];
+      this.sysStatsUi(t.connections.length - 1).open = true;
+    },
+
+    removeSysConn(i) {
+      const t = this.pluginConfigs.system_stats;
+      if (!confirm(`Remove ${this.sysConnTitle(t.connections[i])}?`)) return;
+      t.connections = t.connections.filter((_, k) => k !== i);
+      this.sysStats.ui = this.sysStats.ui.filter((_, k) => k !== i);
+    },
+
+    moveSysConn(i, delta) {
+      const t = this.pluginConfigs.system_stats;
+      const j = i + delta;
+      if (j < 0 || j >= t.connections.length) return;
+      const conns = [...t.connections], ui = [...this.sysStats.ui];
+      [conns[i], conns[j]] = [conns[j], conns[i]];
+      [ui[i], ui[j]] = [ui[j], ui[i]];
+      t.connections = conns; this.sysStats.ui = ui;
+    },
+
+    async testSysConn(i) {
+      const ui = this.sysStatsUi(i);
+      ui.testing = true; ui.result = null;
+      try {
+        ui.result = await fetch('/api/system_stats/test', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginConfigs.system_stats.connections[i]),
+        }).then(r => r.json());
+      } catch (e) {
+        ui.result = { ok: false, message: String(e) };
+      } finally {
+        ui.testing = false;
+      }
+    },
+
+    async showSysKey() {
+      this.sysStats.sshError = '';
+      const d = await fetch('/api/ssh/key').then(r => r.json());
+      if (d.ok) this.sysStats.sshCommand = d.command;
+      else this.sysStats.sshError = d.message;
+    },
+
+    async saveSysStats() {
+      await this.savePluginConfig('system_stats');
+      // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
+      if (this.pluginConfigs.system_stats.enabled !== false) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.sysStats.saved = true;
+      setTimeout(() => this.sysStats.saved = false, 2000);
     },
 
     async toggleTeamBrowser() {

@@ -6,19 +6,16 @@ running on the Mac. One-time setup on the Mac: System Settings → General →
 Sharing → Remote Login on, add this Pi's public key to ~/.ssh/authorized_keys,
 and allow the first "control Music" Automation prompt.
 
-The SSH key lives in data/now_playing/ (gitignored), so each Pi has its own.
-A ControlMaster connection is kept open so 5 s polling stays cheap.
+SSH (key, known_hosts, ControlMaster) is the shared helper in utilities/ssh_remote.py,
+so the same key also serves the System Stats plugin.
 """
 
 import base64
 import logging
-import os
-import subprocess
+
+from utilities import ssh_remote
 
 log = logging.getLogger(__name__)
-
-_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "now_playing"))
-KEY_PATH = os.path.join(_DIR, "id_ed25519")
 
 # Only talks to Music if it's already running, so polling never launches the app.
 TRACK_SCRIPT = '''
@@ -60,45 +57,22 @@ class MacMusicError(Exception):
 
 
 def ensure_key() -> str:
-    """Create this Pi's SSH key if needed; return the public key line."""
-    os.makedirs(_DIR, exist_ok=True)
-    if not os.path.exists(KEY_PATH):
-        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "led-matrix-now-playing",
-                        "-f", KEY_PATH], check=True, capture_output=True, timeout=30)
-    with open(KEY_PATH + ".pub") as f:
-        return f.read().strip()
+    """This Pi's public SSH key (shared with other plugins — see utilities/ssh_remote)."""
+    return ssh_remote.ensure_key()
 
 
 def _ssh(host: str, user: str, remote_cmd: str, stdin: str, timeout: float = 8) -> str:
     if not host or not user:
         raise MacMusicError("Set the Mac hostname and username")
-    if not os.path.exists(KEY_PATH):
-        raise MacMusicError("No SSH key yet — click Show key in the config page and add it to the Mac")
-    cmd = [
-        "ssh", "-i", KEY_PATH, "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
-        "-o", "StrictHostKeyChecking=accept-new",
-        "-o", f"UserKnownHostsFile={os.path.join(_DIR, 'known_hosts')}",
-        "-o", "ControlMaster=auto", "-o", f"ControlPath={os.path.join(_DIR, 'cm-%r@%h')}",
-        "-o", "ControlPersist=120",
-        f"{user}@{host}", remote_cmd,
-    ]
     try:
-        r = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        # A pending macOS "allow control of Music" prompt also blocks osascript until timeout
-        raise MacMusicError(f"Timed out talking to {host} — if the Mac is showing an "
-                            f"\"allow … to control Music\" prompt, click Allow")
-    if r.returncode != 0:
-        err = (r.stderr or "").strip().splitlines()
-        msg = err[-1] if err else f"ssh exited {r.returncode}"
-        if "Permission denied" in msg:
-            msg = "Permission denied — add this Pi's key to the Mac (Show key)"
-        elif "Could not resolve" in msg or "No route" in msg or "timed out" in msg.lower():
-            msg = f"Can't reach {host} — is the Mac awake and Remote Login on?"
-        elif "-1743" in (r.stderr or "") or "Not authorized" in (r.stderr or ""):
-            msg = "The Mac blocked control of Music — allow it in System Settings → Privacy & Security → Automation"
-        raise MacMusicError(msg)
-    return r.stdout
+        return ssh_remote.run(host, user, remote_cmd, stdin=stdin, timeout=timeout,
+                              # A pending macOS "allow control of Music" prompt blocks osascript until timeout
+                              timeout_hint='if the Mac is showing an "allow … to control Music" prompt, click Allow')
+    except ssh_remote.SSHError as e:
+        if "-1743" in e.stderr or "Not authorized" in e.stderr:
+            raise MacMusicError("The Mac blocked control of Music — allow it in System Settings → "
+                                "Privacy & Security → Automation")
+        raise MacMusicError(str(e).replace("that machine", "the Mac"))
 
 
 def parse_track(output: str):

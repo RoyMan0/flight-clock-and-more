@@ -79,7 +79,7 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = WorldClockPlugin = NowPlayingPlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = WorldClockPlugin = NowPlayingPlugin = SystemStatsPlugin = create_app = None
     try:
         from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
     except Exception as e:
@@ -120,6 +120,10 @@ def main():
         from plugins.now_playing.manager import NowPlayingPlugin
     except Exception as e:
         log.warning(f"Now playing plugin failed to import: {e}")
+    try:
+        from plugins.system_stats.manager import SystemStatsPlugin
+    except Exception as e:
+        log.warning(f"System stats plugin failed to import: {e}")
     try:
         from web.app import create_app
     except Exception as e:
@@ -251,6 +255,14 @@ def main():
             ))
         except Exception as e:
             log.warning(f"Now playing plugin failed to load: {e}")
+
+    if SystemStatsPlugin:
+        try:
+            pm.register("system_stats", SystemStatsPlugin(
+                display, cfg.get_plugin_config("system_stats"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"System stats plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)
