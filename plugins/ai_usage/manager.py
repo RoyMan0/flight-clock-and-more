@@ -31,9 +31,10 @@ PROVIDER_ORDER = ("claude", "codex")
 BOTH_PHASE_SECONDS = 3
 SHOW_REFRESH_MIN_AGE = 180      # on-screen refresh skips data fetched less than this ago
 # The usage endpoints only allow a few calls in a short window. After a 429, wait
-# Retry-After (if sent) or BACKOFF_START, doubling up to BACKOFF_MAX while it repeats.
+# Retry-After (if sent) or 5 min, then 10 min while it repeats — never longer, or the
+# numbers on screen get too stale to be useful.
 BACKOFF_START = 300
-BACKOFF_MAX = 1800
+BACKOFF_MAX = 600
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CACHE_FILE = os.path.join(_BASE_DIR, "data", "ai_usage.json")
 
@@ -163,7 +164,7 @@ class AiUsagePlugin(BasePlugin):
         if not wait:
             prev = self._backoff_s.get(p)
             wait = min(BACKOFF_MAX, prev * 2) if prev else BACKOFF_START
-        wait = min(max(wait, 60.0), BACKOFF_MAX * 2)
+        wait = min(max(wait, 60.0), BACKOFF_MAX)
         self._backoff_s[p] = wait
         self._backoff_until[p] = time.monotonic() + wait
         log.info(f"[ai_usage] {p}: rate-limited, next try in {wait / 60:.0f}m (showing last numbers)")
