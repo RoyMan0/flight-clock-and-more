@@ -331,16 +331,20 @@ class CalendarPlugin(BasePlugin):
             return False
         self._visit = visit
         hold, trans = self._hold(), self._transition()
-        elapsed = time.monotonic() - self._start
-        idx = min(int(elapsed // (hold + trans)), len(visit) - 1)
-        t = elapsed - idx * (hold + trans)
+        n, period = len(visit), hold + trans
+        # Loops back to the first event (pinned, or the only module with content);
+        # a normal turn ends as the last event's hold ends (display_duration).
+        t = (time.monotonic() - self._start) % (n * period) if n > 1 else 0.0
+        idx = int(t // period)
+        t -= idx * period
         offset = 0
-        if idx < len(visit) - 1 and t > hold:
+        if n > 1 and t > hold:
             offset = min(R.PANEL_H, int((t - hold) * FRAME_RATE * TRANSITION_PX))
         cur = self._panel(idx, visit[idx], fmt)
         if offset:
-            nxt = self._panel(idx + 1, visit[idx + 1], fmt)
-            header_ev = visit[idx + 1] if offset >= R.PANEL_H // 2 else visit[idx]
+            nxt_idx = (idx + 1) % n
+            nxt = self._panel(nxt_idx, visit[nxt_idx], fmt)
+            header_ev = visit[nxt_idx] if offset >= R.PANEL_H // 2 else visit[idx]
             return self._push(("d", self._version, idx, offset, header_ev["source"], fmt),
                               lambda: R.render_detailed(header_ev, [cur, nxt], offset))
         return self._push(("d", self._version, idx, 0, int(time.time() // 60), fmt),

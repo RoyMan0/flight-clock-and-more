@@ -182,7 +182,7 @@ Upcoming events from `plugins.calendar.sources`. Each source is `{uid, type: "ic
 - **Detailed mode (`render.py`):** header (7×5 icon in the calendar colour plus the calendar name; for CalDAV the calendar's own name) and 24 px panels.
   - Time column x1–20: `4:00`/`PM`, `ALL`/`DAY`, or `NOW`/end time.
   - Bar at x22; text from x24, with the title wrapped to 2 lines, then the location if there's room, then TODAY/TOMORROW/`FRI 10/30`.
-  - `events_per_visit` events per turn, each held `seconds_per_event`, sliding 2 px/frame between them. `display_duration` = n × hold + (n−1) × slide.
+  - `events_per_visit` events per turn, each held `seconds_per_event`, sliding 2 px/frame between them. `display_duration` = n × hold + (n−1) × slide; when shown longer (pinned, or the only module with content) it slides from the last event back to the first and keeps looping.
 - **Compact mode:** header `CALENDAR` plus the date, 8 px rows (coloured time, title from x26), and a dim divider row per new day (the first only if it isn't today). Static if ≤3 rows; otherwise a looping strip like transit with `scroll_speed`.
 - **Reminders** (`reminders`, `reminder_minutes`): takeover alert.
   - `has_live_content()` is True for an unreminded timed event starting within N minutes (or up to 1 min late).
