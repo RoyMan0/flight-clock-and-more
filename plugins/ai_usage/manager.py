@@ -29,7 +29,11 @@ log = logging.getLogger(__name__)
 
 PROVIDER_ORDER = ("claude", "codex")
 BOTH_PHASE_SECONDS = 3
-SHOW_REFRESH_MIN_AGE = 60       # on-screen refresh skips data fetched less than this ago
+SHOW_REFRESH_MIN_AGE = 180      # on-screen refresh skips data fetched less than this ago
+# The usage endpoints only allow a few calls in a short window. After a 429, wait
+# Retry-After (if sent) or BACKOFF_START, doubling up to BACKOFF_MAX while it repeats.
+BACKOFF_START = 300
+BACKOFF_MAX = 1800
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CACHE_FILE = os.path.join(_BASE_DIR, "data", "ai_usage.json")
 
@@ -62,6 +66,8 @@ class AiUsagePlugin(BasePlugin):
         self._in_flight: set = set()
         self._failing: set = set()        # providers mid failure streak (warn once)
         self._fetched: dict = {}          # provider → monotonic time of last fetch start
+        self._backoff_until: dict = {}    # provider → monotonic time it may be asked again
+        self._backoff_s: dict = {}        # provider → current backoff length (s)
         self._start = time.monotonic()
         self._key: Optional[tuple] = None
         self._load_cache()
@@ -114,7 +120,8 @@ class AiUsagePlugin(BasePlugin):
         now = time.monotonic()
         for p in enabled_providers(self.config):
             with self._lock:
-                if p in self._in_flight or now - self._fetched.get(p, -1e9) < min_age:
+                if (p in self._in_flight or now - self._fetched.get(p, -1e9) < min_age
+                        or now < self._backoff_until.get(p, 0)):
                     continue
                 self._in_flight.add(p)
                 self._fetched[p] = now
@@ -125,6 +132,7 @@ class AiUsagePlugin(BasePlugin):
         try:
             usage = providers.fetch(p, credentials_path(self.config, p))
             result = {"usage": usage, "error": None, "login": False}
+            self._backoff_s.pop(p, None)
             if p in self._failing:
                 log.info(f"[ai_usage] {p}: usage fetch recovered")
                 self._failing.discard(p)
@@ -135,12 +143,30 @@ class AiUsagePlugin(BasePlugin):
             with self._lock:
                 prev = (self._results.get(p) or {}).get("usage")
             result = {"usage": prev, "error": str(e), "login": False}   # keep showing last good values
-            self._warn(p, f"usage fetch failed — {e}")
+            resp = getattr(e, "response", None)
+            if resp is not None and resp.status_code == 429:
+                self._back_off(p, resp)
+            else:
+                self._warn(p, f"usage fetch failed — {e}")
         with self._lock:
             self._in_flight.discard(p)
             self._results[p] = result
         if result["usage"] and not result["error"]:
             self._save_cache()
+
+    def _back_off(self, p: str, resp):
+        """Rate-limited: pause both the timer and the on-screen refresh for this provider."""
+        try:
+            wait = float(resp.headers.get("Retry-After", ""))
+        except ValueError:
+            wait = 0.0
+        if not wait:
+            prev = self._backoff_s.get(p)
+            wait = min(BACKOFF_MAX, prev * 2) if prev else BACKOFF_START
+        wait = min(max(wait, 60.0), BACKOFF_MAX * 2)
+        self._backoff_s[p] = wait
+        self._backoff_until[p] = time.monotonic() + wait
+        log.info(f"[ai_usage] {p}: rate-limited, next try in {wait / 60:.0f}m (showing last numbers)")
 
     def _warn(self, p: str, msg: str):
         if p not in self._failing:
