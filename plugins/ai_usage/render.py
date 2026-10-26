@@ -28,9 +28,11 @@ BAR_W = MATRIX_W - 2 * LEFT
 HEADER_Y = 1                # 1 px margin above the title
 
 _TINY = _parse_bdf(os.path.join(_FONTS_DIR, "tom-thumb.bdf"))
-# tom-thumb pads ':' to a full 4 px cell (2 px gap each side); tighten to 1 px
-if ord(":") in _TINY:
-    _TINY[ord(":")] = {**_TINY[ord(":")], "xoff": 0, "dw": 2}
+# tom-thumb pads narrow glyphs to a full 4 px cell, leaving 2 px gaps; tighten to 1 px.
+# ':' is 1 px wide (2 px gap each side), '1' is 2 px wide (2 px gap after).
+for _ch, _fix in ((":", {"xoff": 0, "dw": 2}), ("1", {"dw": 3})):
+    if ord(_ch) in _TINY:
+        _TINY[ord(_ch)] = {**_TINY[ord(_ch)], **_fix}
 
 COL_LABEL   = (170, 170, 170)
 COL_VALUE   = (240, 240, 240)
