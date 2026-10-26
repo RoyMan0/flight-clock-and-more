@@ -1438,8 +1438,10 @@ def _install_requirements_then_restart(deps_changed: bool):
 def update_app():
     try:
         req_before = _requirements_hash()
+        # core.fileMode=false: install.sh chmods main.py, and a permission-only
+        # difference must not block the pull as a "local change"
         result = subprocess.run(
-            ["git", "pull"],
+            ["git", "-c", "core.fileMode=false", "pull"],
             cwd=BASE_DIR,
             capture_output=True,
             text=True,
