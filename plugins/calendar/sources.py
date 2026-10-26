@@ -130,8 +130,29 @@ def fetch_ics(url: str, start, end, source: str, color: str) -> list:
         raise SourceError(f"the link returned HTTP {r.status_code} — check it's the full, current link")
     r.raise_for_status()
     if b"BEGIN:VCALENDAR" not in r.content[:4096]:
-        raise SourceError("that link isn't a calendar feed (expected an .ics file)")
+        raise SourceError(_not_a_feed(r))
     return parse_ics(r.content, start, end, source, color)
+
+
+def _not_a_feed(r) -> str:
+    """Say what the link actually returned, and which link to use instead."""
+    url, final = r.request.url.lower(), r.url.lower()
+    ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip() or "unknown content"
+    text = r.text[:6000] if "text" in ctype or "html" in ctype else ""
+    hint = ""
+    if "google." in url:
+        hint = " In Google Calendar settings, copy 'Secret address in iCal format' (it ends in /basic.ics)."
+    elif "outlook." in url or "office365" in url or "office.com" in url:
+        hint = " In Outlook's Publish calendar, copy the ICS link (ends in .ics), not the HTML one."
+    elif "icloud.com" in url:
+        hint = " Share the calendar as a Public Calendar and copy its webcal:// link."
+    if "accounts.google.com" in final or "login.microsoftonline" in final or "signin" in final:
+        return "that link asks for a sign-in, so it isn't a private feed link." + hint
+    if "html" in ctype or "<html" in text.lower():
+        m = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+        title = " ".join(m.group(1).split())[:60] if m else ""
+        return f"that link opens a web page{f' ({title})' if title else ''}, not a calendar file." + hint
+    return f"that link returned {ctype}, not a calendar file (.ics)." + hint
 
 
 # ------------------------------------------------------------------
