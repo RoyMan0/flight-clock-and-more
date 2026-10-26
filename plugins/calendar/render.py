@@ -4,9 +4,10 @@ Calendar rendering (64×32, 4x6 BDF font).
 Header (both modes): 7×5 calendar icon · title, grey separator at y7.
 
 Detailed — one event per 24 px panel under the header (y8-31):
-  x1-20   time column: "4:00"/"PM", "16:00", "ALL"/"DAY", "NOW"/"-5PM"
-  x22     vertical bar in the calendar's colour
-  x24-63  title (2 wrapped lines), then TODAY / TOMORROW / FRI 10/30
+  x1-21   time column: start over end ("7:30P"/"9:30P", "19:30"/"-21:30"),
+          "ALL"/"DAY", "NOW"/"-5P"
+  x23     vertical bar in the calendar's colour
+  x25-63  title (2 wrapped lines), then TODAY / TOMORROW / FRI 10/30
           (a one-line title gets the location on line 2)
 Panels slide up from one event to the next.
 
@@ -28,10 +29,10 @@ SEPARATOR_Y = 7
 BODY_Y = 8                  # panels / scrolling area start here (text rows at +1)
 PANEL_H = MATRIX_H - BODY_Y  # 24
 ROW_H = 8
-TIME_W = 20                 # detailed time column
-BAR_X = 22
-TEXT_X = 24
-COMPACT_TITLE_X = 26
+TIME_W = 22                 # detailed time column (x1-22; glyphs end in a blank column)
+BAR_X = 23
+TEXT_X = 25
+COMPACT_TITLE_X = 24
 
 COL_TEXT    = (235, 235, 235)
 COL_DIM     = (120, 120, 120)
@@ -42,6 +43,14 @@ COL_REMIND  = (255, 210, 0)
 DEFAULT_COLOUR = (74, 144, 217)
 
 _ICON = ["#######", "#.#.#.#", "#######", "#.#.#.#", "#######"]
+
+# Times use a copy of 4x6 with a tight colon: the stock glyph pads its 1 px dot
+# with 2 blank columns each side; shifted left with a 2 px advance it's 1 px
+# each side, so "10:30P" fits the time column.
+_TIME_FONT = dict(_FONT)
+if ord(":") in _TIME_FONT:
+    _g = _TIME_FONT[ord(":")]
+    _TIME_FONT[ord(":")] = {**_g, "dw": 2, "rows": [(r << 1) & 0xFF for r in _g["rows"]]}
 
 
 # ------------------------------------------------------------------
@@ -67,6 +76,10 @@ def _dim(rgb, f=0.7) -> tuple:
 
 def _width(text: str) -> int:
     return _bdf_width(text, _FONT)
+
+
+def _time_width(text: str) -> int:
+    return _bdf_width(text, _TIME_FONT)
 
 
 def _fit(text: str, max_w: int) -> str:
@@ -130,14 +143,6 @@ def in_progress(ev, now=None) -> bool:
     return ev["start"] <= now < ev["end"]
 
 
-def _clock(dt: datetime, clock_format: str) -> tuple:
-    """(main, sub) for the detailed time column."""
-    if clock_format == "24hr":
-        return dt.strftime("%H:%M"), ""
-    h = dt.hour % 12 or 12
-    return f"{h}:{dt.minute:02d}", "AM" if dt.hour < 12 else "PM"
-
-
 def _short_clock(dt: datetime, clock_format: str) -> str:
     """Compact time: '9:00A', '10:30P', '16:00'."""
     if clock_format == "24hr":
@@ -147,13 +152,9 @@ def _short_clock(dt: datetime, clock_format: str) -> str:
 
 
 def _end_label(dt: datetime, clock_format: str) -> str:
-    """When a running event ends: '-5P', '-5:30', '-16:00'; the dash goes if it won't fit."""
-    if clock_format == "24hr":
-        label = dt.strftime("%H:%M")
-    else:
-        h = dt.hour % 12 or 12
-        label = f"{h}{'A' if dt.hour < 12 else 'P'}" if dt.minute == 0 else f"{h}:{dt.minute:02d}"
-    return "-" + label if _width("-" + label) <= TIME_W else label
+    """When an event ends: '-9:30P', '-21:30'; the dash goes if it won't fit ('10:30P')."""
+    label = _short_clock(dt, clock_format)
+    return "-" + label if _time_width("-" + label) <= TIME_W else label
 
 
 def time_column(ev, clock_format: str, now=None) -> tuple:
@@ -162,8 +163,8 @@ def time_column(ev, clock_format: str, now=None) -> tuple:
         return ("ALL", COL_TEXT), ("DAY", COL_DIM)
     if in_progress(ev, now):
         return ("NOW", COL_NOW), (_end_label(ev["end"], clock_format), COL_DIM)
-    main, sub = _clock(ev["start"], clock_format)
-    return (main, COL_TEXT), (sub, COL_DIM)
+    end = _end_label(ev["end"], clock_format) if ev["end"] > ev["start"] else ""
+    return (_short_clock(ev["start"], clock_format), COL_TEXT), (end, COL_DIM)
 
 
 # ------------------------------------------------------------------
@@ -195,9 +196,9 @@ def render_panel(ev, clock_format: str, now=None) -> Image.Image:
     img = Image.new("RGB", (MATRIX_W, PANEL_H), (0, 0, 0))
     colour = hex_rgb(ev.get("color"))
     (main, mcol), (sub, scol) = time_column(ev, clock_format, now)
-    _bdf_draw(img, LEFT, 1, main, _FONT, mcol)
+    _bdf_draw(img, LEFT, 1, main, _TIME_FONT, mcol)
     if sub:
-        _bdf_draw(img, LEFT, 9, sub, _FONT, scol)
+        _bdf_draw(img, LEFT, 9, sub, _TIME_FONT, scol)
     px = img.load()
     for y in range(1, PANEL_H):
         px[BAR_X, y] = colour
@@ -265,7 +266,7 @@ def _draw_compact_row(img, y: int, row, clock_format: str, now=None):
         t, colour = "NOW", COL_NOW
     else:
         t = _short_clock(ev["start"], clock_format)
-    _bdf_draw(img, LEFT, y, t, _FONT, colour)
+    _bdf_draw(img, LEFT, y, t, _TIME_FONT, colour)
     _bdf_draw(img, COMPACT_TITLE_X, y, _fit(ev["title"], MATRIX_W - COMPACT_TITLE_X), _FONT, COL_TEXT)
 
 

@@ -180,10 +180,10 @@ Upcoming events from `plugins.calendar.sources`. Each source is `{uid, type: "ic
 - **Parsing:** both paths go through `parse_ics`, where `icalendar` + `recurring_ical_events` expand RRULE, EXDATE and RECURRENCE-ID overrides within `window(days_ahead)` (local midnight + N days). Cancelled events are dropped. Timed events become aware local datetimes; all-day events keep `date` with an exclusive end. The libraries are imported lazily, so a Pi that hasn't run pip gets a readable error.
 - **`manager.upcoming()`:** drops ended events, de-dupes (uid, start, title), sorts all-day first within each day, caps at `max_events`. `update()` runs one thread per source and keeps the last good events on error. `on_config_change` refetches immediately. `enabled` defaults to False.
 - **Detailed mode (`render.py`):** header (7×5 icon in the calendar colour plus the calendar name; for CalDAV the calendar's own name) and 24 px panels.
-  - Time column x1–20: `4:00`/`PM`, `ALL`/`DAY`, or `NOW`/end time.
-  - Bar at x22; text from x24, with the title wrapped to 2 lines, then the location if there's room, then TODAY/TOMORROW/`FRI 10/30`.
+  - Time column x1–22: start over a dim end (`7:30P`/`-9:30P`, `19:30`/`-21:30`; the dash is dropped when it won't fit, e.g. `10:30P`), `ALL`/`DAY`, or `NOW`/end. Times use `_TIME_FONT`, a 4x6 copy whose colon is shifted left with a 2 px advance (1 px each side), so `10:30P` fits.
+  - Bar at x23; text from x25, with the title wrapped to 2 lines, then the location if there's room, then TODAY/TOMORROW/`FRI 10/30`.
   - `events_per_visit` events per turn, each held `seconds_per_event`, sliding 2 px/frame between them. `display_duration` = n × hold + (n−1) × slide; when shown longer (pinned, or the only module with content) it slides from the last event back to the first and keeps looping.
-- **Compact mode:** header `CALENDAR` plus the date, 8 px rows (coloured time, title from x26), and a dim divider row per new day (the first only if it isn't today). Static if ≤3 rows; otherwise a looping strip like transit with `scroll_speed`.
+- **Compact mode:** header `CALENDAR` plus the date, 8 px rows (coloured time in `_TIME_FONT`, title from x24), and a dim divider row per new day (the first only if it isn't today). Static if ≤3 rows; otherwise a looping strip like transit with `scroll_speed`.
 - **Reminders** (`reminders`, `reminder_minutes`): takeover alert.
   - `has_live_content()` is True for an unreminded timed event starting within N minutes (or up to 1 min late).
   - The card's header reads `IN N MIN` in yellow for `REMINDER_SECONDS` (15). The event is then recorded in `_reminded` (pruned after 2 days) and the plugin goes un-live.
