@@ -169,6 +169,13 @@ class TransitPlugin(BasePlugin):
         self._strip_key: Optional[tuple] = None
         self._last_render_key: Optional[tuple] = None
 
+    @property
+    def enabled(self) -> bool:
+        # Off unless configured: installs from before this module have no config
+        # block, and the update loop polls every enabled plugin even when it isn't
+        # in plugin_order.
+        return bool(self.config.get("enabled", False))
+
     def reset(self):
         self._y_offset = 0.0
         self._last_render_key = None

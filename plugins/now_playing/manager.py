@@ -141,6 +141,13 @@ class NowPlayingPlugin(BasePlugin):
         self._marquees = None
         self._marquee_key = None
 
+    @property
+    def enabled(self) -> bool:
+        # Off unless configured: installs from before this module have no config
+        # block, and the update loop polls every enabled plugin even when it isn't
+        # in plugin_order.
+        return bool(self.config.get("enabled", False))
+
     def reset(self):
         if self._marquees:
             for m in self._marquees:

@@ -195,6 +195,13 @@ class WorldClockPlugin(BasePlugin):
         self._strip: Optional[Image.Image] = None
         self._key: Optional[tuple] = None
 
+    @property
+    def enabled(self) -> bool:
+        # Off unless configured: installs from before this module have no config
+        # block, and the update loop polls every enabled plugin even when it isn't
+        # in plugin_order.
+        return bool(self.config.get("enabled", False))
+
     def reset(self):
         self._y_offset = 0.0
         self._key = None

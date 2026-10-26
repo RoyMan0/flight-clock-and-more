@@ -217,6 +217,7 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
 
 Every new module must ship with all of these (the owner asked for this explicitly):
 1. `plugins/<id>/manager.py` + guarded import and `pm.register()` block in `main.py`.
+   - Override `enabled` to `self.config.get("enabled", False)`. `BasePlugin` defaults to True, and existing installs have no config block for a new module, so it would be polled in the background and show as Enabled on the config page without anyone turning it on.
 2. A `plugins.<id>` block and `plugin_order` entry in `config/config.example.json`; any keys in `config/secrets.example.json` and the Secrets Schema below (and excluded from the generic "Other Secrets" card).
 3. A hand-written config card in `config.html` (its Save also posts `pluginOrder` so existing installs pick it up), plus its display name in `window.PLUGIN_NAMES` in `web/templates/base.html` (the one list used by Dashboard, Config and Display).
 4. **An About section in `web/templates/about.html`** — a collapsible card in `#aboutAccordion` (same markup as the others: icon, one-paragraph overview, then `subsection-title` blocks for colours/legends/sources) written for end users, not developers.
