@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 
 PROVIDER_ORDER = ("claude", "codex")
 BOTH_PHASE_SECONDS = 3
+SHOW_REFRESH_MIN_AGE = 60       # on-screen refresh skips data fetched less than this ago
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CACHE_FILE = os.path.join(_BASE_DIR, "data", "ai_usage.json")
 
@@ -60,6 +61,7 @@ class AiUsagePlugin(BasePlugin):
         self._results: dict = {}
         self._in_flight: set = set()
         self._failing: set = set()        # providers mid failure streak (warn once)
+        self._fetched: dict = {}          # provider → monotonic time of last fetch start
         self._start = time.monotonic()
         self._key: Optional[tuple] = None
         self._load_cache()
@@ -106,13 +108,16 @@ class AiUsagePlugin(BasePlugin):
     def update_interval(self) -> float:
         return max(60.0, float(self.config.get("update_interval", 300)))
 
-    def update(self):
-        """One background fetch per provider; never blocks the shared update thread."""
+    def update(self, min_age: float = 0):
+        """One background fetch per provider; never blocks the shared update thread.
+        min_age skips providers fetched more recently than that (seconds)."""
+        now = time.monotonic()
         for p in enabled_providers(self.config):
             with self._lock:
-                if p in self._in_flight:
+                if p in self._in_flight or now - self._fetched.get(p, -1e9) < min_age:
                     continue
                 self._in_flight.add(p)
+                self._fetched[p] = now
             threading.Thread(target=self._poll, args=(p,), daemon=True,
                              name=f"ai-usage-{p}").start()
 
@@ -169,8 +174,12 @@ class AiUsagePlugin(BasePlugin):
         return self._seconds_per_page() * max(1, len(self._pages()))
 
     def reset(self):
+        """Called each time the module comes on screen: also fetch fresh numbers
+        (the page redraws when they land, ~1 s later)."""
         self._start = time.monotonic()
         self._key = None
+        if self.enabled:
+            self.update(min_age=SHOW_REFRESH_MIN_AGE)
 
     def is_cycle_complete(self) -> bool:
         return time.monotonic() - self._start >= self.display_duration
