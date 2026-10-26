@@ -1772,6 +1772,82 @@
         </div>
       </div>
 
+      <!-- Maze Config -->
+      <div class="card mb-4" x-show="'maze' in pluginConfigs">
+        <div class="card-header"><i class="bi bi-joystick me-2"></i>Maze</div>
+        <div class="card-body" x-show="'maze' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.maze.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">In the rotation, the Pi builds a random maze and solves it — the route changes colour every time it hits a dead end. An unsolved maze carries on next turn.
+                To play it yourself, open the <a href="/display">Display</a> tab and tap <strong>Maze</strong>.</div>
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label">Maze size</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.maze.size">
+                <option value="L" :selected="pluginConfigs.maze.size === 'L'">Large paths (15×7)</option>
+                <option value="M" :selected="pluginConfigs.maze.size === 'M'">Medium (21×10)</option>
+                <option value="S" :selected="pluginConfigs.maze.size === 'S'">Small paths (31×15)</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label">Maze style</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.maze.style">
+                <option value="random" :selected="pluginConfigs.maze.style === 'random'">Mix it up</option>
+                <option value="winding" :selected="pluginConfigs.maze.style === 'winding'">Winding — long corridors</option>
+                <option value="branchy" :selected="pluginConfigs.maze.style === 'branchy'">Branchy — many dead ends</option>
+                <option value="loops" :selected="pluginConfigs.maze.style === 'loops'">Loops — several routes</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label">How the Pi solves it</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.maze.solver">
+                <option value="rotate" :selected="pluginConfigs.maze.solver === 'rotate'">Take turns</option>
+                <option value="explorer" :selected="pluginConfigs.maze.solver === 'explorer'">Explorer — tries a route, backs up at dead ends</option>
+                <option value="wall" :selected="pluginConfigs.maze.solver === 'wall'">Wall follower — right hand on the wall</option>
+                <option value="flood" :selected="pluginConfigs.maze.solver === 'flood'">Flood — spreads out like water</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label">Colours</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.maze.theme">
+                <option value="random" :selected="pluginConfigs.maze.theme === 'random'">Random each maze</option>
+                <option value="neon" :selected="pluginConfigs.maze.theme === 'neon'">Neon</option>
+                <option value="pacman" :selected="pluginConfigs.maze.theme === 'pacman'">Pac-Man</option>
+                <option value="retro" :selected="pluginConfigs.maze.theme === 'retro'">Retro green</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label">Play timeout (min)</label>
+              <input type="number" min="1" max="30" class="form-control bg-dark text-light border-secondary"
+                     x-model.number="pluginConfigs.maze.play_idle_minutes">
+              <div class="form-text text-muted">A game with no moves for this long ends and the rotation resumes.</div>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label d-flex justify-content-between">
+                <span>Solving speed</span>
+                <span class="text-muted small" x-text="pluginConfigs.maze.solve_speed + ' steps/frame'"></span>
+              </label>
+              <input type="range" class="form-range" min="0.5" max="10" step="0.5" x-model.number="pluginConfigs.maze.solve_speed">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.7rem"><span>Slow</span><span>Fast</span></div>
+            </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="mazeCelebrate" x-model="pluginConfigs.maze.celebrate">
+                <label class="form-check-label" for="mazeCelebrate">Celebrate when solved (rainbow path + dead ends and steps)</label>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-success btn-sm" @click="saveMaze()"><i class="bi bi-save me-1"></i>Save</button>
+            <span class="small text-success" x-show="mazeSaved">Saved.</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1995,6 +2071,7 @@ function configPage() {
       transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
       world_clock:             { cities: [], scroll_speed: 1 },
       system_stats:            { connections: [], scroll_speed: 1 },
+      maze:                    { size: 'M', style: 'random', solver: 'rotate', solve_speed: 2, theme: 'random', celebrate: true, play_idle_minutes: 3 },
       calendar:                { display_mode: 'detailed', days_ahead: 3, events_per_visit: 5, seconds_per_event: 6, scroll_speed: 1, reminders: false, reminder_minutes: 10, sources: [] },
       ai_usage:                { seconds_per_provider: 10, reset_format: 'times', providers: { claude: { enabled: true, credentials_path: '' }, codex: { enabled: false, credentials_path: '' } } },
       now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
@@ -2129,6 +2206,8 @@ function configPage() {
         for (const k of ['agency', 'routes', 'stop_id', 'stop_name', 'direction', 'min_minutes']) delete t[k];
         cfgs.transit = t;
       }
+      if (cfgs.maze) cfgs.maze = { size: 'M', style: 'random', solver: 'rotate', solve_speed: 2, theme: 'random',
+                                   celebrate: true, play_idle_minutes: 3, ...cfgs.maze };
       if (cfgs.world_clock) cfgs.world_clock = { cities: [], scroll_speed: 1, ...cfgs.world_clock };
       if (cfgs.sports) cfgs.sports = { live_priority_mode: 'alert', ...cfgs.sports };
       if (cfgs.system_stats) {
@@ -2703,6 +2782,21 @@ function configPage() {
       const d = await fetch('/api/ssh/key').then(r => r.json());
       if (d.ok) this.sysStats.sshCommand = d.command;
       else this.sysStats.sshError = d.message;
+    },
+
+    mazeSaved: false,
+
+    async saveMaze() {
+      await this.savePluginConfig('maze');
+      // New plugins aren't in an existing install's plugin_order yet — add it so it rotates
+      if (this.pluginConfigs.maze.enabled) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.mazeSaved = true;
+      setTimeout(() => this.mazeSaved = false, 2000);
     },
 
     async saveSysStats() {

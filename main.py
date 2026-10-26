@@ -79,7 +79,7 @@ def main():
     from plugins.clock_weather.manager import ClockWeatherPlugin
     from plugins.flight_tracker.manager import FlightTrackerPlugin
 
-    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = WorldClockPlugin = NowPlayingPlugin = SystemStatsPlugin = AiUsagePlugin = CalendarPlugin = create_app = None
+    StockTickerPlugin = SnowReportPlugin = SportsPlugin = SpecificFlightTrackerPlugin = WorldDaylightPlugin = APNewsPlugin = EventCountdownPlugin = TransitPlugin = WorldClockPlugin = NowPlayingPlugin = SystemStatsPlugin = AiUsagePlugin = CalendarPlugin = MazePlugin = create_app = None
     try:
         from plugins.specific_flight_tracker.manager import SpecificFlightTrackerPlugin
     except Exception as e:
@@ -132,6 +132,10 @@ def main():
         from plugins.calendar.manager import CalendarPlugin
     except Exception as e:
         log.warning(f"Calendar plugin failed to import: {e}")
+    try:
+        from plugins.maze.manager import MazePlugin
+    except Exception as e:
+        log.warning(f"Maze plugin failed to import: {e}")
     try:
         from web.app import create_app
     except Exception as e:
@@ -287,6 +291,14 @@ def main():
             ))
         except Exception as e:
             log.warning(f"Calendar plugin failed to load: {e}")
+
+    if MazePlugin:
+        try:
+            pm.register("maze", MazePlugin(
+                display, cfg.get_plugin_config("maze"), secrets
+            ))
+        except Exception as e:
+            log.warning(f"Maze plugin failed to load: {e}")
 
     # ------------------------------------------------------------------
     # Web server (background thread)

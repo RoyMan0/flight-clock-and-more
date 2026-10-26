@@ -199,6 +199,15 @@ Claude and ChatGPT Codex subscription limits: one page per enabled provider (`se
 - The plugin overrides `enabled` to default **False**, because existing installs have no `ai_usage` block and the update loop polls every enabled plugin. `update()` runs one fire-and-forget thread per provider; `reset()` (each time the module comes on screen) also triggers one unless that provider was fetched <3 min ago (`SHOW_REFRESH_MIN_AGE`). The usage endpoints rate-limit hard (Claude 429s when polled every 1–5 min), so a 429 pauses that provider for `Retry-After` or 5 min, then 10 min if it repeats, never longer, since staler numbers aren't useful (`_back_off`); both the timer and the on-screen refresh respect it, and the last numbers stay on screen. On errors it keeps the last good values. The cache is `data/ai_usage.json`. A window whose `resets_at` has passed shows 0 %.
 - `POST /api/ai_usage/test` fetches with the unsaved settings and returns statuses plus previews.
 
+### Maze Plugin (`plugins/maze/`)
+
+Display mode: the Pi generates and solves a maze in its rotation slot; play mode: the user plays it from the Display tab.
+- `generate.py` — cell grid with open-side bitmasks; `Layout` maps S/M/L to 1/2/3 px paths with 1 px walls (31×15, 21×10, 15×7 cells). Styles: winding (backtracker), branchy (Prim's), loops (braided — Pac-Man always uses this). Exit = farthest cell from the start. Seeded and fast (<2 ms).
+- `solve.py` — step-machine solvers (`step()` per tick, `cells`/`head`/`path`/`dead_ends`): Explorer (new route colour after every dead end, failed branches kept dimmed), WallFollower (hands over to Explorer if it detects a loop), Flood (BFS layer per step, then traces the shortest path). The plugin keeps solver state between rotation turns, so a maze only changes after it's solved (+ celebration + stats card).
+- `game.py` — one shared play session: free / race (Explorer as the Pi racer) / pacman (dots, ghosts chase within 6 cells, 3 lives) / fog (Chebyshev radius). Hints, give-up (Flood from the player), best times top-5 in `data/maze/best.json` (hinted wins aren't recorded). `version` bumps on change for cheap polling.
+- Play sessions: `POST /api/maze/start` calls `start_game(…, on_end=pm.release_hold, still_pinned=…)` then pins the plugin. The plugin ends the game on idle (`play_idle_minutes`, releases the pin) or when something else unpinned it (Return to Rotation). The Display page draws the maze client-side on a `<canvas>` from JSON (moves feel instant) and polls `/api/maze/state?v=` every 150 ms; the panel mirrors it via `render_play`.
+- `render.py` caches each maze's wall layer (`Canvas.with_walls`), so frames only paint routes/markers.
+
 ### Web UI (`web/`)
 
 Flask app created by `web/app.py:create_app()`. Two blueprints:

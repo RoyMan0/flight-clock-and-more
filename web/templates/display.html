@@ -6,11 +6,14 @@
   .module-btn { width: 100%; text-align: left; white-space: normal; }
   .module-btn .bi { width: 1.25rem; }
   .preview-status { min-height: 1.5rem; }
+  .maze-pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap: 8px; width: max-content; }
+  .maze-pad .btn { font-size: 1.6rem; padding: 0; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div x-data="displayPage()" x-init="init()" @beforeunload.window="stop()">
+<div x-data="displayPage()" x-init="init()" @beforeunload.window="stop()"
+     @keydown.window="mazeKey($event)" @resize.window.debounce.150ms="mazeDraw()">
   <div class="row g-4">
     <!-- Live preview -->
     <div class="col-12 col-xl-8">
@@ -63,6 +66,110 @@
         </div>
       </div>
     </div>
+
+    <!-- Maze play panel (shown while Maze is pinned or a game is running) -->
+    <div class="col-12" x-show="held === 'maze' || maze.active">
+      <div class="card">
+        <div class="card-header d-flex flex-wrap align-items-center gap-2">
+          <i class="bi bi-joystick"></i><span>Play Maze</span>
+          <span class="badge ms-auto" :class="maze.active ? 'bg-success' : 'bg-secondary'"
+                x-text="maze.active ? mazeModeName(maze.state.mode) : 'Not started'"></span>
+        </div>
+        <div class="card-body">
+          <!-- Setup -->
+          <div class="row g-2 align-items-end mb-3">
+            <div class="col-12 col-sm-4">
+              <label class="form-label small mb-1">Mode</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="maze.mode">
+                <option value="free">Free Play — reach the exit</option>
+                <option value="race">Race the Pi</option>
+                <option value="pacman">Pac-Man — eat every dot</option>
+                <option value="fog">Fog of War</option>
+              </select>
+            </div>
+            <div class="col-6 col-sm-3">
+              <label class="form-label small mb-1">Size</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="maze.size">
+                <option value="L">Large paths (easy)</option>
+                <option value="M">Medium</option>
+                <option value="S">Small paths (hard)</option>
+              </select>
+            </div>
+            <div class="col-6 col-sm-3" x-show="maze.mode === 'race' || maze.mode === 'pacman'">
+              <label class="form-label small mb-1">Difficulty</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="maze.difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+            <div class="col-12 col-sm-2">
+              <button class="btn btn-success w-100" @click="mazeStart()">
+                <i class="bi" :class="maze.active ? 'bi-arrow-clockwise' : 'bi-play-fill'"></i>
+                <span x-text="maze.active ? 'New' : 'Start'"></span>
+              </button>
+            </div>
+          </div>
+
+          <template x-if="maze.active">
+            <div>
+              <!-- Status -->
+              <div class="d-flex flex-wrap gap-3 small mb-2">
+                <span><i class="bi bi-stopwatch me-1"></i><strong x-text="mazeClock()"></strong></span>
+                <span><i class="bi bi-signpost-2 me-1"></i><strong x-text="maze.state.moves"></strong> moves</span>
+                <span x-show="maze.state.mode === 'pacman'"><i class="bi bi-heart-fill text-danger me-1"></i><strong x-text="maze.state.lives"></strong></span>
+                <span x-show="maze.state.mode === 'pacman'"><strong x-text="maze.state.score"></strong> pts · <span x-text="maze.state.dots_left"></span> dots left</span>
+                <span x-show="maze.state.hints" class="text-muted" x-text="maze.state.hints + ' hint' + (maze.state.hints === 1 ? '' : 's')"></span>
+              </div>
+              <div x-show="maze.state.result">
+                <div class="alert py-2 small mb-2"
+                     :class="maze.state.status === 'won' ? 'alert-success' : (maze.state.status === 'lost' ? 'alert-danger' : 'alert-secondary')">
+                  <strong x-text="maze.state.result"></strong>
+                  <span x-show="maze.state.rank" x-text="' — #' + maze.state.rank + ' best time!'"></span>
+                  <span x-show="maze.state.status === 'won' && maze.state.hints" class="text-muted"> (hints used, so it isn't saved as a best time)</span>
+                </div>
+              </div>
+
+              <div class="row g-3">
+                <!-- Board (drawn here, mirrored on the panel) -->
+                <div class="col-12 col-lg-8">
+                  <canvas x-ref="mazeCanvas" class="w-100 rounded border border-secondary" style="touch-action:none;background:#000"
+                          @touchstart="mazeTouchStart($event)" @touchend="mazeTouchEnd($event)"></canvas>
+                  <div class="form-text text-muted">Use the arrows, your keyboard's arrow keys / WASD, or swipe on the maze.</div>
+                </div>
+                <!-- Controls -->
+                <div class="col-12 col-lg-4">
+                  <div class="maze-pad mx-auto">
+                    <span></span>
+                    <button class="btn btn-outline-light" @pointerdown.prevent="mazeHold('up')" @pointerup="mazeRelease()" @pointerleave="mazeRelease()" aria-label="Up"><i class="bi bi-caret-up-fill"></i></button>
+                    <span></span>
+                    <button class="btn btn-outline-light" @pointerdown.prevent="mazeHold('left')" @pointerup="mazeRelease()" @pointerleave="mazeRelease()" aria-label="Left"><i class="bi bi-caret-left-fill"></i></button>
+                    <button class="btn btn-outline-warning" @click="mazeHint()" aria-label="Hint" title="Hint"><i class="bi bi-lightbulb"></i></button>
+                    <button class="btn btn-outline-light" @pointerdown.prevent="mazeHold('right')" @pointerup="mazeRelease()" @pointerleave="mazeRelease()" aria-label="Right"><i class="bi bi-caret-right-fill"></i></button>
+                    <span></span>
+                    <button class="btn btn-outline-light" @pointerdown.prevent="mazeHold('down')" @pointerup="mazeRelease()" @pointerleave="mazeRelease()" aria-label="Down"><i class="bi bi-caret-down-fill"></i></button>
+                    <span></span>
+                  </div>
+                  <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-outline-secondary btn-sm flex-fill" @click="mazeGiveUp()"
+                            :disabled="['won','lost','gaveup'].includes(maze.state.status)"><i class="bi bi-flag me-1"></i>Give up</button>
+                    <button class="btn btn-outline-danger btn-sm flex-fill" @click="mazeEnd()"><i class="bi bi-x-lg me-1"></i>End</button>
+                  </div>
+                  <div class="small mt-3" x-show="mazeBestList().length">
+                    <div class="text-muted mb-1">Best times — <span x-text="mazeModeName(maze.state.mode) + ', size ' + maze.state.size"></span></div>
+                    <template x-for="(b, i) in mazeBestList()" :key="i">
+                      <div><span class="text-muted" x-text="(i + 1) + '.'"></span> <strong x-text="b.secs.toFixed(1) + 's'"></strong>
+                        <span class="text-muted" x-text="'· ' + b.moves + ' moves · ' + b.date + (b.difficulty ? ' · ' + b.difficulty : '')"></span></div>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+          <p class="small text-muted mb-0" x-show="!maze.active && maze.ended">That game ended (no moves for a while, or it was stopped). Start a new one any time.</p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -87,6 +194,14 @@ function displayPage() {
         this.plugins = all.filter(p => p.id !== 'snow_report');   // hidden until fixed
       } catch (e) { this.plugins = []; }
       this.startSSE();
+      // Rejoin a maze game that's already running (another tab or phone started it)
+      const m = await fetch('/api/maze/state?full=1').then(r => r.json()).catch(() => ({}));
+      if (m.active) {
+        this._mazeApply(m);
+        this.maze.mode = m.mode; this.maze.size = m.size; this.maze.difficulty = m.difficulty;
+        this.maze.best = await fetch('/api/maze/best').then(r => r.json()).catch(() => ({}));
+        this.maze._poll = setInterval(() => this.mazePoll(), 150);
+      }
     },
 
     startSSE() {
@@ -113,6 +228,7 @@ function displayPage() {
     stop() {
       if (this._es) this._es.close();
       clearTimeout(this._retry);
+      clearInterval(this.maze._poll);
     },
 
     async forcePlugin(pid) {
@@ -123,7 +239,165 @@ function displayPage() {
     async returnToRotation() {
       await fetch('/api/display/return', {method: 'POST'});
       this.held = null;
+      this.maze.active = false;
+      clearInterval(this.maze._poll);
     },
+
+    // ---------------- Maze play ----------------
+    maze: { active: false, ended: false, mode: 'free', size: 'M', difficulty: 'medium',
+            state: {}, layout: null, theme: {}, best: {}, _poll: null, _queue: Promise.resolve(),
+            _hold: null, _touch: null, _clock: 0 },
+
+    mazeModeName(m) {
+      return { free: 'Free Play', race: 'Race the Pi', pacman: 'Pac-Man', fog: 'Fog of War' }[m] || 'Maze';
+    },
+
+    mazeClock() {
+      const s = this.maze.state.secs || 0;
+      return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0') + '.' + Math.floor((s * 10) % 10);
+    },
+
+    mazeBestList() {
+      const st = this.maze.state;
+      return (this.maze.best[st.mode + ':' + st.size] || []);
+    },
+
+    _mazeApply(d) {
+      if (!d || d.active === false) {
+        if (this.maze.active) this.maze.ended = true;
+        this.maze.active = false;
+        clearInterval(this.maze._poll);
+        return;
+      }
+      if (d.unchanged) { this.maze.state.secs = d.secs; return; }
+      if (d.maze) { this.maze.layout = d.maze; this.maze.theme = d.theme || this.maze.theme; }
+      const finishedNow = ['won', 'lost', 'gaveup'].includes(d.status) && !['won', 'lost', 'gaveup'].includes(this.maze.state.status);
+      this.maze.state = d;
+      this.maze.active = true;
+      this.$nextTick(() => this.mazeDraw());
+      if (finishedNow) fetch('/api/maze/best').then(r => r.json()).then(b => { this.maze.best = b; });
+    },
+
+    async mazeStart() {
+      const d = await fetch('/api/maze/start', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mode: this.maze.mode, size: this.maze.size, difficulty: this.maze.difficulty }),
+      }).then(r => r.json());
+      if (!d.ok) { alert(d.message || 'Could not start the maze'); return; }
+      this.maze.ended = false;
+      this.held = 'maze';
+      this.maze.state = {};
+      this._mazeApply(d);
+      this.maze.best = await fetch('/api/maze/best').then(r => r.json()).catch(() => ({}));
+      clearInterval(this.maze._poll);
+      this.maze._poll = setInterval(() => this.mazePoll(), 150);
+    },
+
+    async mazePoll() {
+      if (!this.maze.active) return;
+      try {
+        const d = await fetch(`/api/maze/state?v=${this.maze.state.version ?? ''}`).then(r => r.json());
+        this._mazeApply(d);
+      } catch (e) { /* transient */ }
+    },
+
+    mazeMove(dir) {
+      // Queue moves so fast taps arrive in order
+      this.maze._queue = this.maze._queue.then(() =>
+        fetch('/api/maze/move', { method: 'POST', headers: {'Content-Type': 'application/json'},
+                                  body: JSON.stringify({ dir }) })
+          .then(r => r.json()).then(d => this._mazeApply(d)).catch(() => {}));
+    },
+
+    mazeHold(dir) {
+      this.mazeMove(dir);
+      clearInterval(this.maze._hold);
+      this.maze._hold = setInterval(() => this.mazeMove(dir), 170);
+    },
+
+    mazeRelease() { clearInterval(this.maze._hold); this.maze._hold = null; },
+
+    async mazeHint() {
+      const d = await fetch('/api/maze/hint', { method: 'POST' }).then(r => r.json());
+      this._mazeApply(d);
+    },
+
+    async mazeGiveUp() {
+      const d = await fetch('/api/maze/giveup', { method: 'POST' }).then(r => r.json());
+      this._mazeApply(d);
+    },
+
+    async mazeEnd() {
+      await fetch('/api/maze/end', { method: 'POST' });
+      clearInterval(this.maze._poll);
+      this.maze.active = false;
+      this.maze.ended = false;
+      this.held = null;
+    },
+
+    mazeKey(e) {
+      if (!this.maze.active || ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+      const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+                    w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right' }[e.key];
+      if (dir) { e.preventDefault(); this.mazeMove(dir); }
+    },
+
+    mazeTouchStart(e) { const t = e.changedTouches[0]; this.maze._touch = [t.clientX, t.clientY]; },
+
+    mazeTouchEnd(e) {
+      if (!this.maze._touch) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - this.maze._touch[0], dy = t.clientY - this.maze._touch[1];
+      this.maze._touch = null;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+      e.preventDefault();
+      this.mazeMove(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    },
+
+    mazeDraw() {
+      const cv = this.$refs.mazeCanvas, L = this.maze.layout, st = this.maze.state, th = this.maze.theme;
+      if (!cv || !L) return;
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = cv.clientWidth || 640;
+      const c = Math.max(6, Math.floor(cssW / L.cols));          // cell pitch in CSS px
+      const w = Math.max(2, Math.round(c / 5));                    // wall thickness
+      const W = L.cols * c + w, H = L.rows * c + w;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      cv.style.height = H + 'px';
+      const g = cv.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.fillStyle = th.wall || '#3030d0'; g.fillRect(0, 0, W, H);
+      const N = 1, E = 2, S = 4;
+      const cell = (x, y) => [x * c + w, y * c + w, c - w];
+      g.fillStyle = '#000';
+      for (let y = 0; y < L.rows; y++) for (let x = 0; x < L.cols; x++) {
+        const b = L.cells[y * L.cols + x], [px, py, s] = cell(x, y);
+        g.fillRect(px, py, s, s);
+        if (b & E) g.fillRect(px + s, py, w, s);
+        if (b & S) g.fillRect(px, py + s, s, w);
+      }
+      const box = (p, colour, inset = 0) => { const [px, py, s] = cell(p[0], p[1]); g.fillStyle = colour; g.fillRect(px + inset, py + inset, s - 2 * inset, s - 2 * inset); };
+      const disc = (p, colour, r = 0.36) => { const [px, py, s] = cell(p[0], p[1]); g.fillStyle = colour; g.beginPath(); g.arc(px + s / 2, py + s / 2, s * r, 0, 7); g.fill(); };
+      (st.trail || []).forEach(p => box(p, 'rgba(255,255,255,0.13)'));
+      (st.dots || []).forEach(p => disc(p, th.dot || '#ffbe9f', 0.13));
+      if (st.mode !== 'pacman') box(L.exit, th.exit || '#ff3c3c', 1);
+      (st.solution || []).forEach(p => box(p, 'rgba(255,255,255,0.75)', Math.floor(c / 4)));
+      if (st.racer) disc(st.racer, th.racer || '#00e6ff', 0.32);
+      const ghostCols = ['#ff0000', '#ff8cdc', '#00f0f0', '#ffaa3c'];
+      (st.ghosts || []).forEach((p, i) => disc(p, ghostCols[i % 4], 0.38));
+      if (st.hint && Math.floor(Date.now() / 250) % 2 === 0) box(st.hint, 'rgba(255,255,255,0.85)', Math.floor(c / 5));
+      if (st.player) disc(st.player, st.hurt ? '#ff0000' : (th.player || '#ffe600'), 0.4);
+      if (st.visible) {                                         // fog of war
+        const vis = new Set(st.visible.map(p => p.join(','))), seen = new Set((st.seen || []).map(p => p.join(',')));
+        for (let y = 0; y < L.rows; y++) for (let x = 0; x < L.cols; x++) {
+          const k = x + ',' + y;
+          if (vis.has(k)) continue;
+          g.fillStyle = seen.has(k) ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.95)';
+          g.fillRect(x * c, y * c, c + w, c + w);
+        }
+      }
+    },
+
   };
 }
 </script>

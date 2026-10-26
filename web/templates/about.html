@@ -953,5 +953,50 @@
     </div>
   </div>
 
+  <!-- ── Maze ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secMaze">
+      <i class="bi bi-joystick section-icon"></i>
+      <span class="fw-bold fs-5">Maze</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secMaze" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          The Pi builds a random maze and works its way from the <span style="color:rgb(0,255,90)"><strong>green start</strong></span>
+          (top-left) to the <span style="color:rgb(255,40,40)"><strong>flashing red exit</strong></span>, which is always the spot farthest from the start.
+          If its turn in the rotation ends first, it picks up where it left off next time — a new maze only appears once it's solved.
+          You can also play it yourself from the <a href="/display">Display</a> tab.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-cpu me-2"></i>How the Pi Solves It</div>
+        <div class="table-responsive">
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Solver</th><th>What you'll see</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Explorer</strong></td><td class="text-muted small">Tries a route until it hits a dead end, then backs up to the last fork and tries again. <strong>Each new attempt is a new colour</strong>, and failed branches stay on screen, dimmed — count the colours to see how many times it failed.</td></tr>
+            <tr><td><strong>Wall follower</strong></td><td class="text-muted small">Keeps its right hand on the wall. Its trail changes colour at every dead end where it has to turn around.</td></tr>
+            <tr><td><strong>Flood</strong></td><td class="text-muted small">Spreads out from the start like water, in a rainbow of distance colours, then traces the shortest route back in white.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="text-muted small mb-3">When it reaches the exit, a rainbow runs along the winning route, then a card shows how many <strong>dead ends</strong> it hit and how many <strong>steps</strong> it took.
+          Maze size, style (winding, branchy, or with loops), solver, speed and colours (Neon, Pac-Man, Retro or random) are set on the Config page.</p>
+
+        <div class="subsection-title"><i class="bi bi-controller me-2"></i>Playing</div>
+        <ul class="text-muted small mb-2 ps-3">
+          <li>Open <a href="/display">Display</a>, tap <strong>Maze</strong>, pick a mode and press <strong>Start</strong>. Steer with the on-screen arrows (hold to keep moving), your keyboard's arrow keys or WASD, or by swiping on the maze. The game shows on your screen and on the panel.</li>
+          <li><strong>Free Play</strong> — reach the exit as fast as you can.</li>
+          <li><strong>Race the Pi</strong> — the Pi (blue) solves the same maze at the same time. Beat it to the exit. Difficulty sets how fast it thinks.</li>
+          <li><strong>Pac-Man</strong> — eat every dot while ghosts roam (they chase you when they get close). Three lives; getting caught sends you back to the start.</li>
+          <li><strong>Fog of War</strong> — you can only see the area around you; places you've been stay faintly visible.</li>
+          <li><strong>Hint</strong> lights up the next square to go to. <strong>Give up</strong> lets the Pi finish from where you are.</li>
+          <li><strong>Best times</strong> (top 5 for each mode and size) are saved on the Pi. Games where you used a hint don't count.</li>
+          <li>A game with no moves for a few minutes ends on its own and the normal rotation resumes. <strong>End</strong> or <strong>Return to Rotation</strong> stops it right away.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /accordion -->
 {% endblock %}

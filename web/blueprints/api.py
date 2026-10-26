@@ -237,6 +237,9 @@ def return_to_rotation():
     if pm is None:
         return jsonify({"error": "plugin manager not available"}), 503
     pm.release_hold()
+    maze = pm._plugins.get("maze")
+    if maze is not None and getattr(maze, "game", None) is not None:
+        maze.end_game(release=False)            # a running maze game stops with the pin
     return jsonify({"ok": True})
 
 
@@ -931,6 +934,100 @@ def calendar_caldav_calendars():
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)})
     return jsonify({"ok": True, "calendars": cals})
+
+
+# ------------------------------------------------------------------
+# Maze — play sessions from the Display page
+# ------------------------------------------------------------------
+
+def _maze_plugin():
+    """(pm, maze plugin). A game whose pin was released elsewhere (Return to
+    Rotation on the Dashboard/Display page) is ended here, so nobody rejoins it."""
+    pm = _pm()
+    plugin = pm._plugins.get("maze") if pm else None
+    if plugin is not None and plugin.game is not None and pm._held != "maze":
+        plugin.end_game(release=False)
+    return pm, plugin
+
+
+def _maze_payload(plugin, include_maze=False):
+    game = plugin.game
+    if game is None:
+        return {"active": False}
+    out = game.to_json(include_maze=include_maze)
+    out["active"] = True
+    if include_maze:
+        t = plugin.game_theme()
+        out["theme"] = {k: "#%02x%02x%02x" % tuple(v) for k, v in t.items() if isinstance(v, tuple)}
+    return out
+
+
+@api_bp.post("/maze/start")
+def maze_start():
+    pm, plugin = _maze_plugin()
+    if plugin is None:
+        return jsonify({"ok": False, "message": "Maze module isn't loaded"}), 503
+    data = request.get_json(force=True) or {}
+    plugin.start_game(size=data.get("size"), mode=data.get("mode", "free"),
+                      difficulty=data.get("difficulty", "medium"),
+                      on_end=pm.release_hold, still_pinned=lambda: pm._held == "maze")
+    pm.force_plugin("maze", pin=True)
+    return jsonify({"ok": True, **_maze_payload(plugin, include_maze=True)})
+
+
+@api_bp.post("/maze/move")
+def maze_move():
+    _pm_, plugin = _maze_plugin()
+    if plugin is None or plugin.game is None:
+        return jsonify({"active": False})
+    plugin.touch()
+    moved = plugin.game.move((request.get_json(force=True) or {}).get("dir", ""))
+    return jsonify({"moved": moved, **_maze_payload(plugin)})
+
+
+@api_bp.get("/maze/state")
+def maze_state():
+    _pm_, plugin = _maze_plugin()
+    if plugin is None or plugin.game is None:
+        return jsonify({"active": False})
+    v = request.args.get("v", type=int)
+    if v is not None and v == plugin.game.version:      # nothing moved — just the timer
+        return jsonify({"active": True, "unchanged": True, "version": v,
+                        "secs": round(plugin.game.elapsed(), 1)})
+    return jsonify(_maze_payload(plugin, include_maze=request.args.get("full") == "1"))
+
+
+@api_bp.post("/maze/hint")
+def maze_hint():
+    _pm_, plugin = _maze_plugin()
+    if plugin is None or plugin.game is None:
+        return jsonify({"active": False})
+    plugin.touch()
+    return jsonify({"dir": plugin.game.hint(), **_maze_payload(plugin)})
+
+
+@api_bp.post("/maze/giveup")
+def maze_giveup():
+    _pm_, plugin = _maze_plugin()
+    if plugin is None or plugin.game is None:
+        return jsonify({"active": False})
+    plugin.touch()
+    plugin.game.give_up()
+    return jsonify(_maze_payload(plugin))
+
+
+@api_bp.post("/maze/end")
+def maze_end():
+    _pm_, plugin = _maze_plugin()
+    if plugin is not None:
+        plugin.end_game(release=True)
+    return jsonify({"active": False})
+
+
+@api_bp.get("/maze/best")
+def maze_best():
+    from plugins.maze.game import load_best
+    return jsonify(load_best())
 
 
 # ------------------------------------------------------------------

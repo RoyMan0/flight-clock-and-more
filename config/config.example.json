@@ -30,7 +30,7 @@
       "br_y": 0.0
     }
   },
-  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing", "system_stats", "ai_usage", "calendar"],
+  "plugin_order": ["clock_weather", "flight_tracker", "specific_flight_tracker", "stock_ticker", "snow_report", "sports", "world_daylight", "ap_news", "event_countdown", "transit", "world_clock", "now_playing", "system_stats", "ai_usage", "calendar", "maze"],
   "plugins": {
     "clock_weather": {
       "enabled": false,
@@ -218,6 +218,17 @@
       "reminders": false,
       "reminder_minutes": 10,
       "sources": []
+    },
+    "maze": {
+      "enabled": false,
+      "display_duration": 30,
+      "size": "M",
+      "style": "random",
+      "solver": "rotate",
+      "solve_speed": 2,
+      "theme": "random",
+      "celebrate": true,
+      "play_idle_minutes": 3
     }
   },
   "web": {
