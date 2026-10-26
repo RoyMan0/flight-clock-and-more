@@ -4,8 +4,9 @@ Pillow>=10.0
 folium>=0.17
 urllib3>=2.0
 qrcode>=7.4
-# FR24 position/route fallback for the flight tracker (utilities/fr24_lookup.py)
-fr24>=0.3.1,<0.5
+# FR24 position/route fallback for the flight tracker (utilities/fr24_lookup.py).
+# fr24 0.4+ no longer bundles an HTTP client — the [httpx] extra is required.
+fr24[httpx]>=0.3.1,<0.5
 h2
 hpack
 # Transit plugin (RTD, MTA). 3.x requires protobuf>=7, which conflicts with

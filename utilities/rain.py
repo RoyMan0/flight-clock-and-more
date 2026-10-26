@@ -38,6 +38,13 @@ _DAILY_LIMIT = 1000
 _cached_data = None
 _cached_ts = 0.0
 
+# Failure backoff: without it, every rain/wind check (each minute) retried a failing
+# request. A rejected key (401/403) waits 6 h unless the key changes; other errors 5 min.
+_retry_after = 0.0
+_bad_key = None
+_BAD_KEY_BACKOFF = 6 * 3600
+_ERROR_BACKOFF = 300
+
 
 def _get_owm_key():
     try:
@@ -87,6 +94,7 @@ def get_owm_metrics():
 
 def _fetch(lat, lon, api_key):
     """Fetch current + minutely data from OWM One Call 3.0."""
+    global _retry_after, _bad_key
     try:
         r = requests.get(
             _BASE_URL,
@@ -100,6 +108,15 @@ def _fetch(lat, lon, api_key):
         )
         if r.status_code == 429:
             logger.warning("[Rain] Rate limited (429) – using cache")
+            _retry_after = time.time() + _ERROR_BACKOFF
+            return None
+        if r.status_code in (401, 403):
+            if _bad_key != api_key:
+                logger.warning(f"[Rain] OpenWeatherMap rejected the API key ({r.status_code}). The key must be "
+                               "subscribed to One Call API 3.0 (openweathermap.org → My Subscriptions). "
+                               "Pausing rain/wind alerts for 6 h or until the key is changed.")
+            _bad_key = api_key
+            _retry_after = time.time() + _BAD_KEY_BACKOFF
             return None
         r.raise_for_status()
         data = r.json()
@@ -116,10 +133,12 @@ def _fetch(lat, lon, api_key):
         return data
 
     except requests.exceptions.HTTPError as e:
-        logger.error(f"[Rain] HTTP error: {e}")
+        _retry_after = time.time() + _ERROR_BACKOFF
+        logger.error(f"[Rain] HTTP error: {str(e).replace(api_key, '***')}")
         return None
     except Exception as e:
-        logger.error(f"[Rain] Fetch failed: {e}")
+        _retry_after = time.time() + _ERROR_BACKOFF
+        logger.error(f"[Rain] Fetch failed: {str(e).replace(api_key, '***')}")
         return None
 
 
@@ -161,6 +180,8 @@ def _refresh():
             logger.info("[Rain] Loaded from disk cache")
 
     if (now - _cached_ts) >= _POLL_INTERVAL:
+        if now < _retry_after and not (_bad_key and api_key != _bad_key):
+            return _cached_data                    # backing off after a failure
         data = _fetch(location[0], location[1], api_key)
         if data:
             _cached_data = data
