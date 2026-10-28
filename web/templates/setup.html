@@ -144,7 +144,9 @@
     border-bottom: 1px solid var(--border);
   }
   .plugin-row:last-child { border-bottom: none; }
-  .plugin-row .name { flex: 1; font-size: 14px; }
+  .plugin-row .name { flex: 1; font-size: 14px; min-width: 0; }
+  .plugin-row .name small { display: block; font-size: 11.5px; opacity: .6; margin-top: 2px; }
+  .key-tip { font-size: 12px; opacity: .7; margin-top: 4px; line-height: 1.35; }
   .plugin-row .dur  { width: 54px; }
   .plugin-row .dur input {
     width: 100%; background: var(--bg); border: 1px solid var(--border);
@@ -371,6 +373,7 @@
                placeholder="Paste key or leave blank"
                value="{{ (secrets.get('airlabs_api_keys') or [''])[0] }}"
                autocomplete="off">
+        <div class="key-tip">Free: 1,000 lookups a month.</div>
       </div>
       <div class="field">
         <label>FlightAware — Flight Data (alternative)</label>
@@ -378,6 +381,7 @@
                placeholder="Paste key or leave blank"
                value="{{ (secrets.get('flightaware_api_keys') or [''])[0] }}"
                autocomplete="off">
+        <div class="key-tip">Free: about $5 of lookups a month — $10 if you share ADS-B data with FlightAware (e.g. PiAware).</div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>OpenWeatherMap — Precipitation &amp; Wind Alerts</label>
@@ -386,6 +390,15 @@
                value="{{ secrets.get('owm_api_key','') }}"
                autocomplete="off">
       </div>
+    </div>
+
+    <div class="note">
+      <b>Running out of free flight lookups?</b> The Pi can hold several AirLabs and FlightAware keys and
+      switches to the next one when a key runs low — add extra keys later under <b>Config → API &amp; Metrics</b>.
+      Some people get more keys by signing up again with another email address, but <b>AirLabs' terms allow one
+      account per person</b> and they may block keys that break this, so that's at your own risk.
+      Free sources (FlightStats, adsbdb) are always tried first, and a smaller search radius or higher minimum
+      altitude also means fewer lookups.
     </div>
 
     <div class="note">
@@ -407,7 +420,7 @@
     <div class="card" id="plugin-list">
       {% for p in plugins %}
       <div class="plugin-row">
-        <div class="name">{{ p.label }}</div>
+        <div class="name">{{ p.label }}<small>{{ p.note }}</small></div>
         <div class="dur">
           <input type="number" min="5" max="120"
                  id="dur-{{ p.id }}" value="{{ p.duration }}"
@@ -424,8 +437,9 @@
     </div>
 
     <div class="note">
-      Clock &amp; Weather is always on. Plugins without their required API keys
-      will be skipped automatically.
+      Clock &amp; Weather is always on. Anything that needs more setup (stops, cities,
+      music sources, calendar links…) can be switched on now and finished later on the
+      <b>Config</b> page — until then it's simply skipped in the rotation.
     </div>
 
     <div class="btn-row">
@@ -629,7 +643,7 @@ function buildReview() {
     if (t.checked) {
       const pid = t.id.replace('tog-','');
       const dur = document.getElementById('dur-' + pid)?.value || '30';
-      const label = t.closest('.plugin-row').querySelector('.name').textContent;
+      const label = t.closest('.plugin-row').querySelector('.name').firstChild.textContent.trim();
       enabledPlugins.push(label + ' (' + dur + 's)');
     }
   });
@@ -652,8 +666,7 @@ async function saveAndFinish() {
   btn.textContent = 'Saving…'; btn.disabled = true;
 
   // Gather plugins
-  const pluginIds = ['clock_weather','flight_tracker','specific_flight_tracker',
-                     'stock_ticker','snow_report','sports','world_daylight'];
+  const pluginIds = {{ plugins | map(attribute='id') | list | tojson }};
   const plugins = pluginIds.map(pid => ({
     id:      pid,
     enabled: document.getElementById('tog-' + pid)?.checked ?? false,

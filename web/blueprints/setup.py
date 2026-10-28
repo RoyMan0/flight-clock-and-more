@@ -12,6 +12,29 @@ import sys
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request
 
 
+
+# Modules offered in the first-boot wizard: (id, label, what it needs).
+# Ones that need more setup can be switched on now — they're skipped in the
+# rotation until they're configured on the Config page. Keep in step with
+# window.PLUGIN_NAMES in base.html when adding a module.
+KNOWN_PLUGINS = [
+    ("clock_weather",           "Clock & Weather",         "Always on"),
+    ("flight_tracker",          "Overhead Flights",        "Planes passing overhead (interrupts the rotation)"),
+    ("specific_flight_tracker", "Specific Flight Tracker", "Follow flights you name on the Config page (AirLabs key)"),
+    ("stock_ticker",            "Stock Ticker",            "Add symbols on the Config page"),
+    ("sports",                  "Sports Scores",           "Pick leagues/teams on the Config page"),
+    ("world_daylight",          "World Daylight Map",      "Ready to go"),
+    ("ap_news",                 "Breaking News",           "Ready to go"),
+    ("event_countdown",         "Event Countdown",         "Set the event on the Config page"),
+    ("transit",                 "Transit Arrivals/Departures", "Choose stops on the Config page"),
+    ("world_clock",             "World Clock",             "Pick cities on the Config page"),
+    ("now_playing",             "Now Playing",             "Connect Spotify, your Mac or Last.fm on the Config page"),
+    ("system_stats",            "System Stats",            "Shows this Pi right away; add more machines later"),
+    ("ai_usage",                "AI Usage",                "Sign in on the Config page"),
+    ("calendar",                "Calendar",                "Add a calendar link on the Config page"),
+    ("maze",                    "Maze",                    "Ready to go — also playable from the Display tab"),
+]
+
 def _get_timezones() -> list[str]:
     """Return sorted list of IANA timezone names."""
     try:
@@ -113,21 +136,14 @@ def setup_page():
     secrets = cfg.get_all_secrets_masked() if hasattr(cfg, "get_all_secrets_masked") else {}
 
     # Build plugin list for the wizard
-    known_plugins = [
-        ("clock_weather",          "Clock & Weather"),
-        ("flight_tracker",         "Flight Tracker (overhead)"),
-        ("specific_flight_tracker","Specific Flight Tracker"),
-        ("stock_ticker",           "Stock Ticker"),
-        ("snow_report",            "Snow Report"),
-        ("sports",                 "Sports Scores"),
-        ("world_daylight",         "World Daylight Map"),
-    ]
+    # Snow Report is left out — it's hidden everywhere until it's fixed.
     plugin_list = []
-    for pid, label in known_plugins:
+    for pid, label, note in KNOWN_PLUGINS:
         pcfg = plugins_cfg.get(pid, {})
         plugin_list.append({
             "id":       pid,
             "label":    label,
+            "note":     note,
             "enabled":  pcfg.get("enabled", False),
             "duration": pcfg.get("display_duration", 30),
         })
@@ -299,23 +315,27 @@ def setup_save():
     # ---- secrets / API keys ----
     secrets_data = data.get("secrets", {})
     if secrets_data:
-        # Convert single-string api key fields to list format expected by config
         airlabs_key = secrets_data.get("airlabs_key", "").strip()
         fa_key = secrets_data.get("flightaware_key", "").strip()
         owm_key = secrets_data.get("owm_api_key", "").strip()
         new_secrets = {
             "tomorrow_api_key": secrets_data.get("tomorrow_api_key", "").strip(),
         }
-        if airlabs_key:
-            new_secrets["airlabs_api_keys"] = [airlabs_key]
-        if fa_key:
-            new_secrets["flightaware_api_keys"] = [fa_key]
+        # AirLabs/FlightAware hold several keys. The wizard shows only the first
+        # (masked as ********); a new key is ADDED to the list — re-running setup
+        # used to replace the list and delete any extra keys.
+        for field, key in (("airlabs_api_keys", airlabs_key), ("flightaware_api_keys", fa_key)):
+            if key and key != "********":
+                existing = list(cfg.get_secret(field, []) or [])
+                if key not in existing:
+                    new_secrets[field] = existing + [key]
         if owm_key:
             new_secrets["owm_api_key"] = owm_key
         cfg.save_secrets(new_secrets)
 
     # ---- plugins ----
     plugins_data = data.get("plugins", [])
+    old_order = list(cfg.get("plugin_order") or [])
     new_order = []
     for p in plugins_data:
         pid = p.get("id", "")
@@ -331,10 +351,18 @@ def setup_save():
         if existing["enabled"]:
             new_order.append(pid)
 
+    # Keep the existing order for modules that stay on, then add newly enabled
+    # ones. Modules the wizard doesn't list (e.g. Snow Report) keep their place —
+    # rebuilding the order from the wizard's list used to drop them.
+    wizard_ids = {p.get("id") for p in plugins_data}
+    enabled = set(new_order)
+    merged = [pid for pid in old_order if pid in enabled or pid not in wizard_ids]
+    merged += [pid for pid in new_order if pid not in merged]
     # Always ensure clock_weather is first and in the order
-    if "clock_weather" not in new_order:
-        new_order.insert(0, "clock_weather")
-    cfg.save_config_section("plugin_order", value=new_order)
+    if "clock_weather" in merged:
+        merged.remove("clock_weather")
+    merged.insert(0, "clock_weather")
+    cfg.save_config_section("plugin_order", value=merged)
 
     return jsonify({"ok": True})
 

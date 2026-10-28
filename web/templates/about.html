@@ -464,6 +464,27 @@
         <p class="text-muted small">Optional full-screen radar view showing all tracked aircraft overhead plotted on a map within the configured search radius.</p>
         <p class="text-muted small mb-0"><strong>Data sources:</strong> adsb.lol (primary), FlightRadar24, OpenSky Network (fallback). Route and schedule data from adsbdb, AirLabs, FlightStats, and FlightAware.</p>
 
+        <div class="subsection-title"><i class="bi bi-key me-2"></i>Flight API Keys &amp; Free Limits</div>
+        <p class="text-muted small mb-2">
+          Plane positions are free. Keys are only used to look up a flight's route (where it's coming from and going to),
+          and only after the free sources (FlightStats, adsbdb) come up empty. Results are saved, so each flight is looked up once.
+        </p>
+        <div class="table-responsive">
+        <table class="table about-table table-sm table-striped">
+          <thead><tr><th>Service</th><th>Free allowance</th></tr></thead>
+          <tbody>
+            <tr><td><strong>AirLabs</strong></td><td class="text-muted small">1,000 lookups a month per key.</td></tr>
+            <tr><td><strong>FlightAware AeroAPI</strong></td><td class="text-muted small">About $5 of lookups a month — <strong>$10 if you share ADS-B data with FlightAware</strong> (e.g. a PiAware receiver). The Pi stops before your budget runs out.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="text-muted small mb-2"><strong>Running out?</strong></p>
+        <ul class="text-muted small mb-0 ps-3">
+          <li>The Pi can hold <strong>several keys for each service</strong> (Config → API &amp; Metrics → Add Key). It uses the key whose monthly allowance resets soonest first, and moves to the next when one runs low; usage for each is shown there.</li>
+          <li>Some people get extra free keys by signing up again with another email address. Be aware that <strong>AirLabs' terms allow one account per person</strong> and they may block keys that break this — that's at your own risk.</li>
+          <li>Other ways to use fewer lookups: a smaller search radius or a higher minimum altitude on the Config page (fewer planes to look up), FlightAware's ADS-B feeder bonus, or a paid plan.</li>
+        </ul>
+
       </div>
     </div>
   </div>
