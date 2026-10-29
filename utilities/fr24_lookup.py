@@ -47,6 +47,11 @@ except ImportError:
 # Bounding-box query cache — FR24 polling guideline is 90 seconds
 _AREA_CACHE: dict = {}
 _AREA_POLL_INTERVAL = 90  # seconds
+# On a failed query the last result is reused, but only while it's this fresh:
+# older positions don't say what's overhead now. Without this cap, an internet
+# outage left the last plane on screen indefinitely (the flight tracker's live
+# priority never ended).
+_AREA_STALE_MAX = 180     # seconds
 
 
 def is_available() -> bool:
@@ -148,8 +153,9 @@ def get_flights_in_area(zone: dict) -> list[dict]:
 
     except Exception as e:
         log.warning(f"[fr24_lookup] area query failed: {e}")
-        # Return stale cache if available, otherwise empty
-        return cached["flights"] if cached else []
+        if cached and (now - cached["ts"]) < _AREA_STALE_MAX:
+            return cached["flights"]
+        return []
 
 
 def get_flight_position(callsign: str) -> dict | None:

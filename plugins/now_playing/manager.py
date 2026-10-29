@@ -34,6 +34,9 @@ log = logging.getLogger(__name__)
 SOURCES = ("spotify", "mac", "lastfm")
 SOURCE_NAMES = {"spotify": "Spotify", "mac": "Mac Music app", "lastfm": "Last.fm"}
 STALE_SECS = 30                 # forget a track if updates stop arriving
+SOURCE_RETRY_SECS = 60          # skip a source this long after it errors (e.g. Spotify
+                                # while the internet is down) so the next one is reached fast
+_source_skip_until: dict = {}   # source → time.monotonic() it may be tried again
 DEFAULT_SCROLL_SPEED = 1.0
 
 _art_cache: "OrderedDict[str, object]" = OrderedDict()   # art_key → 21×21 image (or None)
@@ -100,10 +103,15 @@ def first_playing(config: dict, statuses: list = None):
     If `statuses` is given, a status line per checked source is appended to it."""
     for source in enabled_sources(config):
         name = SOURCE_NAMES[source]
+        # The config page's Test (statuses given) always tries every source
+        if statuses is None and time.monotonic() < _source_skip_until.get(source, 0):
+            continue
         try:
             track = fetch_source(config, source)
+            _source_skip_until.pop(source, None)
         except Exception as e:
             log.debug(f"[now_playing] {source}: {e}")
+            _source_skip_until[source] = time.monotonic() + SOURCE_RETRY_SECS
             if statuses is not None:
                 statuses.append({"source": source, "name": name, "ok": False, "text": str(e)})
             continue

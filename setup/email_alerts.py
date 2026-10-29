@@ -50,7 +50,7 @@ def _send(subject: str, body: str, attachment_path: Optional[str] = None):
     msg["To"] = receiver
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as smtp:
             smtp.starttls()
             smtp.login(sender, password)
             smtp.send_message(msg)

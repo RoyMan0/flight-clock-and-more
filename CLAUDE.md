@@ -55,7 +55,9 @@ The main loop runs at 10 fps. Every frame, `_dispatch()` is called:
    - `has_live_content()` runs every frame for plugins with priority on, so keep it cheap (Calendar caches its check for 1 s).
 4. **draw() contract** — `draw()` must return `True` if content was drawn, `False` if nothing to show; the manager only calls `display.swap()` when `draw()` returns True
 
-`_update_loop()` runs in a background thread, calling each plugin's `update()` at its configured `update_interval`. During clock-only mode, only `clock_weather` gets updated.
+`_update_loop()` starts each plugin's `update()` at its configured `update_interval` on **its own thread** (`_run_update`, at most one at a time per plugin; the interval counts from when the last update finished). Before, they ran one after another on one shared thread, so offline (every request hanging until its timeout) a single pass took 2–3 minutes and starved fast plugins (System Stats, Now Playing).
+
+**Never do network I/O on the display path.** `draw()`, `reset()`, `has_content()`, `has_live_content()`, and scene keyframes run on the main loop at 10 fps. With the internet down a request can hang for its timeout *plus* a DNS lookup that requests' timeout doesn't cover; the old clock/weather keyframes froze the panel for ~2 minutes per frame. Read caches there, and refresh them with `utilities/background.run_once(name, fn)` (a single-flight daemon thread). The weather getters (`get_temperature_cached`/`get_forecast_cached`), the clock alerts build, and the ISS pass refresh all work this way. During clock-only mode, only `clock_weather` gets updated.
 
 ### BasePlugin Interface (`plugins/base_plugin.py`)
 

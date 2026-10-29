@@ -15,7 +15,8 @@ Dispatch order (checked every frame):
 Plugins shown as a priority (takeover or interleave) get
 on_priority_view(True) before reset(), so they can show a priority-only view.
 
-Background thread calls update() on each plugin at its configured interval.
+A background loop starts each plugin's update() at its configured interval, on its
+own thread (one at a time per plugin), so a slow plugin never delays the others.
 """
 
 import sys
@@ -49,6 +50,7 @@ class PluginManager:
 
         # Background update thread
         self._update_last: dict = {}      # plugin_id → last update timestamp
+        self._updating: set = set()       # plugin_ids whose update() is running now
         self._stop_event = threading.Event()
         self._update_thread = threading.Thread(
             target=self._update_loop, daemon=True, name="plugin-updater"
@@ -334,13 +336,24 @@ class PluginManager:
                 if clock_only and pid != "clock_weather" and not held:
                     continue  # suppress all API calls during clock-only period
                 last = self._update_last.get(pid, 0)
-                if now - last >= plugin.update_interval:
-                    try:
-                        plugin.update()
-                    except Exception as e:
-                        log.error(f"[plugins] Update error ({pid}): {e}")
+                if now - last >= plugin.update_interval and pid not in self._updating:
+                    # Each plugin refreshes on its own thread (at most one at a time),
+                    # so a slow one — every request hanging while the internet is
+                    # down — can't hold up the others.
+                    self._updating.add(pid)
                     self._update_last[pid] = now
+                    threading.Thread(target=self._run_update, args=(pid, plugin),
+                                     daemon=True, name=f"update-{pid}").start()
             time.sleep(1)
+
+    def _run_update(self, pid: str, plugin):
+        try:
+            plugin.update()
+        except Exception as e:
+            log.error(f"[plugins] Update error ({pid}): {e}")
+        finally:
+            self._update_last[pid] = time.monotonic()    # interval counts from when it finished
+            self._updating.discard(pid)
 
     # ------------------------------------------------------------------
     # On-demand control (web dashboard)

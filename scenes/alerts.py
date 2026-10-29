@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from utilities.animator import Animator
 from setup import colours, fonts, frames
 from rgbmatrix import graphics
+from utilities.background import run_once
 
 logger = logging.getLogger(__name__)
 
@@ -136,22 +137,33 @@ class AlertsScene(object):
         config_manager = _get_config()
         now = time.time()
 
-        # Refresh alert list every 60 seconds
+        # Rebuild the alert list every 60 seconds on a background thread: the
+        # sources (NWS, FAA, OpenWeatherMap, ISS) are network calls, and this
+        # keyframe runs on the display loop, which must never wait on them.
         if now - self._alert_last_fetch >= 60:
+            self._alert_last_fetch = now
+            plugin_cfg = config_manager.get_plugin_config("clock_weather")
+
+            def _build(cfg=plugin_cfg):
+                try:
+                    self._alert_result = self._build_alert_items(cfg)
+                except Exception as e:
+                    logger.error(f"[Alerts] Build failed: {e}")
+                    self._alert_result = []
+
+            run_once("clock-alerts", _build)
+
+        # Apply a finished build
+        result = getattr(self, "_alert_result", None)
+        if result is not None:
+            self._alert_result = None
             prev_alerts = self._active_alerts[:]
-            try:
-                plugin_cfg = config_manager.get_plugin_config("clock_weather")
-                self._active_alerts = self._build_alert_items(plugin_cfg)
-                self._has_active_alerts = bool(self._active_alerts)
-            except Exception as e:
-                logger.error(f"[Alerts] Build failed: {e}")
-                self._active_alerts = []
-                self._has_active_alerts = False
+            self._active_alerts = result
+            self._has_active_alerts = bool(result)
             # If list content changed, clear the alert row and restart rotation
             if self._active_alerts != prev_alerts:
                 self.draw_square(0, 6, 40, 11, colours.BLACK)
                 self._alert_cycle_counter = 0
-            self._alert_last_fetch = now
 
         # Detect mode change (alerts appeared or disappeared)
         if self._has_active_alerts != self._prev_had_alerts:

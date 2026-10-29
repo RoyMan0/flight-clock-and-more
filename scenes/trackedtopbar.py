@@ -1,7 +1,7 @@
 from datetime import datetime
 from rgbmatrix import graphics
 from utilities.animator import Animator
-from utilities.temperature import get_temperature_cached, grab_forecast
+from utilities.temperature import get_temperature_cached, get_forecast_cached
 from setup import colours, fonts, frames, screen
 from config import CLOCK_FORMAT, NIGHT_START, NIGHT_END
 import logging
@@ -68,7 +68,7 @@ class TrackedTopBarScene(object):
         if self._topbar_moon_fetched_day == now.day:
             return self._topbar_moon_phase
         try:
-            forecast = grab_forecast(tag="TrackedTopBar")
+            forecast = get_forecast_cached()      # never blocks the display loop
             if forecast:
                 for day in forecast:
                     if day["startTime"][:10] == now.strftime("%Y-%m-%d"):

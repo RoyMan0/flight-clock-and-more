@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 
 import requests
 
+from utilities.background import run_once
+
 logger = logging.getLogger(__name__)
 
 _API_URL = "https://iss-api.polluxlabs.io/iss-pass"
@@ -92,13 +94,20 @@ def _refresh():
             logger.info("[ISS] Loaded from disk cache")
 
     if (now - _cached_ts) >= _POLL_INTERVAL:
-        passes = _fetch(location[0], location[1])
-        if passes is not None:
-            _cached_passes = passes
-        # Always update timestamp so a failed fetch waits the full interval before retry
+        # Fetch in the background: callers include display-loop keyframes, which
+        # must never wait on the network. Stamp first so a failed fetch waits the
+        # full interval before retrying.
         _cached_ts = now
+        run_once("iss-passes", _fetch_into_cache, location[0], location[1])
 
     return _cached_passes or []
+
+
+def _fetch_into_cache(lat, lon):
+    global _cached_passes
+    passes = _fetch(lat, lon)
+    if passes is not None:
+        _cached_passes = passes
 
 
 def _azimuth_to_compass(degrees):

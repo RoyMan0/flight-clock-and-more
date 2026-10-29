@@ -95,6 +95,7 @@ def _flush_if_units_changed() -> None:
     _last_units = current
 
 from config import TEMPERATURE_LOCATION
+from utilities.background import run_once
 
 def is_dns_error(exc: Exception) -> bool:
     cause = exc
@@ -280,39 +281,54 @@ def grab_forecast(tag="unknown"):
         return []
 
 
-def get_temperature_cached() -> tuple:
-    """Return (temperature, humidity) from module-level cache; fetch only when TTL expires."""
+def _refresh_temperature():
+    """Fetch now (blocking) and update the cache. Run on a background thread."""
     global _temp_data, _temp_next_fetch
+    result = grab_temperature_and_humidity()
     now = datetime.now()
-    if _temp_next_fetch is None or now >= _temp_next_fetch:
-        result = grab_temperature_and_humidity()
-        if result[0] is not None:
-            _temp_data = result
-            _temp_next_fetch = now + timedelta(seconds=_TEMP_TTL)
-            _write_file_cache(_TEMP_CACHE_FILE, list(result))
-        else:
-            _temp_next_fetch = now + timedelta(seconds=60)
-            if _temp_data is None:
-                cached = _read_file_cache(_TEMP_CACHE_FILE)
-                if cached:
-                    _temp_data = tuple(cached)
+    if result[0] is not None:
+        _temp_data = result
+        _temp_next_fetch = now + timedelta(seconds=_TEMP_TTL)
+        _write_file_cache(_TEMP_CACHE_FILE, list(result))
+    else:
+        _temp_next_fetch = now + timedelta(seconds=60)
+
+
+def _refresh_forecast():
+    """Fetch now (blocking) and update the cache. Run on a background thread."""
+    global _forecast_data, _forecast_next_fetch
+    result = grab_forecast()
+    now = datetime.now()
+    if result:
+        _forecast_data = result
+        _forecast_next_fetch = now + timedelta(seconds=_FORECAST_TTL)
+        _write_file_cache(_FORECAST_CACHE_FILE, result)
+    else:
+        _forecast_next_fetch = now + timedelta(seconds=300)
+
+
+def get_temperature_cached() -> tuple:
+    """(temperature, humidity) from the cache, never blocking: scenes call this from
+    the display loop, where an offline fetch could freeze the panel for a minute.
+    An expired cache starts one background refresh; until it lands the last
+    value (or the disk copy from before a restart) is returned."""
+    global _temp_data
+    if _temp_data is None:
+        cached = _read_file_cache(_TEMP_CACHE_FILE)
+        if cached:
+            _temp_data = tuple(cached)
+    if _temp_next_fetch is None or datetime.now() >= _temp_next_fetch:
+        run_once("weather-temperature", _refresh_temperature)
     return _temp_data if _temp_data is not None else (None, None)
 
 
 def get_forecast_cached() -> list:
-    """Return forecast intervals from module-level cache; fetch only when TTL expires."""
-    global _forecast_data, _forecast_next_fetch
-    now = datetime.now()
-    if _forecast_next_fetch is None or now >= _forecast_next_fetch:
-        result = grab_forecast()
-        if result:
-            _forecast_data = result
-            _forecast_next_fetch = now + timedelta(seconds=_FORECAST_TTL)
-            _write_file_cache(_FORECAST_CACHE_FILE, result)
-        else:
-            _forecast_next_fetch = now + timedelta(seconds=300)
-            if _forecast_data is None:
-                cached = _read_file_cache(_FORECAST_CACHE_FILE)
-                if cached:
-                    _forecast_data = cached
+    """Forecast intervals from the cache, never blocking (see get_temperature_cached)."""
+    global _forecast_data
+    if _forecast_data is None:
+        cached = _read_file_cache(_FORECAST_CACHE_FILE)
+        if cached:
+            _forecast_data = cached
+    if _forecast_next_fetch is None or datetime.now() >= _forecast_next_fetch:
+        run_once("weather-forecast", _refresh_forecast)
     return _forecast_data or []

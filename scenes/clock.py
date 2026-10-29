@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from utilities.temperature import grab_forecast
+from utilities.temperature import get_forecast_cached
 from utilities.animator import Animator
 from setup import colours, fonts, frames
 from rgbmatrix import graphics
@@ -43,14 +43,15 @@ class ClockScene(object):
                 self.today_sunrise = None
                 self.today_sunset = None
 
-                # Cooldown: don't hammer the API on repeated failures
+                # Re-check the shared forecast cache at most every 30 s. It never
+                # blocks (this runs on the display loop); an empty cache means a
+                # background fetch is pending or the internet is down.
                 if datetime.now(timezone.utc).timestamp() < self._forecast_retry_after:
                     return None, None
+                self._forecast_retry_after = datetime.now(timezone.utc).timestamp() + 30
 
-                forecast = grab_forecast(tag="ClockScene")
-                if not forecast:  # None or empty list
-                    logging.error("Forecast data missing or API error.")
-                    self._forecast_retry_after = datetime.now(timezone.utc).timestamp() + 300  # 5 min
+                forecast = get_forecast_cached()
+                if not forecast:
                     return None, None
 
                 today_str = now.strftime('%Y-%m-%d')
@@ -80,7 +81,7 @@ class ClockScene(object):
                         break
 
                 if self.today_sunrise is None:
-                    logging.warning(f"[ClockScene] No matching day found in forecast for {today_str} (got {[d['startTime'][:10] for d in forecast]})")
+                    logging.debug(f"[ClockScene] No matching day found in forecast for {today_str} (got {[d['startTime'][:10] for d in forecast]})")
 
         except Exception as e:
             logging.error(f"Error fetching forecast: {e}")
