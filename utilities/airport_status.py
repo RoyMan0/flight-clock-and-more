@@ -30,6 +30,8 @@ _POLL_INTERVAL = 300  # 5 minutes
 # In-memory cache
 _cached_data = None   # raw response text
 _cached_ts = 0.0
+_retry_after = 0.0    # after a failed fetch, wait until this time (e.g. internet down)
+_FAIL_RETRY = 300     # 5 minutes
 
 
 def _fetch():
@@ -68,7 +70,7 @@ def _load_cache():
 
 def _refresh():
     """Refresh data if poll interval has elapsed."""
-    global _cached_data, _cached_ts
+    global _cached_data, _cached_ts, _retry_after
 
     now = time.time()
     if _cached_data is not None and (now - _cached_ts) < _POLL_INTERVAL:
@@ -81,11 +83,13 @@ def _refresh():
             _cached_ts = disk_ts
             logger.info("[AirportStatus] Loaded from disk cache")
 
-    if (now - _cached_ts) >= _POLL_INTERVAL:
+    if (now - _cached_ts) >= _POLL_INTERVAL and now >= _retry_after:
         content = _fetch()
         if content is not None:
             _cached_data = content
             _cached_ts = now
+        else:
+            _retry_after = now + _FAIL_RETRY
 
     return _cached_data
 

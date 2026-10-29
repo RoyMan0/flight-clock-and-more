@@ -83,6 +83,8 @@ _ALERT_MAP = {
 # In-memory cache
 _cached_alerts = None
 _cached_ts = 0.0
+_retry_after = 0.0    # after a failed fetch, wait until this time (e.g. internet down)
+_FAIL_RETRY = 300     # 5 minutes
 
 
 def _fetch(lat, lon):
@@ -126,7 +128,7 @@ def _load_cache():
 
 def _refresh():
     """Refresh data if poll interval has elapsed."""
-    global _cached_alerts, _cached_ts
+    global _cached_alerts, _cached_ts, _retry_after
 
     import config as cfg
     location = cfg.LOCATION_HOME
@@ -144,11 +146,13 @@ def _refresh():
             _cached_ts = disk_ts
             logger.info("[NWS] Loaded from disk cache")
 
-    if (now - _cached_ts) >= _POLL_INTERVAL:
+    if (now - _cached_ts) >= _POLL_INTERVAL and now >= _retry_after:
         features = _fetch(location[0], location[1])
         if features is not None:
             _cached_alerts = features
             _cached_ts = now
+        else:
+            _retry_after = now + _FAIL_RETRY
 
     return _cached_alerts or []
 
