@@ -11,7 +11,9 @@ from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 from urllib3.util.retry import Retry
 
-_CACHE_DIR = ".cache"
+from utilities.paths import DATA_ROOT
+
+_CACHE_DIR = os.path.join(DATA_ROOT, ".cache")
 _TEMP_CACHE_FILE = os.path.join(_CACHE_DIR, "temperature.json")
 _FORECAST_CACHE_FILE = os.path.join(_CACHE_DIR, "forecast.json")
 _FILE_CACHE_TTL = 7200  # 2-hour file cache TTL (fallback on reboot/API failure)

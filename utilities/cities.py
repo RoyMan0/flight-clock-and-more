@@ -18,7 +18,7 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from utilities.paths import DATA_ROOT as _BASE_DIR
 _CITIES_FILE  = os.path.join(_BASE_DIR, "data", "cities.json")
 _GEONAMES_URL = "https://download.geonames.org/export/dump/cities5000.zip"
 _CACHE_VER    = 1

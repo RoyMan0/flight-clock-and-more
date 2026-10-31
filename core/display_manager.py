@@ -85,9 +85,7 @@ class DisplayManager:
         double-buffering which causes the scenes to flicker because they only
         update one buffer per N frames.
         """
-        if self.software_mode:
-            self.canvas.real._flush_to_pil(self._pil_image)
-        else:
+        if not self.software_mode:          # software mode: the canvas mirror already holds the frame
             self.matrix.SwapOnVSync(self.canvas.real)
 
     def clear(self):
@@ -122,26 +120,25 @@ class DisplayManager:
 
 
 class _SoftwareCanvas:
-    """Minimal shim that mimics rgbmatrix FrameCanvas for software mode."""
+    """Stands in for the rgbmatrix FrameCanvas in software mode.
 
-    def __init__(self, width: int, height: int, pil_image: Image.Image):
+    Drawing is a no-op: MirrorCanvas keeps the real 64×32 copy (used by the web
+    preview and the Mac app's panel window), so keeping a second per-pixel copy
+    here only cost ~2,000 Python calls per frame.
+    """
+
+    def __init__(self, width: int, height: int, pil_image: Image.Image = None):
         self.width = width
         self.height = height
-        self._pixels: list[list[tuple]] = [
-            [(0, 0, 0)] * width for _ in range(height)
-        ]
-        self._pil_ref = pil_image
 
     def Clear(self):
-        for row in self._pixels:
-            for i in range(len(row)):
-                row[i] = (0, 0, 0)
+        pass
 
     def SetPixel(self, x: int, y: int, r: int, g: int, b: int):
-        if 0 <= x < self.width and 0 <= y < self.height:
-            self._pixels[y][x] = (r, g, b)
+        pass
 
-    def _flush_to_pil(self, img: Image.Image):
-        for y, row in enumerate(self._pixels):
-            for x, pixel in enumerate(row):
-                img.putpixel((x, y), pixel)
+    def Fill(self, r, g, b):
+        pass
+
+    def SetImage(self, image, offset_x=0, offset_y=0, *args, **kwargs):
+        pass

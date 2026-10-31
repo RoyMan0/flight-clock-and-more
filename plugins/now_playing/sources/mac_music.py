@@ -12,8 +12,10 @@ so the same key also serves the System Stats plugin.
 
 import base64
 import logging
+import subprocess
 
 from utilities import ssh_remote
+from utilities.paths import DESKTOP
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +63,24 @@ def ensure_key() -> str:
     return ssh_remote.ensure_key()
 
 
+def _local(cmd: str, stdin: str, timeout: float) -> str:
+    """Mac desktop app: the Music app is on this machine, so skip SSH."""
+    try:
+        r = subprocess.run(["sh", "-c", cmd], input=stdin, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise MacMusicError('Music did not answer — if macOS is showing an "allow … to control Music" '
+                            'prompt, click Allow')
+    if r.returncode != 0:
+        if "-1743" in r.stderr or "Not authorized" in r.stderr:
+            raise MacMusicError("macOS blocked control of Music — allow Flight Clock in System Settings → "
+                                "Privacy & Security → Automation")
+        raise MacMusicError(r.stderr.strip() or f"osascript failed ({r.returncode})")
+    return r.stdout
+
+
 def _ssh(host: str, user: str, remote_cmd: str, stdin: str, timeout: float = 8) -> str:
+    if DESKTOP:
+        return _local(remote_cmd, stdin, timeout)
     if not host or not user:
         raise MacMusicError("Set the Mac hostname and username")
     try:

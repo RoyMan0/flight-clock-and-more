@@ -43,6 +43,32 @@ sudo systemctl cat its-a-plane   # view service file
 
 ## Architecture
 
+### Desktop (Mac app)
+
+A separate repo, `Flight-Clock-App`, runs this codebase as a standalone Mac app. It has its own CLAUDE.md and pulls this repo in as a git submodule, so everything below must keep working there too.
+- **Writable paths → `DATA_ROOT`.** `utilities/paths.py` defines:
+  - `APP_ROOT`: code and assets (fonts, logos, icons, `airports.json`, example configs).
+  - `DATA_ROOT`: everything written at runtime (`config/`, `data/`, `.cache/`, `close.txt`, regenerated maps, downloaded sports logos).
+
+  On the Pi they're the same directory. The Mac app points `DATA_ROOT` at `~/Library/Application Support/Flight Clock` (env `FLIGHTCLOCK_DATA_DIR`), because its bundle is read-only. **New code that writes a file must build the path from `DATA_ROOT`**, never from `__file__`.
+- **`DESKTOP` flag** (env `FLIGHTCLOCK_DESKTOP=1`): templates get `desktop` from a context processor in `web/app.py`. `{% if not desktop %}` hides these Pi-only controls:
+  - WiFi & Bluetooth
+  - reboot/shutdown
+  - git Update
+  - timezone (the Mac's own is used)
+  - HAT tuning (pixel order, GPIO slowdown, PWM)
+
+  `_block_pi_only_on_desktop` in `api.py` returns 404 for the matching `/api/system/*` endpoints. The setup wizard skips its WiFi step.
+- **Hooks the Mac app sets on the Flask app:**
+  - `restart_cb`, used by `/api/system/restart-app` and `/setup/finish` in place of `systemctl restart`.
+  - `locate_cb`, used by `/setup/locate` for the wizard's "Use my Mac's location".
+- **`GET /api/display/frame`**: the raw 64×32 RGB snapshot (6,144 bytes, with an `X-Brightness` header), polled at 10 fps by the Mac panel window.
+- **`core/bootstrap.py`** holds plugin import and registration, shared by `main.py` and the Mac app. **Add new plugins to `OPTIONAL_PLUGINS` there**, not to `main.py`.
+- **Platform differences:**
+  - Sounds use `afplay` on macOS and `mpg123` on the Pi.
+  - The Now Playing Mac source runs `osascript` locally instead of over SSH when `DESKTOP`.
+  - In software mode, `_SoftwareCanvas` is a no-op sink; the canvas mirror holds the frame.
+
 ### Plugin System (`core/plugin_manager.py`)
 
 The main loop runs at 10 fps. Every frame, `_dispatch()` is called:
@@ -228,7 +254,7 @@ The dashboard uses SSE (`/api/stream`) for live updates. The Alpine.js `init()` 
 ### Adding a new plugin — checklist
 
 Every new module must ship with all of these (the owner asked for this explicitly):
-1. `plugins/<id>/manager.py` + guarded import and `pm.register()` block in `main.py`.
+1. `plugins/<id>/manager.py` + an entry in `OPTIONAL_PLUGINS` in `core/bootstrap.py` (both `main.py` and the Mac app register from that list).
    - Override `enabled` to `self.config.get("enabled", False)`. `BasePlugin` defaults to True, and existing installs have no config block for a new module, so it would be polled in the background and show as Enabled on the config page without anyone turning it on.
 2. A `plugins.<id>` block and `plugin_order` entry in `config/config.example.json`; any keys in `config/secrets.example.json` and the Secrets Schema below (and excluded from the generic "Other Secrets" card).
 3. A hand-written config card in `config.html` (its Save also posts `pluginOrder` so existing installs pick it up), plus its display name in `window.PLUGIN_NAMES` in `web/templates/base.html` (the one list used by Dashboard, Config and Display).
@@ -236,7 +262,8 @@ Every new module must ship with all of these (the owner asked for this explicitl
 4. **An About section in `web/templates/about.html`** — a collapsible card in `#aboutAccordion` (same markup as the others: icon, one-paragraph overview, then `subsection-title` blocks for colours/legends/sources) written for end users, not developers.
 5. A section in this file describing the design and any gotchas.
 6. No personal values (hostnames, usernames, keys) in examples or placeholders — the repo is public.
-7. Works on a phone: no horizontal page scroll at 390 px wide (wrap wide tables in `.table-responsive`, give flex rows `min-width:0` on text and `flex-shrink-0` on controls). Friends configure their Pis from phones.
+7. Files it writes (caches, state) go under `utilities.paths.DATA_ROOT`, never next to the code. The Mac app's bundle is read-only. Pi-only features (hardware, `sudo`, systemd) are hidden with `{% if not desktop %}` / `utilities.paths.DESKTOP`.
+8. Works on a phone: no horizontal page scroll at 390 px wide (wrap wide tables in `.table-responsive`, give flex rows `min-width:0` on text and `flex-shrink-0` on controls). Friends configure their Pis from phones.
 
 ## Known States / Gotchas
 

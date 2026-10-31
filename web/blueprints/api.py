@@ -14,9 +14,11 @@ from flask import Blueprint, current_app, jsonify, request, Response, stream_wit
 api_bp = Blueprint("api", __name__)
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-CLOSEST_FILE  = os.path.join(BASE_DIR, "close.txt")
-FARTHEST_FILE = os.path.join(BASE_DIR, "farthest.txt")
-HISTORY_FILE  = os.path.join(BASE_DIR, "data", "flight_history.json")
+from utilities.paths import DATA_ROOT, DESKTOP
+
+CLOSEST_FILE  = os.path.join(DATA_ROOT, "close.txt")
+FARTHEST_FILE = os.path.join(DATA_ROOT, "farthest.txt")
+HISTORY_FILE  = os.path.join(DATA_ROOT, "data", "flight_history.json")
 
 
 def _cfg():
@@ -37,6 +39,22 @@ def _load_json(path, default):
         return default
 
 
+# Pi-only system controls (WiFi, Bluetooth, power, git update, setup hotspot).
+# The Mac desktop app hides them in the UI and refuses them here.
+_PI_ONLY_PREFIXES = (
+    "/system/connect-bt", "/system/bt/", "/system/wifi/", "/system/setup-mode",
+    "/system/update", "/system/check-updates", "/system/reboot", "/system/shutdown",
+)
+
+
+@api_bp.before_request
+def _block_pi_only_on_desktop():
+    if DESKTOP:
+        path = request.path[len(api_bp.url_prefix or "/api"):]
+        if path.startswith(_PI_ONLY_PREFIXES):
+            return jsonify({"error": "not available in the Mac app"}), 404
+
+
 # ------------------------------------------------------------------
 # Status
 # ------------------------------------------------------------------
@@ -55,6 +73,7 @@ def system_info():
         "cpu_temp": _cpu_temp(),
         "memory": _memory(),
         "hostname": _hostname(),
+        "desktop": DESKTOP,
     }
     return jsonify(info)
 
@@ -105,6 +124,19 @@ def _preview_data_url(img) -> str:
     with _preview_lock:
         _preview_cache.update(key=raw, data=data)
     return data
+
+
+@api_bp.get("/display/frame")
+def display_frame():
+    """Raw 64×32 RGB bytes (6,144) for the Mac app's panel window — far cheaper than the PNG preview."""
+    d = _display()
+    if d is None:
+        return Response(status=503)
+    return Response(
+        d.get_snapshot().tobytes(),
+        mimetype="application/octet-stream",
+        headers={"Cache-Control": "no-store", "X-Brightness": str(d.brightness)},
+    )
 
 
 @api_bp.get("/display/snapshot")
@@ -279,7 +311,7 @@ def save_system_config():
 
     restarting = False
     tz = (data.get("location") or {}).get("timezone", "").strip()
-    if tz:
+    if tz and not DESKTOP:              # the Mac app follows the Mac's own timezone
         _apply_system_timezone(tz)
         if tz != old_tz:
             # Timezone changed — need a full process restart so datetime.now()
@@ -1468,6 +1500,10 @@ def wifi_connect():
 
 @api_bp.post("/system/restart-app")
 def restart_app():
+    restart_cb = getattr(current_app, "restart_cb", None)
+    if restart_cb:                      # Mac app: relaunch itself
+        threading.Thread(target=lambda: (time.sleep(0.5), restart_cb()), daemon=True).start()
+        return jsonify({"ok": True})
     threading.Thread(
         target=lambda: (time.sleep(0.5), subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"])),
         daemon=True,

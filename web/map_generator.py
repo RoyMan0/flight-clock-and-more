@@ -5,7 +5,9 @@ from config import LOCATION_HOME, DISTANCE_UNITS
 
 
 WEB_DIR = os.path.dirname(__file__)
-MAPS_DIR = os.path.join(WEB_DIR, "static", "maps")
+from utilities.paths import DATA_ROOT
+
+MAPS_DIR = os.path.join(DATA_ROOT, "web", "static", "maps")
 os.makedirs(MAPS_DIR, exist_ok=True)
 
 def get_unit_label():

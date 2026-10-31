@@ -9,7 +9,7 @@ import os
 from flask import Flask, render_template, jsonify, send_from_directory
 
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.abspath(os.path.join(WEB_DIR, ".."))
+from utilities.paths import DATA_ROOT as BASE_DIR, DESKTOP
 
 CLOSEST_FILE  = os.path.join(BASE_DIR, "close.txt")
 FARTHEST_FILE = os.path.join(BASE_DIR, "farthest.txt")
@@ -34,6 +34,13 @@ def create_app(cfg=None, display=None, plugin_manager=None, setup_mode=False):
     app.cfg = cfg
     app.display = display
     app.plugin_manager = plugin_manager
+    app.restart_cb = None               # the Mac app sets this to relaunch itself
+    app.locate_cb = None                # the Mac app sets this for the wizard's "use my location"
+
+    @app.context_processor
+    def _inject_platform():
+        # Templates hide Pi-only controls (WiFi, Bluetooth, power, HAT tuning) with {% if not desktop %}
+        return {"desktop": DESKTOP}
 
     # ------------------------------------------------------------------
     # Register blueprints
@@ -68,7 +75,8 @@ def create_app(cfg=None, display=None, plugin_manager=None, setup_mode=False):
 
     @app.get("/maps/<path:filename>")
     def maps(filename):
-        maps_dir = os.path.join(WEB_DIR, "static", "maps")
+        # Maps are regenerated at runtime under the data root (the repo dir on the Pi)
+        maps_dir = os.path.join(BASE_DIR, "web", "static", "maps")
         return send_from_directory(maps_dir, filename)
 
     return app

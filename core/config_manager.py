@@ -5,15 +5,18 @@ import threading
 from datetime import datetime
 from typing import Any
 
-BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.json")
-EXAMPLE_PATH = os.path.join(BASE_DIR, "config", "config.example.json")
-SECRETS_PATH = os.path.join(BASE_DIR, "config", "secrets.json")
+from utilities.paths import APP_ROOT, DATA_ROOT
+
+BASE_DIR    = DATA_ROOT            # config/ and its backups are written here
+CONFIG_PATH = os.path.join(DATA_ROOT, "config", "config.json")
+EXAMPLE_PATH = os.path.join(APP_ROOT, "config", "config.example.json")
+SECRETS_PATH = os.path.join(DATA_ROOT, "config", "secrets.json")
 
 
 def _bootstrap_config():
     """Copy config.example.json → config.json on first install if missing."""
     if not os.path.exists(CONFIG_PATH) and os.path.exists(EXAMPLE_PATH):
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
         shutil.copy2(EXAMPLE_PATH, CONFIG_PATH)
         print(f"[config] Created config.json from config.example.json")
 

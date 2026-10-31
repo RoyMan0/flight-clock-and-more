@@ -64,8 +64,10 @@ _FEEDS = {
     "us_news":      "https://news.google.com/rss/headlines/section/geo/US?hl=en-US&gl=US&ceid=US:en",
 }
 
+from utilities.paths import DATA_ROOT
+
 _BASE_DIR   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_CACHE_PATH = os.path.join(_BASE_DIR, "data", "ap_news_cache.json")
+_CACHE_PATH = os.path.join(DATA_ROOT, "data", "ap_news_cache.json")
 _FONTS_DIR  = os.path.join(_BASE_DIR, "fonts")
 
 # ------------------------------------------------------------------

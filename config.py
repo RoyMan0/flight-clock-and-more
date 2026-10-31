@@ -5,7 +5,7 @@ All existing scenes continue to import from this module unchanged.
 import json
 import os
 
-_BASE = os.path.dirname(os.path.abspath(__file__))
+_BASE = os.environ.get("FLIGHTCLOCK_DATA_DIR") or os.path.dirname(os.path.abspath(__file__))
 
 
 def _load(path):

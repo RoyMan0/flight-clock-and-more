@@ -35,8 +35,9 @@ SHOW_REFRESH_MIN_AGE = 180      # on-screen refresh skips data fetched less than
 # numbers on screen get too stale to be useful.
 BACKOFF_START = 300
 BACKOFF_MAX = 600
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CACHE_FILE = os.path.join(_BASE_DIR, "data", "ai_usage.json")
+from utilities.paths import DATA_ROOT
+
+CACHE_FILE = os.path.join(DATA_ROOT, "data", "ai_usage.json")
 
 
 def enabled_providers(config: dict) -> list:

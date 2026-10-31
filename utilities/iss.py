@@ -24,7 +24,7 @@ from utilities.background import run_once
 logger = logging.getLogger(__name__)
 
 _API_URL = "https://iss-api.polluxlabs.io/iss-pass"
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from utilities.paths import DATA_ROOT as _BASE_DIR
 _CACHE_DIR = os.path.join(_BASE_DIR, ".cache")
 _CACHE_FILE = os.path.join(_CACHE_DIR, "iss.json")
 _POLL_INTERVAL = 1800  # 30 minutes

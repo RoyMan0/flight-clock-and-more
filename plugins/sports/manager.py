@@ -53,9 +53,10 @@ COL_FINAL  = (120, 120, 120)
 COL_PRE    = (100, 180, 255)
 COL_SCORE  = (255, 220, 0)
 
-LOGO_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "assets", "sports", "logos")
-)
+# Team logos are downloaded on demand, so they live under the writable data root
+from utilities.paths import DATA_ROOT
+
+LOGO_DIR = os.path.join(DATA_ROOT, "assets", "sports", "logos")
 _FONTS_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "fonts")
 )

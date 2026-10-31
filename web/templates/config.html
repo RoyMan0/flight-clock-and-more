@@ -22,6 +22,95 @@
   <div x-show="activeTab === 'config'">
   <div class="row g-4">
 
+    {% if desktop %}
+    <!-- Mac App (desktop app only): window and LED look; saved to desktop.json, applied at once -->
+    <div class="col-12" x-data="macAppCard()" x-init="load()">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-laptop me-2"></i>Mac App</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-sm-6 col-lg-3">
+              <label class="form-label">Window mode</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="p.window_mode" @change="save({window_mode: p.window_mode})">
+                <option value="window">Window + menu bar icon</option>
+                <option value="menubar">Menu bar only (no Dock icon)</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+              <label class="form-label">Panel position</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="p.level" @change="save({level: p.level})"
+                      :disabled="p.window_mode === 'menubar'">
+                <option value="normal">Normal window</option>
+                <option value="floating">Always on top</option>
+                <option value="desktop">On the desktop (behind windows)</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+              <label class="form-label">LED style</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="p.led_style" @change="save({led_style: p.led_style})">
+                <option value="round">Round LEDs</option>
+                <option value="square">Square LEDs</option>
+                <option value="sharp">Sharp pixels</option>
+              </select>
+            </div>
+            <div class="col-sm-6 col-lg-3 d-flex flex-column justify-content-end gap-1">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" x-model="p.bezel" @change="save({bezel: p.bezel})">
+                <label class="form-check-label">Bezel</label>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" x-model="p.glow" @change="save({glow: p.glow})">
+                <label class="form-check-label">LED glow</label>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="p.launch_at_login" @change="save({launch_at_login: p.launch_at_login})">
+                <label class="form-check-label">Open at login</label>
+              </div>
+              <div class="text-muted small" x-show="p.launch_at_login_status === 'needs approval'">
+                Approve it in System Settings → General → Login Items.
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="p.lan_access" @change="save({lan_access: p.lan_access})">
+                <label class="form-check-label">Allow access from phones and other computers</label>
+              </div>
+              <div class="text-muted small" style="overflow-wrap:anywhere">
+                <span x-show="p.lan_url">Open <strong x-text="p.lan_url"></strong> on your phone.</span>
+                <span x-show="!p.lan_url">Off: settings open only on this Mac.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-outline-secondary btn-sm" @click="openFolder('data')"><i class="bi bi-folder me-1"></i>Data folder</button>
+          <button class="btn btn-outline-secondary btn-sm" @click="openFolder('logs')"><i class="bi bi-journal-text me-1"></i>Logs</button>
+          <span class="text-muted small ms-auto" x-text="'Flight Clock ' + (p.version || '')"></span>
+          <span class="text-warning small w-100" x-show="restartNeeded">
+            Restart Flight Clock (Dashboard → Restart Application) to apply the network setting.
+          </span>
+        </div>
+      </div>
+    </div>
+    <script>
+      function macAppCard() {
+        return {
+          p: {}, restartNeeded: false,
+          async load() { this.p = await fetch('/api/desktop/settings').then(r => r.json()); },
+          async save(changes) {
+            const r = await fetch('/api/desktop/settings', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                            body: JSON.stringify(changes)}).then(r => r.json());
+            if (r.restart_needed) this.restartNeeded = true;
+            this.p = {...this.p, ...r};
+          },
+          openFolder(what) { fetch('/api/desktop/open/' + what, {method: 'POST'}); },
+        };
+      }
+    </script>
+    {% endif %}
+
     <!-- Plugin Rotation Order -->
     <div class="col-md-5">
       <div class="card">
@@ -73,6 +162,7 @@
                 <option value="24hr">24-hour</option>
               </select>
             </div>
+            {% if not desktop %}{# Pi only: the Mac app uses the Mac's timezone #}
             <div class="col-md-4">
               <label class="form-label">Timezone</label>
               <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.location.timezone">
@@ -82,6 +172,7 @@
                 </template>
               </select>
             </div>
+            {% endif %}
             <div class="col-md-4">
               <label class="form-label">Units</label>
               <select class="form-select bg-dark text-light border-secondary"
@@ -91,6 +182,7 @@
                 <option value="metric">Metric (°C, km, km/h)</option>
               </select>
             </div>
+            {% if not desktop %}{# Pi only: LED HAT tuning #}
             <div class="col-md-4">
               <label class="form-label">LED Pixel Order</label>
               <select class="form-select bg-dark text-light border-secondary" x-model="sysCfg.display.led_rgb_sequence">
@@ -115,6 +207,7 @@
                 <label class="form-check-label">HAT PWM Mode</label>
               </div>
             </div>
+            {% endif %}
             <div class="col-md-4">
               <label class="form-label">Day Brightness</label>
               <input type="range" class="form-range" min="10" max="100"
@@ -193,6 +286,7 @@
         </div>
       </div>
 
+      {% if not desktop %}{# Pi only: WiFi and Bluetooth #}
       <!-- WiFi Network -->
       <div class="card mb-4">
         <div class="card-header"><i class="bi bi-wifi me-2"></i>WiFi &amp; Bluetooth</div>
@@ -296,6 +390,8 @@
                class="mt-2 small" :class="btConfigStatusOk ? 'text-success' : 'text-warning'"></div>
         </div>
       </div>
+
+      {% endif %}
 
       <!-- Overhead Flight Tracker Config -->
       <div class="card mb-4" x-show="'flight_tracker' in pluginConfigs">

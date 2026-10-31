@@ -34,7 +34,9 @@ CHASE_RANGE = 6
 HURT_SECS = 1.5
 HINT_SECS = 2.0
 
-_BEST_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "maze", "best.json"))
+from utilities.paths import DATA_ROOT
+
+_BEST_PATH = os.path.join(DATA_ROOT, "data", "maze", "best.json")
 _best_lock = threading.Lock()
 
 

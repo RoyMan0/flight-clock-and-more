@@ -28,9 +28,9 @@ from plugins.transit.providers.base import (
 log = logging.getLogger(__name__)
 
 _CHI = ZoneInfo("America/Chicago")
-_DATA_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "transit")
-)
+from utilities.paths import DATA_ROOT as _DATA_DIR
+
+_DATA_ROOT = os.path.join(_DATA_DIR, "data", "transit")
 
 TRAIN_API = "https://lapi.transitchicago.com/api/1.0/ttarrivals.aspx"
 L_STOPS_URL = "https://data.cityofchicago.org/resource/8pix-ypme.json?$limit=2000"

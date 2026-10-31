@@ -73,6 +73,7 @@
             </div>
           </div>
           <div class="border-top pt-3 d-flex flex-column gap-2">
+            {% if not desktop %}{# Pi only: git update and Bluetooth #}
             <button class="btn btn-sm btn-outline-success w-100"
                     :disabled="sysActionPending"
                     @click="checkForUpdates()">
@@ -105,11 +106,13 @@
                 </template>
               </div>
             </div>
+            {% endif %}
             <button class="btn btn-sm btn-outline-warning w-100"
                     :disabled="sysActionPending"
                     @click="systemAction('restart-app', 'Restart the application?')">
               <i class="bi bi-arrow-clockwise me-1"></i>Restart Application
             </button>
+            {% if not desktop %}{# Pi only: power #}
             <button class="btn btn-sm btn-outline-info w-100"
                     :disabled="sysActionPending"
                     @click="systemAction('reboot', 'Reboot the Pi? This will take about a minute.')">
@@ -120,6 +123,7 @@
                     @click="systemAction('shutdown', 'Shut down the Pi? You will need physical access to turn it back on.')">
               <i class="bi bi-power me-1"></i>Shut Down System
             </button>
+            {% endif %}
             <div x-show="sysActionMsg" x-text="sysActionMsg" class="text-center small text-muted mt-1"></div>
           </div>
         </div>

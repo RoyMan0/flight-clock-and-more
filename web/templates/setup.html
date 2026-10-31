@@ -223,7 +223,7 @@
 <div id="wizard">
 
   <!-- ── Step 1: Wi-Fi ─────────────────────────────────────────── -->
-  <section id="step-wifi" class="active">
+  <section id="step-wifi"{% if not desktop %} class="active"{% endif %}>
     <h2>Connect to Wi-Fi</h2>
     <p class="sub">Choose your home network so the display can fetch data.</p>
 
@@ -256,10 +256,15 @@
   </section>
 
   <!-- ── Step 2: Location ──────────────────────────────────────── -->
-  <section id="step-location">
+  <section id="step-location"{% if desktop %} class="active"{% endif %}>
     <h2>Home Location</h2>
     <p class="sub">Used for weather, sun times, and flight radius.</p>
 
+    {% if desktop %}
+    <button class="btn btn-ghost" id="locate-btn" onclick="useMacLocation()" style="margin-bottom:12px;">
+      📍 Use my Mac's location
+    </button>
+    {% endif %}
     <div class="note">
       Enter your home coordinates. You can find them by searching your address on
       <a href="#" onclick="return false;">maps.google.com</a> and reading the URL, or use
@@ -307,7 +312,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="field"{% if desktop %} style="display:none"{% endif %}>{# the Mac app uses the Mac's timezone #}
         <label>Timezone</label>
         <select id="loc-timezone">
           {% for tz in timezones %}
@@ -349,7 +354,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-ghost" onclick="prevStep()">Back</button>
+      {% if not desktop %}<button class="btn btn-ghost" onclick="prevStep()">Back</button>{% endif %}
       <button class="btn btn-primary" onclick="nextStep()">Next</button>
     </div>
   </section>
@@ -482,7 +487,9 @@
 
 <script>
 // ── State ─────────────────────────────────────────────────────────
-const STEPS = ['wifi','location','api','plugins','review'];
+// The Mac app has no WiFi step: the Mac is already online
+const DESKTOP = {{ 'true' if desktop else 'false' }};
+const STEPS = DESKTOP ? ['location','api','plugins','review'] : ['wifi','location','api','plugins','review'];
 let currentStep = 0;
 let selectedSSID = '';
 let selectedSecure = false;
@@ -715,6 +722,11 @@ function showFinish() {
   document.getElementById('step-dots').style.display = 'none';
   const fin = document.getElementById('finish-screen');
   fin.style.display = 'block';
+  if (DESKTOP) {                        // the Mac app restarts itself into the display
+    fin.querySelectorAll('p, a').forEach(el => el.style.display = 'none');
+    document.getElementById('redirect-countdown').textContent = 'Starting Flight Clock…';
+    return;
+  }
 
   const host = window.location.hostname;
   document.getElementById('dashboard-url').textContent = 'http://' + host + ':8080';
@@ -732,10 +744,29 @@ function showFinish() {
   }, 1000);
 }
 
+{% if desktop %}
+// ── Mac app: fill in coordinates from the Mac's location ─────────
+async function useMacLocation() {
+  const btn = document.getElementById('locate-btn');
+  btn.disabled = true; btn.textContent = 'Locating…';
+  try {
+    const r = await fetch('/setup/locate', { method: 'POST' }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error || 'location unavailable');
+    document.getElementById('loc-lat').value = r.lat.toFixed(4);
+    document.getElementById('loc-lon').value = r.lon.toFixed(4);
+    btn.textContent = '✓ ' + (r.label || 'Location found');
+  } catch (e) {
+    btn.textContent = "📍 Use my Mac's location";
+    alert("Couldn't get your location (" + e.message + "). Enter the coordinates below instead.");
+  }
+  btn.disabled = false;
+}
+{% endif %}
+
 // ── Init ──────────────────────────────────────────────────────────
 buildDots();
 // Auto-check if already connected when page loads
-fetch('/setup/status').then(r => r.json()).then(d => {
+if (!DESKTOP) fetch('/setup/status').then(r => r.json()).then(d => {
   if (d.connected) {
     wifiConnected = true;
     showStatus('connected', '✓ Already connected: ' + (d.ssid || ''));

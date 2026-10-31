@@ -23,7 +23,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.openweathermap.org/data/3.0/onecall"
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from utilities.paths import DATA_ROOT as _BASE_DIR
 _CACHE_DIR = os.path.join(_BASE_DIR, ".cache")
 _CACHE_FILE = os.path.join(_CACHE_DIR, "rain.json")
 _USAGE_FILE = os.path.join(_BASE_DIR, "data", "owm_usage.json")

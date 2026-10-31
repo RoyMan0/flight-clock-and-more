@@ -18,7 +18,9 @@ import subprocess
 
 log = logging.getLogger(__name__)
 
-_DATA = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+from utilities.paths import DATA_ROOT
+
+_DATA = os.path.join(DATA_ROOT, "data")
 SSH_DIR = os.path.join(_DATA, "ssh")
 KEY_PATH = os.path.join(SSH_DIR, "id_ed25519")
 _LEGACY_KEY = os.path.join(_DATA, "now_playing", "id_ed25519")

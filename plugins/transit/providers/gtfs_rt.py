@@ -39,9 +39,9 @@ from plugins.transit.providers.base import (
 
 log = logging.getLogger(__name__)
 
-_DATA_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "transit")
-)
+from utilities.paths import DATA_ROOT as _DATA_DIR
+
+_DATA_ROOT = os.path.join(_DATA_DIR, "data", "transit")
 _INDEX_VERSION = 3
 _FEED_CACHE_SECS = 15
 

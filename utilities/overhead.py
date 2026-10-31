@@ -17,6 +17,7 @@ import math
 import time
 import hashlib
 import subprocess
+import sys
 import logging
 from threading import Thread, Lock
 from datetime import datetime, timedelta
@@ -62,7 +63,9 @@ SKIP_ADSBDB_PREFIXES = {
     "EJA",   # NetJets
 }
 
-BASE_DIR          = os.path.dirname(os.path.dirname(__file__))
+from utilities.paths import APP_ROOT, DATA_ROOT
+
+BASE_DIR          = DATA_ROOT        # everything below is written at runtime
 LOG_FILE          = os.path.join(BASE_DIR, "close.txt")
 LOG_FILE_FARTHEST = os.path.join(BASE_DIR, "farthest.txt")
 FA_USAGE_FILE     = os.path.join(BASE_DIR, "flightaware_usage.json")
@@ -491,13 +494,15 @@ def get_al_metrics(keys: list[str], reset_days: list[int] = None) -> dict:
 def _play_mp3(filename: str):
     def _play():
         try:
-            mp3 = os.path.join(os.path.dirname(os.path.dirname(__file__)), filename)
+            mp3 = os.path.join(APP_ROOT, filename)
             log.info(f"[overhead] Playing sound: {mp3}")
             uid = os.getuid()
             env = os.environ.copy()
             env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+            # macOS (desktop app) has afplay built in; the Pi uses mpg123
+            player = ["afplay", mp3] if sys.platform == "darwin" else ["mpg123", "-q", mp3]
             subprocess.Popen(
-                ["mpg123", "-q", mp3],
+                player,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,

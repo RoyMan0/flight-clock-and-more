@@ -14,7 +14,7 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from utilities.paths import DATA_ROOT as _BASE_DIR
 _POI_FILE    = os.path.join(_BASE_DIR, "data", "nps_pois.json")
 _SECRETS     = os.path.join(_BASE_DIR, "config", "secrets.json")
 _NPS_URL     = "https://developer.nps.gov/api/v1/parks"

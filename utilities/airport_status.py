@@ -22,7 +22,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 _API_URL = "https://nasstatus.faa.gov/api/airport-status-information"
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from utilities.paths import DATA_ROOT as _BASE_DIR
 _CACHE_DIR = os.path.join(_BASE_DIR, ".cache")
 _CACHE_FILE = os.path.join(_CACHE_DIR, "airport_status.json")
 _POLL_INTERVAL = 300  # 5 minutes

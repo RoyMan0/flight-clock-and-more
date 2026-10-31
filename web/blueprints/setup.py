@@ -11,6 +11,8 @@ import sys
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request
 
+from utilities.paths import DESKTOP
+
 
 
 # Modules offered in the first-boot wizard: (id, label, what it needs).
@@ -295,11 +297,12 @@ def setup_save():
     tz = loc.get("timezone", "").strip()
     if tz:
         cfg.save_config_section("location", "timezone", value=tz)
-        try:
-            subprocess.run(["sudo", "timedatectl", "set-timezone", tz],
-                           capture_output=True, timeout=10)
-        except Exception:
-            pass
+        if not DESKTOP:                 # the Mac app follows the Mac's own timezone
+            try:
+                subprocess.run(["sudo", "timedatectl", "set-timezone", tz],
+                               capture_output=True, timeout=10)
+            except Exception:
+                pass
 
     try:
         min_alt = int(loc.get("min_altitude", 8000))
@@ -371,11 +374,28 @@ def setup_save():
 # Finish: save config and restart the app in normal mode
 # ------------------------------------------------------------------
 
+@setup_bp.post("/setup/locate")
+def setup_locate():
+    """Mac app: coordinates from the Mac's location (the desktop launcher sets current_app.locate_cb)."""
+    locate_cb = getattr(current_app, "locate_cb", None)
+    if not locate_cb:
+        return jsonify({"ok": False, "error": "not available"}), 404
+    try:
+        return jsonify({"ok": True, **locate_cb()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @setup_bp.post("/setup/finish")
 def setup_finish():
     # Signal display loop to stop
     if _stop_event:
         _stop_event.set()
+
+    restart_cb = getattr(current_app, "restart_cb", None)
+    if restart_cb:                      # Mac app: relaunch into the normal display
+        threading.Thread(target=lambda: (time.sleep(0.8), restart_cb()), daemon=True).start()
+        return jsonify({"ok": True})
 
     # Restart the app via systemd (which will now have WiFi and skip setup mode)
     def _restart():
