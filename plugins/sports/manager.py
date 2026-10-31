@@ -616,12 +616,58 @@ def _football_status(game: dict) -> str:
     down = sit.get("down", 0)
     dist = sit.get("distance", 0)
 
+    # Longest first; _render_game picks the first that fits beside the league name
     if down:
-        full = f"{qtr} {clock} {down}&{dist}"
-        if len(full) <= 12:   # ~48px — fits alongside a 3-char league name
-            return full
-
+        return f"{qtr} {clock} {down}&{dist}"
     return f"{qtr} {clock}"
+
+
+def _status_candidates(status: str) -> list:
+    """Shorter fallbacks for a status line: drop trailing parts ("Q3 8:10 3&10" →
+    "Q3 8:10" → "Q3") until it fits next to the league name."""
+    parts = status.split(" ")
+    return [" ".join(parts[:n]) for n in range(len(parts), 0, -1)]
+
+
+HEADER_GAP = 4      # px between the league name and the status
+STATUS_SPACE = 2    # spaces in the status are drawn half width to save room
+MIN_LABEL_CHARS = 4
+
+
+def _status_width(status: str) -> int:
+    return sum(STATUS_SPACE if ch == " " else _bdf_width(ch, _BDF) for ch in status)
+
+
+def _fits(label: str, status: str) -> bool:
+    return 1 + _bdf_width(label, _BDF) + HEADER_GAP + _status_width(status) <= MATRIX_W - 1
+
+
+def _fit_header(league_label: str, status: str):
+    """(label, status) that fit on the 64 px header without overlapping.
+    For each status (longest first) try the full league name, then the name
+    shortened to 4 letters; only then drop status parts. Last resort: shorten
+    the league name further."""
+    candidates = _status_candidates(status)
+    for cand in candidates:
+        for n in range(len(league_label), min(len(league_label), MIN_LABEL_CHARS) - 1, -1):
+            if _fits(league_label[:n], cand):
+                return league_label[:n], cand
+    shortest = candidates[-1]
+    while league_label and not _fits(league_label, shortest):
+        league_label = league_label[:-1]
+    return league_label, shortest
+
+
+def _draw_status(img, right_x: int, y: int, status: str, colour):
+    """Right-aligned status with half-width spaces; a football down & distance
+    '&' is drawn dim so '3&10' doesn't read as '3810' (in 4x6 '&' looks like '8')."""
+    x = right_x - _status_width(status)
+    for ch in status:
+        if ch == " ":
+            x += STATUS_SPACE
+            continue
+        _bdf_draw(img, x, y, ch, _BDF, COL_FINAL if ch == "&" else colour)
+        x += _bdf_width(ch, _BDF)
 
 
 def _short_date(game_date: str) -> str:
@@ -676,6 +722,8 @@ def _render_game(game: dict) -> Image.Image:
 
     # ── Header: BDF pixel text on clean black, y=1 (centered in HEADER_H zone)
     league_label = _LEAGUE_DISPLAY.get(game["league"], game["league"][:7])
+    if not is_final:
+        league_label, status_str = _fit_header(league_label, status_str)
     _bdf_draw(img, 1, 1, league_label, _BDF, COL_HEADER)
 
     if is_final:
@@ -689,8 +737,7 @@ def _render_game(game: dict) -> Image.Image:
         if date_str:
             _bdf_draw(img, x_date, 1, date_str, _BDF, COL_HEADER)
     else:
-        sw = _bdf_width(status_str, _BDF)
-        _bdf_draw(img, MATRIX_W - sw - 1, 1, status_str, _BDF, status_col)
+        _draw_status(img, MATRIX_W - 1, 1, status_str, status_col)
 
     # ── Logo slots fill the space below header ────────────────────────
     _draw_slot(img, draw, game["away"], slot_x=0,      game=game)
