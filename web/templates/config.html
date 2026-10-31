@@ -831,6 +831,22 @@
                      x-model.number="pluginConfigs.transit.update_interval">
             </div>
 
+            <!-- Time column -->
+            <div class="col-md-6">
+              <label class="form-label">Show times as</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.transit.time_display">
+                <option value="minutes" :selected="pluginConfigs.transit.time_display === 'minutes'">Minutes until it arrives/departs (e.g. 7)</option>
+                <option value="clock" :selected="pluginConfigs.transit.time_display === 'clock'">Arrival/departure time (e.g. 3:45)</option>
+                <option value="alternate" :selected="pluginConfigs.transit.time_display === 'alternate'">Alternate between both</option>
+              </select>
+              <div class="form-text text-muted">Clock times follow your 12/24-hour setting. They need a wider column, so destinations are shortened a little more.</div>
+            </div>
+            <div class="col-md-3" x-show="pluginConfigs.transit.time_display === 'alternate'">
+              <label class="form-label">Switch every (sec)</label>
+              <input type="number" min="1" max="30" class="form-control bg-dark text-light border-secondary"
+                     x-model.number="pluginConfigs.transit.time_alternate_secs">
+            </div>
+
             <!-- Stops -->
             <template x-for="(stop, i) in (pluginConfigs.transit.stops || [])" :key="transitUi(i).uid">
               <div class="col-12">
@@ -2068,7 +2084,7 @@ function configPage() {
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
       event_countdown:         { event_title: '', event_datetime: '' },
-      transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {} },
+      transit:                 { stops: [], display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {}, time_display: 'minutes', time_alternate_secs: 3 },
       world_clock:             { cities: [], scroll_speed: 1 },
       system_stats:            { connections: [], scroll_speed: 1 },
       maze:                    { size: 'M', style: 'random', solver: 'rotate', solve_speed: 2, theme: 'random', celebrate: true, play_idle_minutes: 3 },
@@ -2194,7 +2210,8 @@ function configPage() {
       if (!cfgs.clock_weather) cfgs.clock_weather = {};
       if (!cfgs.clock_weather.alerts) cfgs.clock_weather.alerts = {};
       if (cfgs.transit) {
-        const t = { display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {}, ...cfgs.transit };
+        const t = { display_mode: 'combined', scroll_speed: 1, update_interval: 30, dest_aliases: {},
+                    time_display: 'minutes', time_alternate_secs: 3, ...cfgs.transit };
         if (t.display_mode === 'cycle') t.display_mode = 'scroll';   // page-flip mode was replaced by scrolling
         delete t.seconds_per_page;
         // Upgrade the original single-stop format to a one-item stops list

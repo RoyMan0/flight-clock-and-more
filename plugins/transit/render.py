@@ -12,6 +12,7 @@ in the line colour (MTA "A", RTD "W", buses "133"). Dest gets whatever is left.
 
 import logging
 import math
+from datetime import datetime
 import os
 import time
 
@@ -26,6 +27,7 @@ MATRIX_H = 32
 CHAR_W = 4
 ROW_Y = (9, 17, 25)
 MIN_COL_W = 3 * CHAR_W          # "Due", "Dly", "12", "99+"
+CLOCK_COL_W = 5 * CHAR_W        # "12:45" — used whenever clock times can appear
 MAX_LABEL_CHARS = 4
 LEFT_PAD = 1                    # 1 px margin on the left edge
 HEADER_Y = 1                    # 1 px margin above the header
@@ -150,8 +152,23 @@ def dest_x_for(ln_w: int) -> int:
     return LEFT_PAD + ln_w + 2
 
 
-def dest_max_chars(ln_w: int) -> int:
-    return (MATRIX_W - MIN_COL_W - 1 - dest_x_for(ln_w)) // CHAR_W
+def time_col_width(time_mode: str) -> int:
+    """Clock and alternate modes reserve room for "12:45" so the Dest column doesn't jump."""
+    return MIN_COL_W if time_mode == "minutes" else CLOCK_COL_W
+
+
+def dest_max_chars(ln_w: int, col_w: int = MIN_COL_W) -> int:
+    # Clock times ("09:48") start with a full-width digit, so leave a wider gap before them
+    gap = 1 if col_w == MIN_COL_W else 3
+    return (MATRIX_W - col_w - gap - dest_x_for(ln_w)) // CHAR_W
+
+
+def clock_text(a, clock_fmt: str = "12hr") -> str:
+    """Local arrival/departure time: "3:45" (12hr, no am/pm — it's soon) or "15:45"."""
+    t = datetime.fromtimestamp(a.arrival_ts)
+    if clock_fmt == "24hr":
+        return t.strftime("%H:%M")
+    return f"{t.hour % 12 or 12}:{t.minute:02d}"
 
 
 def minutes_text(a, now: float) -> str:
@@ -164,12 +181,14 @@ def minutes_text(a, now: float) -> str:
 
 
 def build_rows(arrivals, now: float = None, alias_set: str = "",
-               user_aliases: dict = None, ln_w: int = None):
-    """Turn Arrival objects into display rows. Returns (ln_w, rows)."""
+               user_aliases: dict = None, ln_w: int = None,
+               time_mode: str = "minutes", show_clock: bool = False, clock_fmt: str = "12hr"):
+    """Turn Arrival objects into display rows. Returns (ln_w, rows).
+    time_mode sets the column width; show_clock picks clock times over minutes."""
     now = now or time.time()
     if ln_w is None:
         ln_w = label_column_width(arrivals)
-    max_chars = dest_max_chars(ln_w)
+    max_chars = dest_max_chars(ln_w, time_col_width(time_mode))
     rows = []
     for a in arrivals[:len(ROW_Y)]:
         rows.append({
@@ -178,7 +197,7 @@ def build_rows(arrivals, now: float = None, alias_set: str = "",
             "block": a.line_block,
             "dest_full": a.dest,
             "dest": shorten(a.dest, max_chars, a.alias_set or alias_set, user_aliases),
-            "min": minutes_text(a, now),
+            "min": clock_text(a, clock_fmt) if show_clock else minutes_text(a, now),
             "realtime": a.realtime,
             "missable": a.missable,
         })
@@ -196,7 +215,7 @@ SEPARATOR_Y = 7                  # grey line under the header (same as AI Usage)
 COL_SEPARATOR = (60, 60, 60)
 
 
-def _draw_header(img: Image.Image, ln_w: int, title: str = None):
+def _draw_header(img: Image.Image, ln_w: int, title: str = None, time_label: str = "Min"):
     px = img.load()
     for x in range(MATRIX_W):
         px[x, SEPARATOR_Y] = COL_SEPARATOR
@@ -205,7 +224,7 @@ def _draw_header(img: Image.Image, ln_w: int, title: str = None):
     else:
         _bdf_draw(img, LEFT_PAD, HEADER_Y, "Ln", _FONT, COL_HEADER)
         _bdf_draw(img, dest_x_for(ln_w), HEADER_Y, "Dest", _FONT, COL_HEADER)
-    _bdf_draw(img, MATRIX_W - _bdf_width("Min", _FONT), HEADER_Y, "Min", _FONT, COL_HEADER)
+    _bdf_draw(img, MATRIX_W - _bdf_width(time_label, _FONT), HEADER_Y, time_label, _FONT, COL_HEADER)
 
 
 def _draw_row(img: Image.Image, y: int, ln_w: int, row: dict):
@@ -226,10 +245,10 @@ def _draw_row(img: Image.Image, y: int, ln_w: int, row: dict):
     _bdf_draw(img, MATRIX_W - _bdf_width(m, _FONT), y, m, _FONT, mcol)
 
 
-def render_board(ln_w: int, rows: list, title: str = None) -> Image.Image:
+def render_board(ln_w: int, rows: list, title: str = None, time_label: str = "Min") -> Image.Image:
     """`title` replaces the "Ln  Dest" header (used to name the stop when cycling stops)."""
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
-    _draw_header(img, ln_w, title)
+    _draw_header(img, ln_w, title, time_label)
     for row, y in zip(rows, ROW_Y):
         _draw_row(img, y, ln_w, row)
     return img
@@ -255,10 +274,10 @@ def build_scroll_strip(ln_w: int, blocks: list) -> Image.Image:
     return img
 
 
-def render_scroll_frame(ln_w: int, strip: Image.Image, offset: int) -> Image.Image:
+def render_scroll_frame(ln_w: int, strip: Image.Image, offset: int, time_label: str = "Min") -> Image.Image:
     """Fixed header row + the strip scrolled to `offset`, wrapping around."""
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
-    _draw_header(img, ln_w)
+    _draw_header(img, ln_w, time_label=time_label)
     sh = strip.height
     offset %= sh
     y = SCROLL_Y

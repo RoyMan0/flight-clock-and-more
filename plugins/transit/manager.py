@@ -108,6 +108,34 @@ def stop_title(stop: dict) -> str:
     return shorten(stop.get("stop_name") or str(stop.get("stop_id")), STOP_NAME_CHARS, alias_set)
 
 
+TIME_MODES = ("minutes", "clock", "alternate")
+
+
+def clock_format() -> str:
+    try:
+        from core.config_manager import get_config
+        return get_config().get("location", "clock_format", default="12hr") or "12hr"
+    except Exception:
+        return "12hr"
+
+
+def time_view(config: dict, now: float = None):
+    """(time_mode, show_clock, header label) for this moment.
+    "alternate" flips between minutes and clock times every `time_alternate_secs` (default 3)."""
+    mode = config.get("time_display", "minutes")
+    if mode not in TIME_MODES:
+        mode = "minutes"
+    if mode == "alternate":
+        try:
+            secs = max(1.0, float(config.get("time_alternate_secs", 3)))
+        except (TypeError, ValueError):
+            secs = 3.0
+        show = int((now or time.time()) // secs) % 2 == 1
+    else:
+        show = mode == "clock"
+    return mode, show, ("Time" if show else "Min")
+
+
 def build_pages(config: dict, results: list, ln_w: int = 8, now: float = None) -> list:
     """
     results: [(stop, [Arrival])] → pages: [(title or None, ln_w, rows)].
@@ -127,18 +155,21 @@ def build_pages(config: dict, results: list, ln_w: int = 8, now: float = None) -
     every = [a for _s, arr in upcoming for a in arr]
     ln_w = max(ln_w, label_column_width(every))
     n = len(ROW_Y)
+    mode, show_clock, _label = time_view(config, now)
+    fmt = clock_format() if mode != "minutes" else "12hr"
+    tv = {"time_mode": mode, "show_clock": show_clock, "clock_fmt": fmt}
 
     if is_scroll_mode(config):
         pages = []
         for stop, arr in upcoming:
             if arr:
                 shown = _pick_rows(arr, n)
-                pages.append((stop_title(stop), *build_rows(shown, now, user_aliases=aliases, ln_w=ln_w)))
+                pages.append((stop_title(stop), *build_rows(shown, now, user_aliases=aliases, ln_w=ln_w, **tv)))
         return pages
 
     if not every:
         return []
-    return [(None, *build_rows(_pick_rows(every, n), now, user_aliases=aliases, ln_w=ln_w))]
+    return [(None, *build_rows(_pick_rows(every, n), now, user_aliases=aliases, ln_w=ln_w, **tv))]
 
 
 def _pick_rows(arrivals: list, n: int) -> list:
@@ -266,7 +297,8 @@ class TransitPlugin(BasePlugin):
                 self._strip = build_scroll_strip(ln_w, [(t, rows) for t, _w, rows in pages])
                 self._strip_key = key
             strip = self._strip
-            push_pil_to_canvas(render_scroll_frame(ln_w, strip, int(self._y_offset)),
+            push_pil_to_canvas(render_scroll_frame(ln_w, strip, int(self._y_offset),
+                                                   time_view(self.config)[2]),
                                self.display_manager)
             # Loops for the whole display_duration, like Breaking News
             self._y_offset = (self._y_offset + self._scroll_speed()) % strip.height
@@ -275,8 +307,9 @@ class TransitPlugin(BasePlugin):
 
         # Static board: combined mode, or a single stop
         _title, ln_w, rows = pages[0]
-        key = (ln_w, self._rows_key(rows))
+        label = time_view(self.config)[2]
+        key = (ln_w, label, self._rows_key(rows))
         if key != self._last_render_key:
-            push_pil_to_canvas(render_board(ln_w, rows), self.display_manager)
+            push_pil_to_canvas(render_board(ln_w, rows, time_label=label), self.display_manager)
             self._last_render_key = key
         return True

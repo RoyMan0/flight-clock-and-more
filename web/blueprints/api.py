@@ -606,7 +606,7 @@ def transit_preview():
     """Fetch live arrivals for an unsaved transit config and render each 64×32 page."""
     from PIL import Image
     from plugins.transit.manager import (
-        build_pages, configured_stops, fetch_stop, is_scroll_mode, line_label_width,
+        build_pages, configured_stops, fetch_stop, is_scroll_mode, line_label_width, time_view,
     )
     from plugins.transit.providers.base import ProviderNotReady
     from plugins.transit.render import (
@@ -646,14 +646,14 @@ def transit_preview():
                 "rows": [{"line": r["label"], "dest_full": r["dest_full"], "dest": r["dest"],
                           "min": r["min"], "missable": r["missable"]} for r in rows],
                 # Scroll mode gets one tall image of the whole loop instead (below)
-                "image": None if scrolling else _png(render_board(ln_w, rows)),
+                "image": None if scrolling else _png(render_board(ln_w, rows, time_label=time_view(data)[2])),
             })
         scroll_image = None
         if scrolling:
             ln_w = built[0][1]
             strip = build_scroll_strip(ln_w, [(t, rows) for t, _w, rows in built])
             tall = Image.new("RGB", (64, SCROLL_Y + strip.height))
-            tall.paste(render_scroll_frame(ln_w, strip, 0).crop((0, 0, 64, SCROLL_Y)), (0, 0))
+            tall.paste(render_scroll_frame(ln_w, strip, 0, time_view(data)[2]).crop((0, 0, 64, SCROLL_Y)), (0, 0))
             tall.paste(strip, (0, SCROLL_Y))
             scroll_image = _png(tall)
         return {"pages": pages, "scroll_image": scroll_image, "problems": problems}
