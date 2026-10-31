@@ -156,12 +156,14 @@ def _eastern_now() -> datetime:
     return utc + timedelta(hours=offset)
 
 
-def _dates_param() -> str:
-    """ESPN 'dates' param: yesterday–today in Eastern time."""
+def _dates_param() -> list[str]:
+    """ESPN 'dates' values: yesterday and today in Eastern time.
+
+    One request per day: ESPN rejects the "YYYYMMDD-YYYYMMDD" range form with a 400."""
     et = _eastern_now()
     today     = et.strftime("%Y%m%d")
     yesterday = (et - timedelta(days=1)).strftime("%Y%m%d")
-    return f"{yesterday}-{today}"
+    return [yesterday, today]
 
 
 # ------------------------------------------------------------------
@@ -409,25 +411,27 @@ class SportsPlugin(BasePlugin):
 # ESPN API
 # ------------------------------------------------------------------
 
-def _fetch_league(url: str, league_name: str, dates: str, league_id: str = "") -> list[dict]:
-    try:
-        r = requests.get(
-            url,
-            params={"dates": dates},
-            timeout=10,
-            headers={"User-Agent": "LEDMatrix/1.0"},
-        )
-        if r.status_code != 200:
-            return []
-        games = []
-        for event in r.json().get("events", []):
-            game = _parse_event(event, league_name, league_id)
-            if game:
-                games.append(game)
-        return games
-    except Exception as e:
-        log.debug(f"[sports] Fetch error ({league_name}): {e}")
-        return []
+def _fetch_league(url: str, league_name: str, dates: list[str], league_id: str = "") -> list[dict]:
+    games, seen = [], set()
+    for day in dates:
+        try:
+            r = requests.get(
+                url,
+                params={"dates": day},
+                timeout=10,
+                headers={"User-Agent": "LEDMatrix/1.0"},
+            )
+            if r.status_code != 200:
+                log.warning(f"[sports] {league_name} {day}: HTTP {r.status_code}")
+                continue
+            for event in r.json().get("events", []):
+                game = _parse_event(event, league_name, league_id)
+                if game and game["game_id"] not in seen:   # late games can appear on both days
+                    seen.add(game["game_id"])
+                    games.append(game)
+        except Exception as e:
+            log.debug(f"[sports] Fetch error ({league_name} {day}): {e}")
+    return games
 
 
 def _parse_event(event: dict, league: str, league_id: str = "") -> Optional[dict]:
