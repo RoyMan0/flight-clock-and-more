@@ -346,6 +346,11 @@ class APNewsPlugin(BasePlugin):
             self._strip = None
         log.debug(f"[ap_news] Updated: {len(headlines)} headlines")
 
+    def describe(self):
+        with self._lock:
+            headlines = [h if isinstance(h, str) else str(h) for h in self._headlines]
+        return {"banner": _HEADER_TEXT, "headlines": headlines} if headlines else None
+
     def draw(self) -> bool:
         with self._lock:
             headlines = list(self._headlines)

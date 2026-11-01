@@ -175,6 +175,16 @@ class MazePlugin(BasePlugin):
 
     # ------------------------------------------------------------------
 
+    def describe(self):
+        # The maze itself is a pixel grid; high-res screens draw the frame as tiles
+        # ("pixels") and only typeset the stats card.
+        out = {"pixels": True, "phase": "play" if self.game is not None else self._phase}
+        if self.game is None and self._phase == "stats" and self._solver is not None:
+            s = self._solver
+            out["lines"] = ["SOLVED", f"{s.dead_ends} DEAD ENDS", f"{s.steps} STEPS"]
+            out["accent"] = list(THEMES[self._theme]["routes"][0])
+        return out
+
     def draw(self) -> bool:
         self._frame += 1
         with self._lock:

@@ -16,6 +16,12 @@ Live priority (see core/plugin_manager.py):
     "interleave"  is shown between every normal module while live.
   on_priority_view(True) is called before reset() when shown as a priority.
 
+Describe (Mac app flip-board / e-ink screens):
+  describe() returns a JSON-safe dict of what the plugin shows right now
+  (data, page and view — not pixels or scroll offsets). Only the web API
+  calls it (GET /api/display/model); the draw loop never does. Return None
+  and the Mac app restyles the 64x32 pixels instead.
+
 Cycling:
   is_cycle_complete() returning True signals the manager to advance to the
   next plugin even if display_duration hasn't expired yet.
@@ -79,6 +85,16 @@ class BasePlugin(ABC):
     def on_priority_view(self, active: bool):
         """Called before reset(): True when shown as a live priority, False
         for a normal rotation turn. Override to show a priority-only view."""
+
+    # ------------------------------------------------------------------
+    # Describe (for high-res renderers)
+    # ------------------------------------------------------------------
+
+    def describe(self):
+        """What is on screen now, as a JSON-safe dict, or None (pixel fallback).
+        Called from the web thread: read shared state under the plugin's lock
+        and return copies."""
+        return None
 
     # ------------------------------------------------------------------
     # Cycling control

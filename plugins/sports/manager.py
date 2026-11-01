@@ -349,6 +349,19 @@ class SportsPlugin(BasePlugin):
 
         log.debug(f"[sports] Updated: {len(games)} games ({len(live)} live)")
 
+    def describe(self):
+        with self._lock:
+            games = list(self._games)
+            if self._priority_view:
+                games = [g for g in games if g["state"] == "in"] or games
+        if not games:
+            return None
+        idx = min(self._current_idx, len(games) - 1)
+        g = games[idx]
+        return {"index": idx, "count": len(games), "game": {
+            k: g.get(k) for k in ("game_id", "league", "league_id", "state", "clock", "period",
+                                  "status_detail", "situation", "away", "home", "game_date")}}
+
     def draw(self) -> bool:
         with self._lock:
             games = list(self._games)

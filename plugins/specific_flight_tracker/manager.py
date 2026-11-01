@@ -674,6 +674,23 @@ class SpecificFlightTrackerPlugin(BasePlugin):
         self._display._show_nearby_locations = self.config.get("show_nearby_locations", True)
         self._display.reset_scene()
 
+    def describe(self):
+        from utilities.describe import rgb
+        flights = self._display._data if self._display and self._display._data else self._build_display_data()
+        if not flights:
+            return None
+        idx = min(self._display._data_index if self._display else 0, len(flights) - 1)
+        f = dict(flights[idx])
+        f["origin_color"], f["destination_color"] = rgb(f.get("origin_color")), rgb(f.get("destination_color"))
+        units = _get_config().get("location", "units", default="imperial")
+        out = {"index": idx, "count": len(flights), "flight": f, "units": "km" if units == "metric" else "mi",
+               "details": bool(self.config.get("show_additional_details", True))}
+        if self.config.get("show_nearby_locations", True) and f.get("lat") is not None:
+            c = getattr(self._display, "_loc_cache", None) or {}
+            out["city"] = (c.get("city") or {}).get("name")
+            out["poi"] = (c.get("poi") or {}).get("name")
+        return out
+
     def draw(self) -> bool:
         self._ensure_display()
         self._display.canvas = self.display_manager.canvas

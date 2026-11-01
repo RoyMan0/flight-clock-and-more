@@ -87,6 +87,16 @@ class SnowReportPlugin(BasePlugin):
             self._data_version += 1
         log.debug(f"[snow] Updated {len(reports)} resorts")
 
+    def describe(self):
+        if self.config.get("morning_only", False) and not (6 <= datetime.now().hour < 10):
+            return None
+        with self._lock:
+            reports = list(self._reports)
+        if not reports:
+            return None
+        idx = min(self._current_idx, len(reports) - 1)
+        return {"index": idx, "count": len(reports), "report": dict(reports[idx])}
+
     def draw(self) -> bool:
         if self.config.get("morning_only", False):
             hour = datetime.now().hour

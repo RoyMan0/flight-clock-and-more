@@ -182,6 +182,15 @@ class StockTickerPlugin(BasePlugin):
 
         log.debug(f"[stock] Updated: {len(etfs)} ETFs, {len(stocks)} stocks")
 
+    def describe(self):
+        with self._data_lock:
+            etfs, stocks = list(self._etfs), list(self._stocks)
+        if not etfs and not stocks:
+            return None
+        keep = ("symbol", "price", "day_change_pct")
+        return {"etfs": [{k: e.get(k) for k in keep} for e in etfs],
+                "stocks": [{k: e.get(k) for k in keep} for e in stocks]}
+
     def draw(self) -> bool:
         with self._data_lock:
             etfs   = list(self._etfs)

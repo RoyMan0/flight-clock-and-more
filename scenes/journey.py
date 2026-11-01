@@ -31,7 +31,51 @@ DISTANCE_FONT = fonts.extrasmall
 ARROW_POINT_POSITION = (42, 5)
 ARROW_WIDTH = 5
 ARROW_HEIGHT = 8
-    
+
+
+def _delay_minutes(real, scheduled):
+    if real is None or scheduled in (None, 0):
+        return None
+    return (real - scheduled) / 60
+
+
+def delay_colours(flight: dict):
+    """(origin colour, destination colour) from the departure and arrival delays."""
+    departure_delay_minutes = _delay_minutes(flight.get("time_real_departure"), flight.get("time_scheduled_departure"))
+    arrival_delay_minutes = _delay_minutes(flight.get("time_estimated_arrival"), flight.get("time_scheduled_arrival"))
+
+    if departure_delay_minutes is None:
+        origin_color = colours.LIGHT_GREY
+    elif departure_delay_minutes <= 20:
+        origin_color = colours.LIGHT_MID_GREEN
+    elif 20 < departure_delay_minutes <= 40:
+        origin_color = colours.LIGHT_YELLOW
+    elif 40 < departure_delay_minutes <= 60:
+        origin_color = colours.LIGHT_MID_ORANGE
+    elif 60 < departure_delay_minutes <= 240:
+        origin_color = colours.LIGHT_RED
+    elif 240 < departure_delay_minutes <= 480:
+        origin_color = colours.LIGHT_PURPLE
+    else:
+        origin_color = colours.LIGHT_DARK_BLUE
+
+    if arrival_delay_minutes is None:
+        destination_color = colours.LIGHT_GREY
+    elif arrival_delay_minutes <= 15:
+        destination_color = colours.LIGHT_MID_GREEN
+    elif arrival_delay_minutes <= 30:
+        destination_color = colours.LIGHT_YELLOW
+    elif arrival_delay_minutes <= 60:
+        destination_color = colours.LIGHT_MID_ORANGE
+    elif arrival_delay_minutes <= 240:
+        destination_color = colours.LIGHT_RED
+    elif arrival_delay_minutes <= 480:
+        destination_color = colours.LIGHT_PURPLE
+    else:
+        destination_color = colours.LIGHT_DARK_BLUE
+    return origin_color, destination_color
+
+
 class JourneyScene(object):
     def __init__(self):
         super().__init__()
@@ -60,47 +104,7 @@ class JourneyScene(object):
         distance_origin_text = f'{dist_origin:.0f}{distance_units}'
         distance_destination_text = f'{dist_destination:.0f}{distance_units}'
 
-        def safe_delay(real, scheduled):
-            if real is None or scheduled in (None, 0):
-                return None
-            return (real - scheduled) / 60
-
-        departure_delay_minutes = safe_delay(time_real_departure, time_scheduled_departure)
-        arrival_delay_minutes = safe_delay(time_estimated_arrival, time_scheduled_arrival)
-        
-        # Print time differences for debugging
-        #print(f"Origin: {origin}, Departure Delay (minutes): {departure_delay_minutes}")
-        #print(f"Destination: {destination}, Arrival Delay (minutes): {arrival_delay_minutes}")
-        
-        if departure_delay_minutes is None:
-            origin_color = colours.LIGHT_GREY
-        elif departure_delay_minutes <= 20:
-            origin_color = colours.LIGHT_MID_GREEN
-        elif 20 < departure_delay_minutes <= 40:
-            origin_color = colours.LIGHT_YELLOW
-        elif 40 < departure_delay_minutes <= 60:
-            origin_color = colours.LIGHT_MID_ORANGE
-        elif 60 < departure_delay_minutes <= 240:
-            origin_color = colours.LIGHT_RED
-        elif 240 < departure_delay_minutes <= 480:
-            origin_color = colours.LIGHT_PURPLE
-        else:
-            origin_color = colours.LIGHT_DARK_BLUE
-
-        if arrival_delay_minutes is None:
-            destination_color = colours.LIGHT_GREY
-        elif arrival_delay_minutes <= 15:
-            destination_color = colours.LIGHT_MID_GREEN
-        elif arrival_delay_minutes <= 30:
-            destination_color = colours.LIGHT_YELLOW
-        elif arrival_delay_minutes <= 60:
-            destination_color = colours.LIGHT_MID_ORANGE
-        elif arrival_delay_minutes <= 240:
-            destination_color = colours.LIGHT_RED
-        elif arrival_delay_minutes <= 480:
-            destination_color = colours.LIGHT_PURPLE
-        else:
-            destination_color = colours.LIGHT_DARK_BLUE
+        origin_color, destination_color = delay_colours(self._data[self._data_index])
 
         # Clear the full journey area including the distance row at y=16.
         # Airport codes (7x13 font, descent=2) reach y=12; distance text

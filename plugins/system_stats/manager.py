@@ -156,6 +156,42 @@ class SystemStatsPlugin(BasePlugin):
                 rows.append((conn, stats, error))
         return rows
 
+    def describe(self):
+        from plugins.system_stats import render as r
+        rows = self._rows()
+        if not rows:
+            return None
+        u = units()
+        hosts = []
+        for conn, stats, error in rows:
+            name = (conn.get("name") or "").strip() or (stats or {}).get("host") or conn.get("host") or "This Pi"
+            if error or stats is None:
+                hosts.append({"name": name, "offline": True, "stats": []})
+                continue
+            avail = r.available_stats(conn, stats)
+            items = []
+            for key in (k for k in avail if k != "uptime"):
+                label, colour = r.STATS[key]
+                item = {"key": key, "label": label, "color": list(colour)}
+                if key in ("cpu", "gpu", "mem"):
+                    pct = stats.get(f"{key}_pct")
+                    temp = stats.get(f"{key}_temp") if key != "mem" else None
+                    item.update(value=None if pct is None else f"{round(pct)}%", frac=(pct or 0) / 100.0)
+                    if temp is not None:
+                        item.update(temp=r.fmt_temp(temp, u), temp_color=list(r.temp_colour(temp)))
+                else:
+                    a, b = ("disk_r", "disk_w") if key == "disk" else ("net_rx", "net_tx")
+                    full = float(conn.get("disk_max" if key == "disk" else "net_max")
+                                 or (7e9 if key == "disk" else 1.25e9))
+                    total = None if stats.get(a) is None else (stats.get(a) or 0) + (stats.get(b) or 0)
+                    item.update(a=r.fmt_rate(stats.get(a)), b=r.fmt_rate(stats.get(b)),
+                                a_mark="R" if key == "disk" else "↓", b_mark="W" if key == "disk" else "↑",
+                                frac=r.log_frac(total, full))
+                items.append(item)
+            hosts.append({"name": name, "offline": False, "stats": items,
+                          "uptime": r.fmt_uptime(stats.get("uptime_s")) if "uptime" in avail else ""})
+        return {"hosts": hosts}
+
     def draw(self) -> bool:
         rows = self._rows()
         if not rows:

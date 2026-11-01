@@ -212,6 +212,31 @@ class AiUsagePlugin(BasePlugin):
     def is_cycle_complete(self) -> bool:
         return time.monotonic() - self._start >= self.display_duration
 
+    def describe(self):
+        from plugins.ai_usage.render import PROVIDERS, countdown, effective_pct, time_labels
+        pages = self._pages()
+        if not pages:
+            return None
+        elapsed = time.monotonic() - self._start
+        idx = int(elapsed // self._seconds_per_page()) % len(pages)
+        p, result = pages[idx]
+        usage = result.get("usage") or {}
+        fmt = self.config.get("reset_format", "times")
+        now = time.time()
+        out = {"index": idx, "count": len(pages), "provider": p,
+               "title": PROVIDERS.get(p, (p.upper(),))[0], "color": list(PROVIDERS.get(p, ("", (200, 200, 200)))[1]),
+               "reset_format": fmt}
+        if not usage:
+            out["message"] = "LOGIN NEEDED" if result.get("login") else "NO DATA"
+            return out
+        cr, wr = usage.get("current_reset"), usage.get("weekly_reset")
+        out.update(current_pct=effective_pct(usage.get("current_pct"), cr, now),
+                   weekly_pct=effective_pct(usage.get("weekly_pct"), wr, now))
+        if fmt != "off":
+            out["current_reset"], out["weekly_reset"] = time_labels(cr, wr, clock_format())
+            out["current_countdown"], out["weekly_countdown"] = countdown(cr, now), countdown(wr, now)
+        return out
+
     def draw(self) -> bool:
         pages = self._pages()
         if not pages:

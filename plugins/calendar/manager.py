@@ -300,6 +300,32 @@ class CalendarPlugin(BasePlugin):
             self._key = key
         return True
 
+    def describe(self):
+        fmt = clock_format()
+
+        def ev_out(ev):
+            (main, mcol), (sub, scol) = R.time_column(ev, fmt)
+            return {"title": ev.get("title", ""), "location": ev.get("location") or "",
+                    "source": ev.get("source") or "Calendar", "color": list(R.hex_rgb(ev.get("color"))),
+                    "time": main, "time_color": list(mcol), "sub": sub, "day": R.day_label(R.event_day(ev)),
+                    "now": R.in_progress(ev), "all_day": bool(ev.get("all_day"))}
+
+        if self._priority and self._reminder_ev is not None:
+            ev = self._reminder_ev
+            return {"view": "reminder", "title": R.reminder_title(ev), "events": [ev_out(ev)], "index": 0}
+        if self._mode() == "compact":
+            events = self._events()
+            if not events:
+                return None
+            rows = [{"day": v} if kind == "day" else {"event": ev_out(v)} for kind, v in R.compact_rows(events)]
+            return {"view": "compact", "rows": rows}
+        visit = self._visit or self._events()[:max(1, int(self.config.get("events_per_visit", 5)))]
+        if not visit:
+            return None
+        n, period = len(visit), self._hold() + self._transition()
+        idx = int(((time.monotonic() - self._start) % (n * period)) // period) if n > 1 else 0
+        return {"view": "detailed", "index": idx, "events": [ev_out(e) for e in visit]}
+
     def draw(self) -> bool:
         fmt = clock_format()
         if self._priority and self._reminder_ev is None:

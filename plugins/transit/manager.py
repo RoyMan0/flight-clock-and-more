@@ -284,6 +284,22 @@ class TransitPlugin(BasePlugin):
     def _rows_key(rows: list) -> tuple:
         return tuple((r["label"], r["dest"], r["min"], r["missable"]) for r in rows)
 
+    def describe(self):
+        pages = self._pages()
+        if not pages:
+            return None
+        label = time_view(self.config)[2]
+        return {
+            "view": "scroll" if is_scroll_mode(self.config) and len(pages) > 1 else "board",
+            "time_label": label,
+            "pages": [{
+                "title": title,
+                "rows": [{"label": r["label"], "color": list(r["color"]), "dest": r["dest_full"],
+                          "short": r["dest"], "min": r["min"], "realtime": r.get("realtime"),
+                          "missable": r.get("missable")} for r in rows],
+            } for title, _w, rows in pages],
+        }
+
     def draw(self) -> bool:
         pages = self._pages()
         if not pages:

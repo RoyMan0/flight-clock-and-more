@@ -99,6 +99,65 @@ class ClockWeatherPlugin(BasePlugin):
         get_temperature_cached()
         get_forecast_cached()
 
+    def describe(self):
+        from datetime import datetime, timezone
+        from config import CLOCK_FORMAT
+        from utilities.describe import rgb
+        d = self._display
+        now = datetime.now()
+        out = {"view": "clock",
+               "time": now.strftime("%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M").strip(),
+               "ampm": now.strftime("%p") if CLOCK_FORMAT == "12hr" else "",
+               "date": now.strftime("%b %d"), "weekday": now.strftime("%A")}
+        if d is not None and getattr(d, "_iss_active", False):
+            try:
+                from utilities.iss import get_iss_pass_data
+                data = get_iss_pass_data()
+            except Exception:
+                data = None
+            if data:
+                return {**out, "view": "iss", "progress": data.get("progress"),
+                        "remaining_sec": data.get("remaining_sec"), "rise_azimuth": data.get("rise_azimuth"),
+                        "set_azimuth": data.get("set_azimuth"), "max_elevation": data.get("max_elevation")}
+
+        rise, sset = (d.today_sunrise, d.today_sunset) if d is not None else (None, None)
+        now_utc = datetime.now(timezone.utc)
+        out["daytime"] = None if rise is None or sset is None else bool(rise <= now_utc < sset)
+        moon = d.today_moonphase if d is not None else None
+        out["moon_phase"] = moon
+        if d is not None and moon is not None:
+            a, b = d.map_moon_phase_to_color(moon)
+            out["date_colors"] = [rgb(a), rgb(b)]
+
+        temp, hum = get_temperature_cached()
+        out["temp"] = None if temp is None else round(temp)
+        out["humidity"] = hum
+
+        days = []
+        today = datetime.now().astimezone().date()
+        for day in get_forecast_cached() or []:
+            try:
+                local = datetime.fromisoformat(day["startTime"])
+                if local.date() < today:
+                    continue
+                v = day["values"]
+                days.append({"day": local.strftime("%a"), "code": v.get("weatherCodeFullDay"),
+                             "max": round(v["temperatureMax"]), "min": round(v["temperatureMin"])})
+            except Exception:
+                continue
+            if len(days) == 3:
+                break
+        out["forecast"] = days
+
+        alerts = list(getattr(d, "_active_alerts", []) or []) if d is not None else []
+        if alerts:
+            n = len(alerts)
+            cycle = 3 if n > 4 else 4
+            slot = max(0, getattr(d, "_alert_cycle_counter", 1) - 1) // cycle % n
+            out["alerts"] = [{"text": t, "color": rgb(c)} for t, c in alerts]
+            out["alert_index"] = slot
+        return out
+
     def is_cycle_complete(self) -> bool:
         # Clock/weather runs continuously; never signals completion
         return False

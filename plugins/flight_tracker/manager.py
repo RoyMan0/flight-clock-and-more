@@ -178,6 +178,37 @@ class FlightTrackerPlugin(BasePlugin):
         self._display.tick()
         return len(self._display._data) > 0
 
+    def describe(self):
+        from scenes.journey import delay_colours
+        from utilities.describe import rgb
+        flights = list(self._display._data) if self._display else []
+        if not flights:
+            return None
+        units = get_config().get("location", "units", default="imperial")
+        if self.config.get("radar_mode", False):
+            loc = get_config().get("location") or {}
+            home = loc.get("location_home", [0, 0])
+            return {"view": "radar", "home": [home[0], home[1]],
+                    "radius_nm": float(loc.get("search_radius_nm") or 50),
+                    "planes": [{"callsign": f.get("callsign"), "lat": f.get("plane_latitude"),
+                                "lon": f.get("plane_longitude"), "altitude": f.get("altitude")}
+                               for f in flights if f.get("plane_latitude") is not None]}
+        idx = min(self._display._data_index, len(flights) - 1)
+        f = flights[idx]
+        callsign, owner = f.get("callsign") or "", f.get("owner_icao") or ""
+        number = callsign[len(owner):] if owner and callsign.startswith(owner) else callsign
+        o_col, d_col = delay_colours(f)
+        return {"view": "flight", "index": idx, "count": len(flights),
+                "callsign": callsign, "number": number, "airline": f.get("airline") or "",
+                "owner_icao": owner, "origin": f.get("origin") or "", "destination": f.get("destination") or "",
+                "origin_color": rgb(o_col), "destination_color": rgb(d_col),
+                "distance_origin": f.get("distance_origin"), "distance_destination": f.get("distance_destination"),
+                "plane": f.get("plane") or "", "distance": f.get("distance"), "direction": f.get("direction") or "",
+                "altitude": f.get("altitude"), "ground_speed": f.get("ground_speed"),
+                "registration": f.get("registration") or "",
+                "units": "km" if units == "metric" else "mi",
+                "details": bool(self.config.get("show_additional_details", False))}
+
     def _draw_radar(self) -> bool:
         flights = self._display._data if self._display else []
         if not flights:

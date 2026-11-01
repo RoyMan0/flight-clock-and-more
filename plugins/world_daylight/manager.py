@@ -468,6 +468,24 @@ class WorldDaylightPlugin(BasePlugin):
             self._moon_phase  = phase
             self._data_version += 1
 
+    def describe(self):
+        with self._lock:
+            temp, hum, phase = self._temperature, self._humidity, self._moon_phase
+        now = datetime.now()
+        dt_utc = now.astimezone(timezone.utc)
+        sun_lat, sun_lon = _sun_geo_position(dt_utc)
+        moon_lat, moon_lon = _moon_geo_position(dt_utc)
+        out = {"sun": [sun_lat, sun_lon], "moon": [moon_lat, moon_lon],
+               "moon_phase": phase if phase is not None else 4, "night": _is_local_night()}
+        if self.config.get("show_time", True):
+            out["time"] = now.strftime("%l:%M %p" if CLOCK_FORMAT == "12hr" else "%H:%M").strip()
+        if self.config.get("show_date", True):
+            out["date"] = now.strftime("%b %-d")
+        if self.config.get("show_temp", True) and temp is not None:
+            out["temp"] = f"{round(temp)}\xb0{'F' if TEMPERATURE_UNITS == 'imperial' else 'C'}"
+            out["temp_color"] = list(_temp_color(hum))
+        return out
+
     def draw(self) -> bool:
         with self._lock:
             temp    = self._temperature

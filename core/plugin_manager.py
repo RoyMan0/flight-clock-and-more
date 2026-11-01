@@ -393,6 +393,23 @@ class PluginManager:
             self._rotation_index = 0
             self._switch_to(self._rotation[0])
 
+    def describe_active(self) -> dict:
+        """The active plugin's describe() model, for GET /api/display/model."""
+        pid = self._active_id
+        plugin = self._plugins.get(pid) if pid else None
+        model = None
+        if plugin is not None:
+            try:
+                model = plugin.describe()
+            except Exception as e:
+                log.debug(f"[plugins] {pid}.describe() failed: {e}")
+        return {
+            "plugin": pid,
+            "priority": bool(pid and pid == (self._priority_id or self._interleaving)),
+            "since": self._active_start,
+            "model": model,
+        }
+
     def get_status(self) -> dict:
         held = self._plugins.get(self._held) if self._held else None
         try:

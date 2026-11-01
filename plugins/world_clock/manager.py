@@ -233,6 +233,10 @@ class WorldClockPlugin(BasePlugin):
             return max(base, strip_h / (self._scroll_speed() * 10) + 1)
         return base
 
+    def describe(self):
+        rows = build_rows(self.config)
+        return {"rows": rows} if rows else None
+
     def draw(self) -> bool:
         rows = build_rows(self.config)
         if not rows:

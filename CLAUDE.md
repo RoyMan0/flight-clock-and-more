@@ -63,6 +63,13 @@ A separate repo, `Flight-Clock-App`, runs this codebase as a standalone Mac app.
   - `restart_cb`, used by `/api/system/restart-app` and `/setup/finish` in place of `systemctl restart`.
   - `locate_cb`, used by `/setup/locate` for the wizard's "Use my Mac's location".
 - **`GET /api/display/frame`**: the raw 64×32 RGB snapshot (6,144 bytes, with an `X-Brightness` header), polled at 10 fps by the Mac panel window.
+- **`describe()` and `GET /api/display/model`** (Mac flip-board and colour e-ink screens): each plugin's `describe()` returns a JSON-safe dict of what it is showing now: data, page index and view mode, **not** pixels or scroll offsets. The Mac app draws it at high resolution from its own layouts (`desktop/panel/js/layouts/<plugin>.js` in Flight-Clock-App).
+  - `PluginManager.describe_active()` wraps the active plugin's model. The endpoint adds `rev`, a CRC of the model, so clients redraw only on change.
+  - Only the web thread calls it; the draw loop never does, so the Pi is unaffected. Read shared state under the plugin's lock, return copies, and never do network I/O there.
+  - Colours are `[r, g, b]` lists; `utilities/describe.rgb()` converts a `graphics.Color`.
+  - Returning `None` (the `BasePlugin` default) makes the Mac app restyle the 64×32 pixels instead. Maze returns `{"pixels": True, …}` on purpose: a maze *is* a pixel grid.
+  - `GET /api/display/asset/<kind>/<name>` serves the images the models refer to: `logo` (airline), `sports-<league>`, and `art` (Now Playing's current artwork). Names are restricted to `[A-Za-z0-9_]{1,16}`.
+  - `scenes/journey.delay_colours(flight)` is shared by the panel scene and the flight tracker's `describe()`.
 - **`core/bootstrap.py`** holds plugin import and registration, shared by `main.py` and the Mac app. **Add new plugins to `OPTIONAL_PLUGINS` there**, not to `main.py`.
 - **Platform differences:**
   - Sounds use `afplay` on macOS and `mpg123` on the Pi.
@@ -262,8 +269,9 @@ Every new module must ship with all of these (the owner asked for this explicitl
 4. **An About section in `web/templates/about.html`** — a collapsible card in `#aboutAccordion` (same markup as the others: icon, one-paragraph overview, then `subsection-title` blocks for colours/legends/sources) written for end users, not developers.
 5. A section in this file describing the design and any gotchas.
 6. No personal values (hostnames, usernames, keys) in examples or placeholders — the repo is public.
-7. Files it writes (caches, state) go under `utilities.paths.DATA_ROOT`, never next to the code. The Mac app's bundle is read-only. Pi-only features (hardware, `sudo`, systemd) are hidden with `{% if not desktop %}` / `utilities.paths.DESKTOP`.
-8. Works on a phone: no horizontal page scroll at 390 px wide (wrap wide tables in `.table-responsive`, give flex rows `min-width:0` on text and `flex-shrink-0` on controls). Friends configure their Pis from phones.
+7. A `describe()` returning what it shows (see Desktop above), plus a layout in Flight-Clock-App's `desktop/panel/js/layouts/`. Without them the Mac's flip-board and e-ink screens show the module's pixels.
+8. Files it writes (caches, state) go under `utilities.paths.DATA_ROOT`, never next to the code. The Mac app's bundle is read-only. Pi-only features (hardware, `sudo`, systemd) are hidden with `{% if not desktop %}` / `utilities.paths.DESKTOP`.
+9. Works on a phone: no horizontal page scroll at 390 px wide (wrap wide tables in `.table-responsive`, give flex rows `min-width:0` on text and `flex-shrink-0` on controls). Friends configure their Pis from phones.
 
 ## Known States / Gotchas
 

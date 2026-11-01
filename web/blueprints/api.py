@@ -139,6 +139,53 @@ def display_frame():
     )
 
 
+@api_bp.get("/display/model")
+def display_model():
+    """What the active plugin shows, as data (plugin.describe()), for the Mac app's
+    flip-board and e-ink screens. `rev` changes only when the content does."""
+    pm = _pm()
+    if pm is None:
+        return Response(status=503)
+    out = pm.describe_active()
+    d = _display()
+    body = json.dumps(out["model"], sort_keys=True, default=str)
+    out["model"] = json.loads(body)
+    out["rev"] = f"{out['plugin']}:{__import__('zlib').crc32(body.encode()):08x}"
+    out["brightness"] = d.brightness if d is not None else 100
+    resp = jsonify(out)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+_ASSET_NAME = __import__("re").compile(r"^[A-Za-z0-9_]{1,16}$")
+
+
+@api_bp.get("/display/asset/<kind>/<name>")
+def display_asset(kind, name):
+    """Images the high-res screens need: airline logos, sports logos, album art."""
+    from flask import send_file
+    if not _ASSET_NAME.match(name):
+        return Response(status=404)
+    if kind == "logo":
+        path = os.path.join(BASE_DIR, "logos", f"{name.upper()}.png")
+    elif kind.startswith("sports-") and _ASSET_NAME.match(kind[7:]):
+        path = os.path.join(DATA_ROOT, "assets", "sports", "logos", kind[7:].lower(), f"{name.upper()}.png")
+    elif kind == "art":
+        plugin = _pm()._plugins.get("now_playing") if _pm() else None
+        art = plugin.current_art() if plugin else None
+        if art is None:
+            return Response(status=404)
+        buf = io.BytesIO()
+        art.save(buf, format="PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png", max_age=0)
+    else:
+        return Response(status=404)
+    if not os.path.isfile(path):
+        return Response(status=404)
+    return send_file(path, mimetype="image/png", max_age=3600)
+
+
 @api_bp.get("/display/snapshot")
 def display_snapshot():
     d = _display()

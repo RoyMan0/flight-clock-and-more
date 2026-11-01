@@ -198,6 +198,20 @@ class NowPlayingPlugin(BasePlugin):
         except (TypeError, ValueError):
             return DEFAULT_SCROLL_SPEED
 
+    def current_art(self):
+        """The current track's artwork (small PIL image) for /api/display/asset/art."""
+        track = self._current()
+        return track.get("art") if track else None
+
+    def describe(self):
+        track = self._current()
+        if not track:
+            return None
+        return {k: track.get(k) for k in ("title", "artist", "album", "source", "art_url", "art_key")} | {
+            "has_art": track.get("art") is not None,
+            "progress": progress_fraction(track, time.monotonic()),
+        }
+
     def draw(self) -> bool:
         track = self._current()
         if not track:

@@ -309,6 +309,17 @@ class EventCountdownPlugin(BasePlugin):
     def update(self):
         pass  # all state computed from datetime.now() at draw time
 
+    def describe(self):
+        title = self.config.get("event_title", "").strip()
+        event_dt = _parse_event_dt(self.config.get("event_datetime", "").strip())
+        if not title or event_dt is None:
+            return None
+        now = datetime.now(timezone.utc) if event_dt.tzinfo else datetime.now()
+        remaining = (event_dt - now).total_seconds()
+        line1, line2 = _format_countdown(remaining, event_dt)
+        return {"title": title, "event_ts": event_dt.timestamp(), "now": remaining <= 0,
+                "line1": line1, "line2": line2}
+
     def draw(self) -> bool:
         title  = self.config.get("event_title", "").strip()
         dt_str = self.config.get("event_datetime", "").strip()
