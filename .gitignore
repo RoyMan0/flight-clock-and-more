@@ -16,6 +16,7 @@ workdammit.log
 # Runtime cache and data (updated every run, not source-controlled)
 .cache/
 data/
+flightaware_usage.json
 
 # Mac dev stub for rgbmatrix C extension (must NOT be deployed to Pi)
 rgbmatrix/
