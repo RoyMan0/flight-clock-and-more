@@ -9,17 +9,20 @@ Data, per module (so pressing Test never burns paid/capped API quota):
   free sources fetch fresh   — sports (ESPN), stock ticker (Yahoo/Schwab), breaking news (AP)
   cached data only           — clock & weather, world daylight (cached weather readers)
   live module's data copied  — specific flight tracker (no AirLabs lookups; no poll thread)
-  no data needed             — event countdown
+  no data needed             — event countdown, maze (built and solved off-screen)
+  polled fresh               — system stats (every enabled machine, twice ~2 s apart so rates show)
 Overhead Flights isn't offered: it only has something to show when a plane is overhead.
 """
 
 import copy
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 log = logging.getLogger(__name__)
 
 PREVIEWABLE = ("clock_weather", "specific_flight_tracker", "stock_ticker", "sports",
-               "world_daylight", "ap_news", "event_countdown")
+               "world_daylight", "ap_news", "event_countdown", "maze", "system_stats")
 
 # How many draw() calls to run, and which ones to capture (frames advance per call)
 _DRAWS = {
@@ -46,6 +49,66 @@ def _snapshot(display):
     return display.get_snapshot().copy()
 
 
+def _maze(config: dict) -> tuple:
+    """A maze with these settings, solved off-screen: start, halfway, and the finish."""
+    from plugins.maze.manager import MazePlugin
+    from plugins.maze.render import THEMES, render_celebration, render_solving, render_stats
+    tmp = MazePlugin(_fake_display(), config, {})
+    tmp._new_maze()
+    maze, layout, theme = tmp._maze, tmp._layout, tmp._theme
+    halfway = copy.deepcopy(tmp._solver)                 # solvers are seeded, so the copy replays the same run
+    solver, steps = tmp._solver, 0
+    while not solver.done and steps < 100_000:
+        solver.step()
+        steps += 1
+    for _ in range(steps // 2):
+        halfway.step()
+    frames = [render_solving(layout, maze, theme, halfway, 0)]
+    if config.get("celebrate", True):
+        cel = render_celebration(layout, maze, theme, solver.path, 15)
+        frames += [cel, render_stats(cel, ["SOLVED", f"{solver.dead_ends} DEAD ENDS", f"{solver.steps} STEPS"],
+                                     THEMES[theme]["routes"][0])]
+    else:
+        frames.append(render_solving(layout, maze, theme, solver, 0))
+    name = {"Explorer": "Explorer", "WallFollower": "Wall follower", "Flood": "Flood"}.get(
+        type(solver).__name__, type(solver).__name__)
+    return frames, f"Halfway, then solved — {name} solver, {theme} theme. Each Test builds a new maze."
+
+
+def _system_stats(config: dict) -> tuple:
+    """Every enabled machine polled twice (in parallel) so disk/network rates show."""
+    from plugins.system_stats.collect import Collector
+    from plugins.system_stats.manager import enabled_connections, units
+    from plugins.system_stats.render import (
+        MATRIX_H, build_sections, build_strip, needs_scroll, render_static, render_strip_frame,
+    )
+    conns = enabled_connections(config)
+    if not conns:
+        return [], "No machines are turned on."
+
+    def poll(conn):
+        collector = Collector(conn)                      # fresh: never disturbs the live poller
+        try:
+            collector.sample()
+            time.sleep(2)
+            return conn, collector.sample(), None
+        except Exception as e:
+            return conn, None, str(e)
+
+    with ThreadPoolExecutor(max_workers=min(8, len(conns))) as ex:
+        results = list(ex.map(poll, conns))
+    sections = build_sections(results, units())
+    offline = [r[0].get("name") or r[0].get("host") or "This Pi" for r in results if r[1] is None]
+    note = f" Couldn't reach {', '.join(offline)} — use Test this machine to see why." if offline else ""
+    if not needs_scroll(sections):
+        return [render_static(sections)], note.strip()
+    strip = build_strip(sections)
+    pages = max(1, -(-strip.height // MATRIX_H))
+    frames = [render_strip_frame(strip, i * MATRIX_H) for i in range(min(pages, MAX_FRAMES))]
+    shown = f"the first {MAX_FRAMES} of {pages} screens" if pages > MAX_FRAMES else "each screen"
+    return frames, f"This scrolls on the panel — showing {shown}.{note}"
+
+
 def render(pm, pid: str, unsaved: dict, secrets: dict) -> tuple:
     """(frames: [PIL.Image], message: str). Raises PreviewError for setup problems."""
     if pid not in PREVIEWABLE:
@@ -54,6 +117,10 @@ def render(pm, pid: str, unsaved: dict, secrets: dict) -> tuple:
     if live is None:
         raise PreviewError("This module isn't loaded")
     config = {**live.config, **(unsaved or {}), "enabled": True}
+    if pid == "maze":
+        return _maze(config)
+    if pid == "system_stats":
+        return _system_stats(config)
     display = _fake_display()
 
     if pid == "specific_flight_tracker":
