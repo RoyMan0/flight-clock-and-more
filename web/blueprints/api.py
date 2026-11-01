@@ -108,19 +108,24 @@ def _led_tiles(w, h):
     return _led_masks[key]
 
 
-def _preview_data_url(img) -> str:
-    """The panel frame drawn as round LEDs (PNG data URL). Identical frames reuse the cache."""
+def _led_png(img) -> str:
+    """A 64×32 frame drawn as round LEDs, as a PNG data URL."""
     from PIL import Image, ImageChops
-    raw = img.tobytes()
-    with _preview_lock:
-        if _preview_cache["key"] == raw:
-            return _preview_cache["data"]
     lit, unlit = _led_tiles(img.width, img.height)
     big = img.resize((img.width * _LED_SCALE, img.height * _LED_SCALE), Image.NEAREST)
     frame = ImageChops.lighter(ImageChops.multiply(big, lit), unlit)
     buf = io.BytesIO()
     frame.save(buf, format="PNG", optimize=False, compress_level=3)
-    data = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _preview_data_url(img) -> str:
+    """The live panel frame as LEDs. Identical frames reuse the cache (many viewers, same frame)."""
+    raw = img.tobytes()
+    with _preview_lock:
+        if _preview_cache["key"] == raw:
+            return _preview_cache["data"]
+    data = _led_png(img)
     with _preview_lock:
         _preview_cache.update(key=raw, data=data)
     return data
@@ -266,6 +271,23 @@ def get_plugin_config(plugin_id):
     if cfg is None:
         return jsonify({}), 503
     return jsonify(cfg.get_plugin_config(plugin_id))
+
+
+@api_bp.post("/plugins/<plugin_id>/preview")
+def plugin_preview(plugin_id):
+    """Config page "Test": render a module with the form's unsaved settings (see web/plugin_preview.py)."""
+    from web import plugin_preview as pp
+    cfg = _cfg()
+    try:
+        frames, message = pp.render(_pm(), plugin_id, request.get_json(force=True) or {},
+                                    cfg.get_all_secrets() if cfg else {})
+    except pp.PreviewError as e:
+        return jsonify({"ok": False, "message": str(e)}), 400
+    except Exception as e:
+        log_ = __import__("logging").getLogger(__name__)
+        log_.warning(f"[preview] {plugin_id}: {e}")
+        return jsonify({"ok": False, "message": f"Preview failed: {e}"}), 500
+    return jsonify({"ok": True, "frames": [_led_png(f) for f in frames], "message": message})
 
 
 @api_bp.post("/plugins/<plugin_id>/config")
