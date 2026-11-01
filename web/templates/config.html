@@ -1510,7 +1510,7 @@
                             @click="sysStatsUi(i).open = !sysStatsUi(i).open">
                       <i class="bi me-1" :class="sysStatsUi(i).open ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
                       <strong x-text="sysConnTitle(conn)"></strong>
-                      <span class="small text-muted d-block d-sm-inline ms-sm-1" x-text="conn.type === 'ssh' ? (conn.user ? conn.user + '@' : '') + (conn.host || 'remote') : 'this Pi'"></span>
+                      <span class="small text-muted d-block d-sm-inline ms-sm-1" x-text="conn.type === 'ssh' ? (conn.user ? conn.user + '@' : '') + (conn.host || 'remote') : 'this {{ pc if desktop else "Pi" }}'"></span>
                     </button>
                     <button class="btn btn-sm btn-outline-danger flex-shrink-0" @click="removeSysConn(i)" title="Remove"><i class="bi bi-trash"></i></button>
                   </div>
@@ -1524,7 +1524,7 @@
                     <div class="col-sm-6">
                       <label class="form-label small mb-1">Machine</label>
                       <select class="form-select form-select-sm bg-dark text-light border-secondary" x-model="conn.type">
-                        <option value="local" :selected="conn.type === 'local'">This Pi</option>
+                        <option value="local" :selected="conn.type === 'local'">This {{ pc if desktop else 'Pi' }}</option>
                         <option value="ssh" :selected="conn.type === 'ssh'">Another computer / NAS (SSH)</option>
                       </select>
                     </div>

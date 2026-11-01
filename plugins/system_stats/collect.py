@@ -1,5 +1,6 @@
 """
-System stats collection — this Pi, or any Linux/macOS machine over SSH.
+System stats collection — this Pi (or the Mac/PC the desktop app runs on), or
+any Linux/macOS machine over SSH.
 
 Each poll runs ONE small read-only shell script on the target and parses its
 output. Cumulative counters (CPU ticks, disk bytes, network bytes) are kept
@@ -17,11 +18,17 @@ macOS:
   storage statistics (disk read/write bytes), netstat -ibn (en* interfaces),
   ioreg IOAccelerator "Device Utilization %" (GPU). Temperatures need admin
   rights on macOS, so they're only shown if `smctemp`/`osx-cpu-temp` is installed.
+Windows (local only — the desktop app on a PC):
+  psutil (CPU times, memory, boot time, disk and network byte counters, NICs
+  that aren't loopback/virtual), the "GPU Engine" performance counters through
+  pdh.dll (busiest engine, as Task Manager shows it), and nvidia-smi for GPU
+  temperature if present. Windows doesn't share CPU temperature with apps.
 """
 
 import logging
 import platform
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -245,6 +252,125 @@ def parse_mac(text: str) -> dict:
     return snap
 
 
+_WIN_VIRTUAL_NIC = re.compile(r"loopback|pseudo|vethernet|virtualbox|vmware|hyper-v|teredo|isatap|6to4|"
+                              r"bluetooth|tailscale|zerotier|wireguard|vpn|tap-", re.I)
+
+
+class _WinGpu:
+    """GPU busy % from the "GPU Engine" counters (pdh.dll), as Task Manager shows it:
+    each engine's utilisation summed over processes, then the busiest engine.
+    The query stays open, so each read averages over the time since the last."""
+
+    PDH_FMT_DOUBLE, PDH_FMT_NOCAP100, PDH_MORE_DATA = 0x200, 0x8000, 0x800007D2
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+
+        class FmtValue(ctypes.Structure):           # PDH_FMT_COUNTERVALUE (union read as double)
+            _fields_ = [("CStatus", wintypes.DWORD), ("doubleValue", ctypes.c_double)]
+
+        class FmtItem(ctypes.Structure):            # PDH_FMT_COUNTERVALUE_ITEM_W
+            _fields_ = [("szName", ctypes.c_wchar_p), ("FmtValue", FmtValue)]
+
+        self._ct, self._wt, self._Item = ctypes, wintypes, FmtItem
+        self._pdh = ctypes.WinDLL("pdh")
+        self._query, self._counter = wintypes.HANDLE(), wintypes.HANDLE()
+        if self._pdh.PdhOpenQueryW(None, None, ctypes.byref(self._query)):
+            raise OSError("PdhOpenQuery failed")
+        if self._pdh.PdhAddEnglishCounterW(self._query, r"\GPU Engine(*)\Utilization Percentage",
+                                           None, ctypes.byref(self._counter)):
+            self._pdh.PdhCloseQuery(self._query)
+            raise OSError("no GPU Engine counters")
+        self._pdh.PdhCollectQueryData(self._query)  # rates need two collections
+
+    def read(self):
+        ct, wt = self._ct, self._wt
+        if self._pdh.PdhCollectQueryData(self._query):
+            return None
+        size, count = wt.DWORD(0), wt.DWORD(0)
+        fmt = self.PDH_FMT_DOUBLE | self.PDH_FMT_NOCAP100
+        st = self._pdh.PdhGetFormattedCounterArrayW(self._counter, fmt, ct.byref(size), ct.byref(count), None)
+        if (st & 0xFFFFFFFF) != self.PDH_MORE_DATA or not size.value:
+            return None
+        buf = ct.create_string_buffer(size.value)
+        if self._pdh.PdhGetFormattedCounterArrayW(self._counter, fmt, ct.byref(size), ct.byref(count), buf):
+            return None
+        items = (self._Item * count.value).from_buffer(buf)
+        engines = {}
+        for it in items:
+            if it.FmtValue.CStatus > 1:              # not PDH_CSTATUS_VALID_DATA / NEW_DATA
+                continue
+            name = it.szName or ""
+            key = name[name.find("luid_"):] if "luid_" in name else name   # one engine, all processes
+            engines[key] = engines.get(key, 0.0) + it.FmtValue.doubleValue
+        return max(0.0, min(100.0, max(engines.values()))) if engines else None
+
+
+def _nvidia_smi():
+    """(utilisation %, temperature °C) from nvidia-smi, or None."""
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "--query-gpu=utilization.gpu,temperature.gpu", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=8,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        g = [p.strip() for p in r.stdout.splitlines()[0].split(",")]
+        return float(g[0]), _deg(g[1])
+    except Exception:
+        return None
+
+
+def sample_windows(gpu=None) -> dict:
+    """A snapshot of this PC (same shape as parse_linux/parse_mac)."""
+    try:
+        import psutil
+    except ImportError:
+        raise CollectError("Stats for this PC need the psutil package")
+    snap = {"os": "windows", "host": platform.node(), "notes": {}}
+
+    t = psutil.cpu_times()
+    snap["cpu_ticks"] = (t.user + t.system + t.idle, t.idle)
+    snap["mem_pct"] = float(psutil.virtual_memory().percent)
+    snap["uptime_s"] = max(0.0, time.time() - psutil.boot_time())
+
+    try:
+        d = psutil.disk_io_counters()
+    except Exception:
+        d = None
+    if d:
+        snap["disk_bytes"] = (d.read_bytes, d.write_bytes)
+    else:
+        snap["notes"]["disk"] = "disk statistics unavailable (run `diskperf -y` as admin to turn them on)"
+
+    try:
+        nics = psutil.net_io_counters(pernic=True)
+        up = {n for n, st in psutil.net_if_stats().items() if st.isup}
+    except Exception:
+        nics, up = {}, set()
+    real = [c for n, c in nics.items() if n in up and not _WIN_VIRTUAL_NIC.search(n)]
+    if real:
+        snap["net_bytes"] = (sum(c.bytes_recv for c in real), sum(c.bytes_sent for c in real))
+    else:
+        snap["notes"]["net"] = "no network interfaces found"
+
+    nv = _nvidia_smi()
+    pct = gpu.read() if gpu else None
+    if pct is None and nv:
+        pct = nv[0]
+    if pct is not None:
+        snap["gpu_pct"] = pct
+    else:
+        snap["notes"]["gpu"] = "GPU usage unavailable on this PC"
+    if nv and nv[1] is not None:
+        snap["gpu_temp"] = nv[1]
+    else:
+        snap["notes"]["gpu_temp"] = "Windows only shares GPU temperature through NVIDIA's tools"
+    snap["notes"]["cpu_temp"] = "Windows doesn't share CPU temperature with apps"
+    return snap
+
+
 # ------------------------------------------------------------------
 # Collector: one per connection, turns snapshots into rates
 # ------------------------------------------------------------------
@@ -254,6 +380,7 @@ class Collector:
         self.conn = dict(conn)
         self._os = None
         self._prev = None            # (time, snapshot)
+        self._gpu = None             # _WinGpu, for this PC on Windows
         self._lock = threading.Lock()
 
     @property
@@ -276,7 +403,12 @@ class Collector:
     def _detect_os(self) -> str:
         if self._os is None:
             if self.is_local and platform.system() == "Windows":
-                raise CollectError("Stats for this PC aren't supported yet; add a Mac or Linux machine over SSH")
+                self._os = "windows"
+                try:
+                    self._gpu = _WinGpu()
+                except Exception as e:
+                    log.info(f"[system_stats] GPU counters unavailable: {e}")
+                return self._os
             uname = (platform.system() if self.is_local else self._run("uname -s", timeout=8)).strip()
             if uname.startswith("Darwin"):
                 self._os = "mac"
@@ -290,9 +422,12 @@ class Collector:
         """One poll. Returns current stats; rates are None until a second poll."""
         with self._lock:
             os_kind = self._detect_os()
-            script = MAC_SCRIPT if os_kind == "mac" else LINUX_SCRIPT
-            text = self._run("sh -s", stdin=script)
-            snap = parse_mac(text) if os_kind == "mac" else parse_linux(text)
+            if os_kind == "windows":
+                snap = sample_windows(self._gpu)
+            else:
+                script = MAC_SCRIPT if os_kind == "mac" else LINUX_SCRIPT
+                text = self._run("sh -s", stdin=script)
+                snap = parse_mac(text) if os_kind == "mac" else parse_linux(text)
             now = time.monotonic()
             prev = self._prev
             self._prev = (now, snap)

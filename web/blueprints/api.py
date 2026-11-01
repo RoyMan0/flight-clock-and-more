@@ -52,7 +52,7 @@ def _block_pi_only_on_desktop():
     if DESKTOP:
         path = request.path[len(api_bp.url_prefix or "/api"):]
         if path.startswith(_PI_ONLY_PREFIXES):
-            return jsonify({"error": "not available in the Mac app"}), 404
+            return jsonify({"error": "not available in the desktop app"}), 404
 
 
 # ------------------------------------------------------------------
@@ -904,7 +904,7 @@ def system_stats_test():
     return jsonify({
         "ok": True,
         "host": stats.get("host"),
-        "os": {"linux": "Linux", "mac": "macOS"}.get(stats.get("os"), stats.get("os")),
+        "os": {"linux": "Linux", "mac": "macOS", "windows": "Windows"}.get(stats.get("os"), stats.get("os")),
         "values": {k: values[k] for k in shown},
         "missing": missing,
         "temp_notes": temp_notes,
