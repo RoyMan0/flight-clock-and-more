@@ -1,3 +1,5 @@
+import os
+from utilities.paths import APP_ROOT   # bundled assets; the working folder is the data folder on the Mac
 from PIL import Image
 
 from utilities.animator import Animator
@@ -29,10 +31,10 @@ class FlightLogoScene:
 
         # Open the file; convert to RGBA immediately to avoid Pillow palette+transparency warnings
         try:
-            image = Image.open(f"logos/{icao}.png").convert("RGBA")
+            image = Image.open(os.path.join(APP_ROOT, "logos", f"{icao}.png")).convert("RGBA")
         except FileNotFoundError:
             try:
-                image = Image.open(f"logos/{DEFAULT_IMAGE}.png").convert("RGBA")
+                image = Image.open(os.path.join(APP_ROOT, "logos", f"{DEFAULT_IMAGE}.png")).convert("RGBA")
             except FileNotFoundError:
                 return  # No logo available, skip drawing
 

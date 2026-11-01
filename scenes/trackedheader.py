@@ -1,3 +1,5 @@
+import os
+from utilities.paths import APP_ROOT   # bundled assets; the working folder is the data folder on the Mac
 import re
 from PIL import Image
 from rgbmatrix import graphics
@@ -56,7 +58,7 @@ def _load_logo(icao):
         resample = Image.ANTIALIAS
     for name in (icao, DEFAULT_LOGO):
         try:
-            img = Image.open(f"logos/{name}.png")
+            img = Image.open(os.path.join(APP_ROOT, "logos", f"{name}.png"))
             img = img.resize((LOGO_SIZE, LOGO_SIZE), resample)
             return img.convert("RGB")
         except Exception:

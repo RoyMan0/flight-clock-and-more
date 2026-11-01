@@ -1,3 +1,5 @@
+import os
+from utilities.paths import APP_ROOT   # bundled assets; the working folder is the data folder on the Mac
 from datetime import datetime, timedelta
 from PIL import Image
 
@@ -106,7 +108,7 @@ class DaysForecastScene(object):
 
                 # Draw icon
                 try:
-                    image = Image.open(f"icons/{icon}.png")
+                    image = Image.open(os.path.join(APP_ROOT, "icons", f"{icon}.png"))
                     try:
                         resample = Image.Resampling.LANCZOS
                     except AttributeError:
