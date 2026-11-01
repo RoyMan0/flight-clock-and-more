@@ -13,6 +13,7 @@ so the same key also serves the System Stats plugin.
 import base64
 import logging
 import subprocess
+import sys
 
 from utilities import ssh_remote
 from utilities.paths import DESKTOP
@@ -79,7 +80,7 @@ def _local(cmd: str, stdin: str, timeout: float) -> str:
 
 
 def _ssh(host: str, user: str, remote_cmd: str, stdin: str, timeout: float = 8) -> str:
-    if DESKTOP:
+    if DESKTOP and sys.platform == "darwin":      # Windows app: the Mac is remote, as on the Pi
         return _local(remote_cmd, stdin, timeout)
     if not host or not user:
         raise MacMusicError("Set the Mac hostname and username")

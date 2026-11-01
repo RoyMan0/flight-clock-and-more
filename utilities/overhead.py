@@ -496,6 +496,9 @@ def _play_mp3(filename: str):
         try:
             mp3 = os.path.join(APP_ROOT, filename)
             log.info(f"[overhead] Playing sound: {mp3}")
+            if sys.platform == "win32":     # Windows desktop app: no player to spawn
+                _play_mp3_windows(mp3)
+                return
             uid = os.getuid()
             env = os.environ.copy()
             env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
@@ -511,6 +514,16 @@ def _play_mp3(filename: str):
         except Exception as e:
             log.error(f"[overhead] Audio failed: {e}")
     Thread(target=_play, daemon=True).start()
+
+
+def _play_mp3_windows(path: str):
+    """Play an MP3 through Windows' built-in MCI (blocks until it ends; call from a thread)."""
+    import ctypes
+    mci = ctypes.windll.winmm.mciSendStringW
+    alias = f"fc{id(path)}{time.monotonic_ns()}"
+    if mci(f'open "{path}" type mpegvideo alias {alias}', None, 0, None) == 0:
+        mci(f"play {alias} wait", None, 0, None)
+        mci(f"close {alias}", None, 0, None)
 
 
 def play_plane_sound():

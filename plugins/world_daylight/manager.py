@@ -380,7 +380,7 @@ def _render_frame(
             fmt = "%l:%M%p" if CLOCK_FORMAT == "12hr" else "%H:%M"
             time_str = dt_local.strftime(fmt).strip().replace("AM", "A").replace("PM", "P")
         if show_date:
-            date_str = dt_local.strftime("%-m/%-d")
+            date_str = f"{dt_local.month}/{dt_local.day}"
         if show_temp and temperature is not None:
             unit = "F" if TEMPERATURE_UNITS == "imperial" else "C"
             temp_str = f"{round(temperature)}\xb0{unit}"
@@ -480,7 +480,7 @@ class WorldDaylightPlugin(BasePlugin):
         if self.config.get("show_time", True):
             out["time"] = now.strftime("%l:%M %p" if CLOCK_FORMAT == "12hr" else "%H:%M").strip()
         if self.config.get("show_date", True):
-            out["date"] = now.strftime("%b %-d")
+            out["date"] = f"{now:%b} {now.day}"
         if self.config.get("show_temp", True) and temp is not None:
             out["temp"] = f"{round(temp)}\xb0{'F' if TEMPERATURE_UNITS == 'imperial' else 'C'}"
             out["temp_color"] = list(_temp_color(hum))

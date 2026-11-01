@@ -275,6 +275,8 @@ class Collector:
 
     def _detect_os(self) -> str:
         if self._os is None:
+            if self.is_local and platform.system() == "Windows":
+                raise CollectError("Stats for this PC aren't supported yet; add a Mac or Linux machine over SSH")
             uname = (platform.system() if self.is_local else self._run("uname -s", timeout=8)).strip()
             if uname.startswith("Darwin"):
                 self._os = "mac"

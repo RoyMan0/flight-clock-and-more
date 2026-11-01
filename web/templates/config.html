@@ -23,17 +23,22 @@
   <div class="row g-4">
 
     {% if desktop %}
-    <!-- Mac App (desktop app only): window and LED look; saved to desktop.json, applied at once -->
+    <!-- Mac / Windows App (desktop apps only): window and LED look; saved to desktop.json, applied at once -->
     <div class="col-12" x-data="macAppCard()" x-init="load()">
       <div class="card">
-        <div class="card-header"><i class="bi bi-laptop me-2"></i>Mac App</div>
+        <div class="card-header"><i class="bi bi-laptop me-2"></i>{{ 'Windows App' if desktop_os == 'windows' else 'Mac App' }}</div>
         <div class="card-body">
           <div class="row g-3">
             <div class="col-sm-6 col-lg-3">
               <label class="form-label">Window mode</label>
               <select class="form-select bg-dark text-light border-secondary" x-model="p.window_mode" @change="save({window_mode: p.window_mode})">
+                {% if desktop_os == 'windows' %}
+                <option value="window">Window + tray icon</option>
+                <option value="menubar">Tray only (no taskbar button)</option>
+                {% else %}
                 <option value="window">Window + menu bar icon</option>
                 <option value="menubar">Menu bar only (no Dock icon)</option>
+                {% endif %}
               </select>
             </div>
             <div class="col-sm-6 col-lg-3">
@@ -114,7 +119,7 @@
               </div>
               <div class="text-muted small" style="overflow-wrap:anywhere">
                 <span x-show="p.lan_url">Open <strong x-text="p.lan_url"></strong> on your phone.</span>
-                <span x-show="!p.lan_url">Off: settings open only on this Mac.</span>
+                <span x-show="!p.lan_url">Off: settings open only on this {{ pc }}.</span>
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ import os
 from flask import Flask, render_template, jsonify, send_from_directory
 
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
-from utilities.paths import DATA_ROOT as BASE_DIR, DESKTOP
+from utilities.paths import DATA_ROOT as BASE_DIR, DESKTOP, DESKTOP_OS
 
 CLOSEST_FILE  = os.path.join(BASE_DIR, "close.txt")
 FARTHEST_FILE = os.path.join(BASE_DIR, "farthest.txt")
@@ -34,13 +34,14 @@ def create_app(cfg=None, display=None, plugin_manager=None, setup_mode=False):
     app.cfg = cfg
     app.display = display
     app.plugin_manager = plugin_manager
-    app.restart_cb = None               # the Mac app sets this to relaunch itself
-    app.locate_cb = None                # the Mac app sets this for the wizard's "use my location"
+    app.restart_cb = None               # the desktop app sets this to relaunch itself
+    app.locate_cb = None                # the desktop app sets this for the wizard's "use my location"
 
     @app.context_processor
     def _inject_platform():
         # Templates hide Pi-only controls (WiFi, Bluetooth, power, HAT tuning) with {% if not desktop %}
-        return {"desktop": DESKTOP}
+        # desktop_os ("mac" / "windows") and pc ("Mac" / "PC") word the desktop apps' pages
+        return {"desktop": DESKTOP, "desktop_os": DESKTOP_OS, "pc": "PC" if DESKTOP_OS == "windows" else "Mac"}
 
     # ------------------------------------------------------------------
     # Register blueprints

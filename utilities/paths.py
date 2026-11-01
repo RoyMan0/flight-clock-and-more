@@ -10,9 +10,12 @@ bundle is read-only. New code that writes files must build the path from DATA_RO
 """
 
 import os
+import sys
 
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_ROOT = os.path.abspath(os.environ.get("FLIGHTCLOCK_DATA_DIR") or APP_ROOT)
 
-# True when running inside the Mac desktop app (set by its launcher)
+# True when running inside the Mac or Windows desktop app (set by its launcher)
 DESKTOP = os.environ.get("FLIGHTCLOCK_DESKTOP") == "1"
+# Which desktop app: "mac" or "windows" ("" on the Pi)
+DESKTOP_OS = ("windows" if sys.platform == "win32" else "mac") if DESKTOP else ""

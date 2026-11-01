@@ -262,7 +262,7 @@
 
     {% if desktop %}
     <button class="btn btn-ghost" id="locate-btn" onclick="useMacLocation()" style="margin-bottom:12px;">
-      📍 Use my Mac's location
+      📍 Use my {{ pc }}'s location
     </button>
     {% endif %}
     <div class="note">
@@ -745,7 +745,7 @@ function showFinish() {
 }
 
 {% if desktop %}
-// ── Mac app: fill in coordinates from the Mac's location ─────────
+// ── Desktop app: fill in coordinates from the computer's location ─────────
 async function useMacLocation() {
   const btn = document.getElementById('locate-btn');
   btn.disabled = true; btn.textContent = 'Locating…';
@@ -756,7 +756,7 @@ async function useMacLocation() {
     document.getElementById('loc-lon').value = r.lon.toFixed(4);
     btn.textContent = '✓ ' + (r.label || 'Location found');
   } catch (e) {
-    btn.textContent = "📍 Use my Mac's location";
+    btn.textContent = "📍 Use my {{ pc }}'s location";
     alert("Couldn't get your location (" + e.message + "). Enter the coordinates below instead.");
   }
   btn.disabled = false;
