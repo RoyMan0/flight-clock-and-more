@@ -27,7 +27,7 @@ import random
 from PIL import Image
 
 from plugins.now_playing.features import with_defaults
-from plugins.transit.render import _bdf_draw, _bdf_width, _parse_bdf
+from plugins.transit.render import _bdf_width, _parse_bdf
 
 MATRIX_W, MATRIX_H = 64, 32
 BANDS = 16
@@ -46,6 +46,29 @@ TEXT_GAP = 20
 
 _TINY = _parse_bdf(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "fonts", "tom-thumb.bdf")))
 _TINY_H = 6
+_TINY_BASELINE = 4                   # ascent 5 (rows 0-4), 1 px descender below
+
+
+def _tiny_draw(img: Image.Image, x: int, text: str, colour: tuple):
+    """tom-thumb glyphs have per-glyph boxes: sit each on the baseline (so lower case
+    isn't drawn from the top of the line), descenders below it."""
+    px = img.load()
+    iw, ih = img.size
+    cx = x
+    for ch in text:
+        g = _TINY.get(ord(ch))
+        if g is None:
+            cx += 4
+            continue
+        top = _TINY_BASELINE - g["bbh"] - g.get("yoff", 0) + 1
+        bits = ((g["bbw"] + 7) // 8) * 8
+        for ri, rv in enumerate(g["rows"]):
+            for bi in range(g["bbw"]):
+                if (rv >> (bits - 1 - bi)) & 1:
+                    ox, oy = cx + g.get("xoff", 0) + bi, top + ri
+                    if 0 <= ox < iw and 0 <= oy < ih:
+                        px[ox, oy] = colour
+        cx += g["dw"]
 
 
 def _pulse(phase: float, sharp: float) -> float:
@@ -173,7 +196,7 @@ class TinyMarquee:
         for start in ((0, self.text_w + TEXT_GAP) if self.scrolls else (0,)):
             x = start
             for t, c in parts:
-                _bdf_draw(self.strip, x, 0, t, _TINY, c)
+                _tiny_draw(self.strip, x, t, c)
                 x += _bdf_width(t, _TINY)
         self.offset = 0.0
         self.pause = 15
