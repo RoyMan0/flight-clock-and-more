@@ -739,6 +739,46 @@
     </div>
   </div>
 
+  <!-- ── Snow Report ── -->
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secSnow">
+      <i class="bi bi-snow section-icon"></i>
+      <span class="fw-bold fs-5">Snow Report</span>
+      <i class="bi bi-chevron-down ms-auto"></i>
+    </div>
+    <div id="secSnow" class="collapse" data-bs-parent="#aboutAccordion">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Conditions at the ski resorts you pick, anywhere in the world: new snow, base depth, runs and lifts open, today's weather and a 3-day forecast.
+          The numbers are the resorts' own reports, published on OnTheSnow. The Pi reads each resort's page about once an hour.
+          Search for resorts by name, state/region or country on the Config page, and put them in the order you want.
+        </p>
+
+        <div class="subsection-title"><i class="bi bi-layout-text-sidebar me-2"></i>Styles</div>
+        <ul class="text-muted small mb-3">
+          <li><strong>Cards</strong> show one resort at a time. The name runs across the top, with a dot on the right that is <span style="color:#00DC3C">green</span> when the resort is open and <span style="color:#DC281E">red</span> when it's closed.
+            Today's weather icon and the high/low temperature sit on the left, and up to three stats on the right. More stats roll up onto a second page, then a 3-day forecast page shows each day's expected snow (or its high when no snow is forecast).
+            Cards either slide up or switch instantly.</li>
+          <li><strong>Rows</strong> put every resort on one board, a row each, with up to three number columns. More than three resorts scroll up under the header.</li>
+        </ul>
+
+        <div class="subsection-title"><i class="bi bi-palette me-2"></i>Colours</div>
+        <div class="table-responsive"><table class="table about-table table-sm table-striped">
+          <tbody>
+            <tr><td><span style="color:#5ABEFF">Blue</span> number</td><td class="text-muted small">New snow. It turns <strong>white</strong> on a powder day (6"/15 cm or more).</td></tr>
+            <tr><td><span style="color:#00C85A">Green</span> number + bar</td><td class="text-muted small">Runs or lifts open; the thin bar underneath fills with the share that's open. Runs alternate between the count (12/147) and the percentage.</td></tr>
+            <tr><td><span style="color:#DC281E">CLOSED</span> / <span style="color:#FF9600">OPENS NOV 11</span></td><td class="text-muted small">The resort isn't open; the planned opening date is shown when the resort has published one. Turn on "Hide closed resorts" to skip them.</td></tr>
+            <tr><td><span style="color:#FFAA3C">Orange</span> / <span style="color:#64A0FF">blue</span> temps</td><td class="text-muted small">Today's high and low.</td></tr>
+          </tbody>
+        </table></div>
+        <p class="text-muted small mb-0">
+          Units follow the Units setting under System Settings: inches and °F, or centimetres and °C.
+          "New snow" covers the last 24, 48 or 72 hours, as you choose. When both are reported, the base shows as base–summit (e.g. 18-30").
+        </p>
+      </div>
+    </div>
+  </div>
+
   <!-- ── World Daylight Map ── -->
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center gap-3" data-bs-toggle="collapse" data-bs-target="#secDaylight">

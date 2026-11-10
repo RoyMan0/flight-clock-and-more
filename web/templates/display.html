@@ -191,7 +191,7 @@ function displayPage() {
       if (this._es) return;      // guard against double init
       try {
         const all = await fetch('/api/plugins').then(r => r.json());
-        this.plugins = all.filter(p => p.id !== 'snow_report');   // hidden until fixed
+        this.plugins = all;
       } catch (e) { this.plugins = []; }
       this.startSSE();
       // Rejoin a maze game that's already running (another tab or phone started it)

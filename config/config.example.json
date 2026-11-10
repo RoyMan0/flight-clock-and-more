@@ -75,11 +75,18 @@
     },
     "snow_report": {
       "enabled": false,
-      "morning_only": false,
-      "display_duration": 15,
-      "seconds_per_resort": 8,
+      "display_duration": 30,
+      "update_interval": 3600,
       "resorts": [],
-      "update_interval": 3600
+      "display_mode": "cards",
+      "transition": "scroll",
+      "seconds_per_resort": 8,
+      "metrics": {"new": true, "base": true, "runs": true, "lifts": true, "temp": true, "forecast": true},
+      "row_columns": ["new", "runs"],
+      "new_window": "24",
+      "hide_closed": false,
+      "morning_only": false,
+      "scroll_speed": 1
     },
     "sports": {
       "enabled": false,

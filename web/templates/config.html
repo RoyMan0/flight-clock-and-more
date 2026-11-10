@@ -163,7 +163,7 @@
         <div class="card-body p-0">
           <ul class="list-group list-group-flush" id="rotation-list">
             <template x-for="(pid, idx) in pluginOrder" :key="pid">
-              <li :class="{'d-none': pid === 'snow_report'}" class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-2 gap-sm-3 px-2 px-sm-3">
+              <li class="list-group-item bg-transparent border-secondary d-flex align-items-center gap-2 gap-sm-3 px-2 px-sm-3">
                 <div class="d-flex flex-column gap-1">
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveUp(idx)" :disabled="idx===0">▲</button>
                   <button class="btn btn-sm btn-outline-secondary py-0" @click="moveDown(idx)" :disabled="idx===pluginOrder.length-1">▼</button>
@@ -661,39 +661,172 @@
         </div>
       </div>
 
-      <!-- Snow Report Config (hidden until fixed) -->
-      <div class="card mb-4" x-show="false">
+      <!-- Snow Report Config -->
+      <div class="card mb-4" x-show="'snow_report' in pluginConfigs">
         <div class="card-header"><i class="bi bi-snow me-2"></i>Snow Report</div>
-        <div class="card-body">
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" x-model="pluginConfigs.snow_report.enabled">
-            <label class="form-check-label fw-semibold">Enabled</label>
-          </div>
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="snowMorningOnly"
-                   x-model="pluginConfigs.snow_report.morning_only">
-            <label class="form-check-label" for="snowMorningOnly">
-              Morning only (6am–10am)
-            </label>
-          </div>
-          <label class="form-label">Seconds per Resort</label>
-          <input type="number" class="form-control bg-dark text-light border-secondary w-auto"
-                 x-model="pluginConfigs.snow_report.seconds_per_resort" min="3" max="30">
-          <label class="form-label mt-3">Resorts</label>
-          <template x-for="(resort, idx) in pluginConfigs.snow_report.resorts" :key="idx">
-            <div class="d-flex gap-2 mb-2">
-              <input type="text" class="form-control bg-dark text-light border-secondary"
-                     x-model="resort.name" placeholder="Resort Name">
-              <input type="number" class="form-control bg-dark text-light border-secondary" style="width:100px"
-                     x-model="resort.id" placeholder="OTS ID">
-              <button class="btn btn-outline-danger btn-sm" @click="pluginConfigs.snow_report.resorts.splice(idx,1)">✕</button>
+        <div class="card-body" x-show="'snow_report' in pluginConfigs">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.snow_report.enabled">
+                <label class="form-check-label fw-semibold">Enabled</label>
+              </div>
+              <div class="form-text text-muted">Resort-reported conditions from OnTheSnow (about 2,000 resorts worldwide), refreshed hourly.</div>
             </div>
-          </template>
-          <button class="btn btn-outline-secondary btn-sm me-2"
-                  @click="pluginConfigs.snow_report.resorts.push({name:'',id:null})">+ Add Resort</button>
-          <button class="btn btn-success btn-sm" @click="savePluginConfig('snow_report')">
-            <i class="bi bi-save me-1"></i>Save
-          </button>
+            <div class="col-md-6">
+              <label class="form-label">New snow over the last</label>
+              <select class="form-select form-select-sm bg-dark text-light border-secondary w-auto" x-model="pluginConfigs.snow_report.new_window">
+                <option value="24">24 hours</option><option value="48">48 hours</option><option value="72">72 hours</option>
+              </select>
+            </div>
+
+            <!-- Resorts -->
+            <div class="col-md-6">
+              <label class="form-label">Add Resorts</label>
+              <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary mb-2"
+                     placeholder="Search by resort, state/region or country…" x-model="snow.q" @input="searchSnow()">
+              <div class="border border-secondary rounded p-1" style="max-height:260px;overflow-y:auto" x-show="snow.q.trim()">
+                <div class="text-muted small p-1" x-show="!snow.results.length" x-text="snow.searching ? 'Searching…' : 'No matches.'"></div>
+                <template x-for="r in snow.results" :key="r.id">
+                  <button type="button" class="btn btn-sm btn-link text-start text-light text-decoration-none w-100 d-block px-1 py-1"
+                          @click="addSnowResort(r)" :disabled="snowSelected(r.id)">
+                    <i class="bi me-1" :class="snowSelected(r.id) ? 'bi-check2 text-success' : 'bi-plus-lg text-info'"></i>
+                    <span x-text="r.name"></span><span class="text-muted" x-text="' · ' + r.region + (r.country && r.country !== r.region ? ', ' + r.country : '')"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Selected Resorts <span class="text-muted small">(display order)</span></label>
+              <div class="text-muted small" x-show="!(pluginConfigs.snow_report.resorts || []).length">Search on the left to add resorts.</div>
+              <ul class="list-group">
+                <template x-for="(entry, idx) in (pluginConfigs.snow_report.resorts || [])" :key="entry.id">
+                  <li class="list-group-item bg-dark text-light border-secondary d-flex align-items-center gap-2 py-1">
+                    <div class="btn-group btn-group-sm flex-shrink-0">
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveSnowResort(idx, -1)" :disabled="idx===0">▲</button>
+                      <button class="btn btn-sm btn-outline-secondary py-0" @click="moveSnowResort(idx, 1)"
+                              :disabled="idx===pluginConfigs.snow_report.resorts.length-1">▼</button>
+                    </div>
+                    <span class="small flex-grow-1 text-truncate" style="min-width:0" x-text="entry.name" :title="entry.name"></span>
+                    <input type="text" maxlength="14" class="form-control form-control-sm bg-dark text-light border-secondary"
+                           style="width:96px;flex-shrink:0" x-model="entry.label" :placeholder="entry.short || 'Label'"
+                           title="Name on display (optional)">
+                    <button class="btn btn-sm btn-outline-danger py-0 flex-shrink-0" @click="pluginConfigs.snow_report.resorts.splice(idx, 1)" title="Remove">✕</button>
+                  </li>
+                </template>
+              </ul>
+              <div class="form-text text-muted" x-show="(pluginConfigs.snow_report.resorts || []).length">
+                The box is the name shown on the display (blank = the short name in grey).
+              </div>
+            </div>
+
+            <!-- Style -->
+            <div class="col-12">
+              <label class="form-label">Style</label>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="snowMode" id="snowModeCards" value="cards" x-model="pluginConfigs.snow_report.display_mode">
+                <label class="form-check-label" for="snowModeCards">Cards <span class="small text-muted">— one resort at a time: weather and stats, then a 3-day forecast</span></label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="snowMode" id="snowModeRows" value="rows" x-model="pluginConfigs.snow_report.display_mode">
+                <label class="form-check-label" for="snowModeRows">Rows <span class="small text-muted">— every resort on one board, a row each; more than 3 scroll up</span></label>
+              </div>
+            </div>
+
+            <!-- Cards options -->
+            <template x-if="pluginConfigs.snow_report.display_mode !== 'rows'">
+              <div class="col-12">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Show on each card</label>
+                    <template x-for="m in snow.metricList" :key="m.key">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" :id="'snowM_' + m.key" x-model="pluginConfigs.snow_report.metrics[m.key]">
+                        <label class="form-check-label" :for="'snowM_' + m.key"><span x-text="m.label"></span> <span class="small text-muted" x-text="m.note"></span></label>
+                      </div>
+                    </template>
+                    <div class="form-text text-muted">Three stats fit at once; more roll up onto a second page.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label d-flex justify-content-between">
+                      <span>Time per resort</span>
+                      <span class="text-muted small" x-text="pluginConfigs.snow_report.seconds_per_resort + ' s'"></span>
+                    </label>
+                    <input type="range" class="form-range" min="4" max="30" step="1" x-model.number="pluginConfigs.snow_report.seconds_per_resort">
+                    <label class="form-label mt-2">Between resorts and pages</label>
+                    <select class="form-select form-select-sm bg-dark text-light border-secondary w-auto" x-model="pluginConfigs.snow_report.transition">
+                      <option value="scroll">Slide up</option><option value="static">Switch instantly</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Rows options -->
+            <template x-if="pluginConfigs.snow_report.display_mode === 'rows'">
+              <div class="col-12">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Columns <span class="text-muted small">(up to 3)</span></label>
+                    <template x-for="c in snow.columnList" :key="c.key">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" :id="'snowC_' + c.key"
+                               :checked="(pluginConfigs.snow_report.row_columns || []).includes(c.key)"
+                               :disabled="!(pluginConfigs.snow_report.row_columns || []).includes(c.key) && (pluginConfigs.snow_report.row_columns || []).length >= 3"
+                               @change="toggleSnowColumn(c.key, $event.target.checked)">
+                        <label class="form-check-label" :for="'snowC_' + c.key" x-text="c.label"></label>
+                      </div>
+                    </template>
+                    <div class="form-text text-muted">Two columns leave room for ~8-letter names; three leave ~4 (use the label boxes for short names).</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label d-flex justify-content-between">
+                      <span>Scroll Speed <span class="text-muted small">(more than 3 resorts)</span></span>
+                      <span class="text-muted small" x-text="pluginConfigs.snow_report.scroll_speed + ' px/frame'"></span>
+                    </label>
+                    <input type="range" class="form-range" min="0.5" max="5" step="0.5" x-model.number="pluginConfigs.snow_report.scroll_speed">
+                    <div class="d-flex justify-content-between text-muted" style="font-size:.7rem"><span>Slow</span><span>Fast</span></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="snowHideClosed" x-model="pluginConfigs.snow_report.hide_closed">
+                <label class="form-check-label" for="snowHideClosed">Hide closed resorts</label>
+              </div>
+              <div class="form-text text-muted">Otherwise a closed resort shows CLOSED, its opening date and the forecast.</div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="snowMorningOnly" x-model="pluginConfigs.snow_report.morning_only">
+                <label class="form-check-label" for="snowMorningOnly">Mornings only (6–10 am)</label>
+              </div>
+            </div>
+
+            <!-- Test results -->
+            <div class="col-12" x-show="snow.test">
+              <ul class="list-unstyled small mb-2">
+                <template x-for="(s, i) in (snow.test?.statuses || [])" :key="i">
+                  <li><strong x-text="s.name + ': '"></strong><span :class="s.ok ? 'text-light' : 'text-danger'" x-text="s.text"></span></li>
+                </template>
+              </ul>
+              <div class="small text-muted mb-1" x-show="snow.test?.message" x-text="snow.test?.message"></div>
+              <div class="d-flex flex-wrap gap-2">
+                <template x-for="(f, i) in (snow.test?.frames || [])" :key="i">
+                  <img :src="f" alt="Snow preview" class="border border-secondary rounded" style="width:100%;max-width:256px;aspect-ratio:2/1">
+                </template>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-success btn-sm" @click="saveSnow()"><i class="bi bi-save me-1"></i>Save</button>
+            <button class="btn btn-outline-info btn-sm" @click="testSnow()" :disabled="!!snow.testing || !(pluginConfigs.snow_report.resorts || []).length">
+              <span class="spinner-border spinner-border-sm me-1" x-show="snow.testing"></span><i class="bi bi-eye me-1" x-show="!snow.testing"></i>Test
+            </button>
+            <span class="small text-success" x-show="snow.saved">Saved.</span>
+          </div>
         </div>
       </div>
 
@@ -2349,7 +2482,7 @@ function configPage() {
       flight_tracker:          {},
       specific_flight_tracker: { tracked_callsigns: [] },
       stock_ticker:            { etf_symbols: [], stock_symbols: [] },
-      snow_report:             { resorts: [] },
+      snow_report:             { resorts: [], metrics: {}, row_columns: ['new', 'runs'] },
       sports:                  { favorite_teams: [], show_all_leagues: [], leagues: {} },
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
@@ -2375,6 +2508,19 @@ function configPage() {
     teamTab: '',
     transit: { agencies: [], ui: [], routesCache: {}, status: '', statusError: false, loading: false, preview: null },
     worldClock: { cities: [], filter: '', preview: null, status: '', saved: false },
+    snow: { q: '', results: [], searching: false, test: null, testing: false, saved: false, _timer: null,
+            metricList: [
+              { key: 'new', label: 'New snow', note: '(white when it\'s a powder day, 6"+)' },
+              { key: 'base', label: 'Base depth', note: '(base–summit when both are reported)' },
+              { key: 'runs', label: 'Runs open', note: '(count and %, with a bar)' },
+              { key: 'lifts', label: 'Lifts open', note: '' },
+              { key: 'temp', label: 'Today\'s high / low', note: '(under the weather icon)' },
+              { key: 'forecast', label: '3-day forecast', note: '(its own page: snow or high temp per day)' },
+            ],
+            columnList: [
+              { key: 'new', label: 'New snow' }, { key: 'base', label: 'Base depth' },
+              { key: 'runs', label: 'Runs open %' }, { key: 'lifts', label: 'Lifts open' },
+            ] },
     sysStats: {
       ui: [], sshCommand: '', sshError: '', saved: false,
       metricList: [ { key: 'uptime', label: 'Uptime (next to the name)' }, { key: 'cpu', label: 'CPU' },
@@ -2473,8 +2619,8 @@ function configPage() {
         fetch('/api/config/backups').then(r=>r.json()),
       ]);
 
-      // flight_tracker is a priority interrupt; snow_report is hidden until fixed
-      this.pluginOrder = plugins.filter(p => p.id !== 'flight_tracker' && p.id !== 'snow_report').map(p => p.id);
+      // flight_tracker is a priority interrupt
+      this.pluginOrder = plugins.filter(p => p.id !== 'flight_tracker').map(p => p.id);
       const cfgs = {};
       for (const p of plugins) cfgs[p.id] = { enabled: p.enabled, ...(p.config || {}) };
       if (!cfgs.clock_weather) cfgs.clock_weather = {};
@@ -2526,6 +2672,16 @@ function configPage() {
         np.source_order = [...(np.source_order || []).filter(s => all.includes(s)), ...all.filter(s => !(np.source_order || []).includes(s))];
         np.sources = { spotify: true, mac: false, lastfm: false, ...(np.sources || {}) };
         cfgs.now_playing = np;
+      }
+      if (cfgs.snow_report) {
+        const sr = { display_mode: 'cards', transition: 'scroll', seconds_per_resort: 8, new_window: '24',
+                     hide_closed: false, morning_only: false, scroll_speed: 1, ...cfgs.snow_report };
+        sr.new_window = String(sr.new_window);
+        sr.metrics = { new: true, base: true, runs: true, lifts: true, temp: true, forecast: true, ...(sr.metrics || {}) };
+        sr.row_columns = sr.row_columns || ['new', 'runs'];
+        // Entries from the old version (numeric OnTheSnow ids that no longer work) are dropped
+        sr.resorts = (sr.resorts || []).filter(r => typeof r.id === 'string' && r.id.includes('/'));
+        cfgs.snow_report = sr;
       }
       this.pluginConfigs = cfgs;
       // Migrate legacy naive event_datetime to UTC ISO so timezone is always correct
@@ -3105,6 +3261,69 @@ function configPage() {
       }
       this.mazeSaved = true;
       setTimeout(() => this.mazeSaved = false, 2000);
+    },
+
+    // ---------------- Snow Report ----------------
+
+    searchSnow() {
+      clearTimeout(this.snow._timer);
+      const q = this.snow.q.trim();
+      if (!q) { this.snow.results = []; return; }
+      this.snow.searching = true;
+      this.snow._timer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/snow_report/resorts?q=' + encodeURIComponent(q)).then(r => r.json());
+          if (this.snow.q.trim() === q) this.snow.results = res;
+        } catch (e) { this.snow.results = []; }
+        this.snow.searching = false;
+      }, 250);
+    },
+
+    snowSelected(id) {
+      return (this.pluginConfigs.snow_report.resorts || []).some(r => r.id === id);
+    },
+
+    addSnowResort(r) {
+      if (this.snowSelected(r.id)) return;
+      this.pluginConfigs.snow_report.resorts.push({ id: r.id, name: r.name, short: r.short || r.name, label: '' });
+    },
+
+    moveSnowResort(idx, d) {
+      const list = this.pluginConfigs.snow_report.resorts, j = idx + d;
+      if (j < 0 || j >= list.length) return;
+      [list[idx], list[j]] = [list[j], list[idx]];
+    },
+
+    toggleSnowColumn(key, on) {
+      const cols = (this.pluginConfigs.snow_report.row_columns || []).filter(c => c !== key);
+      if (on) cols.push(key);
+      const order = ['new', 'base', 'runs', 'lifts'];
+      this.pluginConfigs.snow_report.row_columns = order.filter(c => cols.includes(c)).slice(0, 3);
+    },
+
+    async saveSnow() {
+      await this.savePluginConfig('snow_report');
+      if (this.pluginConfigs.snow_report.enabled) {
+        await fetch('/api/plugins/order', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginOrder),
+        });
+      }
+      this.snow.saved = true;
+      setTimeout(() => this.snow.saved = false, 2000);
+    },
+
+    async testSnow() {
+      this.snow.testing = true;
+      try {
+        this.snow.test = await fetch('/api/snow_report/test', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.pluginConfigs.snow_report),
+        }).then(r => r.json());
+      } catch (e) {
+        this.snow.test = { statuses: [{ name: 'Test', ok: false, text: String(e) }] };
+      }
+      this.snow.testing = false;
     },
 
     async saveSysStats() {

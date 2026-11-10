@@ -903,6 +903,78 @@ def now_playing_test():
 
 
 # ------------------------------------------------------------------
+# Snow Report — resort search + test with the unsaved settings
+# ------------------------------------------------------------------
+
+@api_bp.get("/snow_report/resorts")
+def snow_report_resorts():
+    from plugins.snow_report.manager import search_resorts
+    return jsonify(search_resorts(request.args.get("q", ""), limit=40))
+
+
+@api_bp.post("/snow_report/test")
+def snow_report_test():
+    """Fetch every listed resort now (in parallel) and render what the panel would show."""
+    from concurrent.futures import ThreadPoolExecutor
+    from plugins.snow_report import ots, render as R
+    from plugins.snow_report.manager import display_name, metrics_of, units, window_of
+
+    cfg = request.get_json(force=True) or {}
+    resorts = [r for r in cfg.get("resorts") or [] if r.get("id")][:12]
+    if not resorts:
+        return jsonify({"statuses": [], "frames": [], "message": "Add a resort first."})
+
+    def fetch(r):
+        try:
+            return ots.fetch_report(r["id"])
+        except Exception as e:
+            return {"id": r["id"], "error": str(e)}
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        reps = list(ex.map(fetch, resorts))
+    u, w, m = units(), window_of(cfg), metrics_of(cfg)
+    statuses = []
+    for r, rep in zip(resorts, reps):
+        name = display_name(r, rep)
+        if rep.get("error"):
+            statuses.append({"name": name, "ok": False, "text": rep["error"]})
+            continue
+        bits = ["open" if rep.get("open") else (R.opens_text(rep.get("opening_date") or "").title() or "closed")]
+        if rep.get("runs_total"):
+            bits.append(f"{round(rep.get('runs_open') or 0)}/{round(rep['runs_total'])} runs")
+        if rep.get("base_cm") is not None:
+            bits.append(f"base {R.depth(rep['base_cm'], u)}")
+        bits.append(f"new {w}h {R.depth((rep.get('new_cm') or {}).get(w) or 0, u)}")
+        statuses.append({"name": name, "ok": True, "text": ", ".join(bits)})
+
+    shown = [(r, rep) for r, rep in zip(resorts, reps)
+             if not (cfg.get("hide_closed") and not rep.get("error") and not rep.get("open"))]
+    frames = []
+    if cfg.get("display_mode") == "rows":
+        cols = [c for c in (cfg.get("row_columns") or ["new", "runs"]) if c in R.ROW_COLS][:3] or ["new"]
+        ents = [(rep, display_name(r, rep)) for r, rep in shown]
+        if len(ents) <= 3:
+            frames = [R.render_rows_static(ents, cols, w, u)] if ents else []
+        else:
+            strip = R.build_rows_strip(ents, cols, w, u)
+            frames = [R.render_rows_frame(strip, ents, cols, w, u, k * 24) for k in range(min(4, -(-len(ents) // 3)))]
+    else:
+        for r, rep in shown[:4]:
+            name = display_name(r, rep)
+            if rep.get("error"):
+                frames.append(R.render_error(name, rep["error"]))
+                continue
+            pages = R.card_pages(rep, name, m, w, u)
+            frames += [R.render_page(rep, name, p, w, u, m.get("temp", True), 0) for p in pages[:2]]
+    note = ""
+    if cfg.get("display_mode") != "rows" and len(shown) > 4:
+        note = f"Showing the first 4 of {len(shown)} resorts."
+    if cfg.get("hide_closed") and len(shown) < len(resorts):
+        note = (note + " Closed resorts are hidden.").strip()
+    return jsonify({"statuses": statuses, "frames": [_led_png(f) for f in frames[:8]], "message": note})
+
+
+# ------------------------------------------------------------------
 # System Stats — test one connection (live values + preview)
 # ------------------------------------------------------------------
 

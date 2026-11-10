@@ -27,6 +27,7 @@ KNOWN_PLUGINS = [
     ("sports",                  "Sports Scores",           "Pick leagues/teams on the Config page"),
     ("world_daylight",          "World Daylight Map",      "Ready to go"),
     ("ap_news",                 "Breaking News",           "Ready to go"),
+    ("snow_report",             "Snow Report",             "Pick ski resorts on the Config page"),
     ("event_countdown",         "Event Countdown",         "Set the event on the Config page"),
     ("transit",                 "Transit Arrivals/Departures", "Choose stops on the Config page"),
     ("world_clock",             "World Clock",             "Pick cities on the Config page"),
