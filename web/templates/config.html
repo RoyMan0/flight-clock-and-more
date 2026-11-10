@@ -474,6 +474,13 @@
               </div>
               <p class="text-muted small mb-0 ms-4">Shows all overhead flights simultaneously as dots on a radar-style grid instead of scrolling text. Disabled by default.</p>
             </div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" x-model="pluginConfigs.flight_tracker.sound">
+                <label class="form-check-label">Sound when a plane arrives overhead</label>
+              </div>
+              <p class="text-muted small mb-0 ms-4">{% if desktop %}Plays through this {{ pc }}'s speakers. On a Pi, sound needs a Bluetooth speaker connected.{% else %}Needs a Bluetooth speaker connected to the Pi.{% endif %}</p>
+            </div>
             <div class="col-md-4">
               <label class="form-label">Min Altitude (ft)</label>
               <input type="number" class="form-control bg-dark text-light border-secondary"
@@ -965,6 +972,11 @@
             </select>
             <div class="form-text text-muted">Overhead flights always come first.</div>
           </div>
+          <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.sound">
+            <label class="form-check-label">Sound when a game starts or a score changes</label>
+          </div>
+          <p class="text-muted small mb-0 ms-4">{% if desktop %}Plays through this {{ pc }}'s speakers. On a Pi, sound needs a Bluetooth speaker connected.{% else %}Needs a Bluetooth speaker connected to the Pi.{% endif %}</p>
           <div class="form-check form-switch mt-2">
             <input class="form-check-input" type="checkbox" x-model="pluginConfigs.sports.show_only_today_completed">
             <label class="form-check-label">Show only today's completed games</label>
@@ -2487,11 +2499,11 @@ function configPage() {
     pluginOrder: [],
     pluginConfigs: {
       clock_weather:           {},
-      flight_tracker:          {},
+      flight_tracker:          { sound: true },
       specific_flight_tracker: { tracked_callsigns: [] },
       stock_ticker:            { etf_symbols: [], stock_symbols: [] },
       snow_report:             { resorts: [], metrics: {}, row_columns: ['new', 'runs'], new_windows: ['24'] },
-      sports:                  { favorite_teams: [], show_all_leagues: [], leagues: {} },
+      sports:                  { favorite_teams: [], show_all_leagues: [], leagues: {}, sound: true },
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
       event_countdown:         { event_title: '', event_datetime: '' },
@@ -2650,7 +2662,8 @@ function configPage() {
       if (cfgs.maze) cfgs.maze = { size: 'M', style: 'random', solver: 'rotate', solve_speed: 2, theme: 'random',
                                    celebrate: true, play_idle_minutes: 3, ...cfgs.maze };
       if (cfgs.world_clock) cfgs.world_clock = { cities: [], scroll_speed: 1, ...cfgs.world_clock };
-      if (cfgs.sports) cfgs.sports = { live_priority_mode: 'alert', ...cfgs.sports };
+      if (cfgs.sports) cfgs.sports = { live_priority_mode: 'alert', sound: true, ...cfgs.sports };
+      if (cfgs.flight_tracker) cfgs.flight_tracker = { sound: true, ...cfgs.flight_tracker };
       if (cfgs.system_stats) {
         const ss = { scroll_speed: 1, ...cfgs.system_stats };
         const base = this._newSysConn('local');

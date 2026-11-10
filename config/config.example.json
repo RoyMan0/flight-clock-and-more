@@ -54,7 +54,8 @@
       "max_altitude": 100000,
       "max_flight_lookup": 5,
       "radar_mode": false,
-      "show_additional_details": false
+      "show_additional_details": false,
+      "sound": true
     },
     "specific_flight_tracker": {
       "enabled": false,
@@ -94,6 +95,7 @@
       "seconds_per_game": 7,
       "live_priority": false,
       "live_priority_mode": "alert",
+      "sound": true,
       "show_upcoming": false,
       "show_only_today_completed": false,
       "favorite_teams": [],

@@ -369,7 +369,8 @@ class SportsPlugin(BasePlugin):
                 games = [g for g in games if g["state"] == "in"] or games
             if self._sound_pending:
                 self._sound_pending = False
-                play_espn_sound()
+                if self.config.get("sound", True):
+                    play_espn_sound()
 
         if not games:
             return False

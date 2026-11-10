@@ -169,7 +169,7 @@ class FlightTrackerPlugin(BasePlugin):
                 self._display._data = new_data
                 self._display.reset_scene()
             self._radar_dirty = True
-            if was_empty and len(new_data) > 0:
+            if was_empty and len(new_data) > 0 and self.config.get("sound", True):
                 play_plane_sound()
 
         if self.config.get("radar_mode", False):

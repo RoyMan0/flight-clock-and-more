@@ -475,7 +475,8 @@ class WorldDaylightPlugin(BasePlugin):
         dt_utc = now.astimezone(timezone.utc)
         sun_lat, sun_lon = _sun_geo_position(dt_utc)
         moon_lat, moon_lon = _moon_geo_position(dt_utc)
-        out = {"sun": [sun_lat, sun_lon], "moon": [moon_lat, moon_lon],
+        # 0.1° is finer than any screen draws them, and keeps the model (and its rev) steady
+        out = {"sun": [round(sun_lat, 1), round(sun_lon, 1)], "moon": [round(moon_lat, 1), round(moon_lon, 1)],
                "moon_phase": phase if phase is not None else 4, "night": _is_local_night()}
         if self.config.get("show_time", True):
             out["time"] = now.strftime("%l:%M %p" if CLOCK_FORMAT == "12hr" else "%H:%M").strip()
