@@ -29,6 +29,7 @@ CHAR_W = 4
 LINE_Y = (9, 17, 25)
 LINE_H = 8
 RIGHT_X = 16
+ICON_X = 2
 SEPARATOR_Y = 7
 BODY_Y = 8
 
@@ -115,6 +116,25 @@ def _right(img, right_x, y, text, colour):
     _text(img, right_x - _bdf_width(text, _FONT) + 1, y, text, colour)
 
 
+def _centre(img, cx, y, text, colour):
+    """Draw text centred on column cx by its lit pixels (the ° glyph's blank right side
+    would otherwise pull short temperatures off-centre)."""
+    w = _bdf_width(text, _FONT)
+    if w <= 0:
+        return
+    tmp = Image.new("RGB", (w + 2, 6), (0, 0, 0))
+    _bdf_draw(tmp, 0, 0, text, _FONT, colour)
+    box = tmp.getbbox()
+    if not box:
+        return
+    ink = tmp.crop((box[0], 0, box[2], 6))
+    x = int(round(cx - (ink.width - 1) / 2))
+    region = img.crop((x, y, x + ink.width, y + 6))
+    mask = ink.convert("L").point(lambda v: 255 if v else 0)
+    region.paste(ink, (0, 0), mask)
+    img.paste(region, (x, y))
+
+
 def fit(text: str, max_px: int) -> str:
     text = text or ""
     while text and _bdf_width(text, _FONT) > max_px:
@@ -143,7 +163,7 @@ def draw_header(img, name: str, is_open: bool):
 # Card pages
 # ------------------------------------------------------------------
 
-def stat_lines(rep: dict, metrics: dict, window: str, units: str, hide_closed_info: bool = False) -> list:
+def stat_lines(rep: dict, metrics: dict, windows, units: str) -> list:
     """Stat lines for the right column: [(kind, args)] in display order."""
     lines = []
     if not rep.get("open"):
@@ -151,7 +171,8 @@ def stat_lines(rep: dict, metrics: dict, window: str, units: str, hide_closed_in
         if rep.get("opening_date") and rep["opening_date"] >= date.today().isoformat():
             lines.append(("opens", {"text": opens_text(rep["opening_date"])}))
     if metrics.get("new", True):
-        lines.append(("new", {"cm": (rep.get("new_cm") or {}).get(window)}))
+        for w in ([windows] if isinstance(windows, str) else windows):
+            lines.append(("new", {"cm": (rep.get("new_cm") or {}).get(w), "window": w}))
     if rep.get("open"):
         if metrics.get("base", True) and (rep.get("base_cm") is not None or rep.get("summit_cm") is not None):
             lines.append(("base", {}))
@@ -169,7 +190,7 @@ def _draw_line(img, y, kind, args, rep, window, units, frame):
         _text(img, RIGHT_X, y, fit(args["text"], MATRIX_W - RIGHT_X), COL_OPENS)
     elif kind == "new":
         _text(img, RIGHT_X, y, "NEW", COL_LABEL)
-        _text(img, RIGHT_X + 14, y, f"{window}H", (70, 70, 70))
+        _text(img, RIGHT_X + 14, y, f"{args['window']}H", (70, 70, 70))
         cm = args["cm"]
         _right(img, 63, y, depth(cm or 0, units), COL_POWDER if is_powder(cm) else COL_NEW)
     elif kind == "base":
@@ -199,14 +220,15 @@ def _draw_line(img, y, kind, args, rep, window, units, frame):
 def draw_left(img, rep: dict, units: str, show_temp: bool):
     icon = icon_for((rep.get("weather") or {}).get("type"))
     if icon is not None:
-        img.paste(icon, (2, 9))
+        img.paste(icon, (ICON_X, 9))
     if show_temp:
         w = rep.get("weather") or {}
         hi, lo = temp(w.get("high"), units), temp(w.get("low"), units)
+        cx = ICON_X + 4.5                                   # centre of the 10 px icon
         if hi:
-            _text(img, 1, 20, hi, COL_HIGH)
+            _centre(img, cx, 20, hi, COL_HIGH)
         if lo:
-            _text(img, 1, 26, lo, COL_LOW)
+            _centre(img, cx, 26, lo, COL_LOW)
 
 
 def render_lines_page(rep, name, lines, window, units, show_temp, frame) -> Image.Image:
@@ -229,7 +251,7 @@ def render_forecast_page(rep, name, units) -> Image.Image:
         except (KeyError, ValueError):
             label = "---"
         cx = x0 + 10
-        _text(img, cx - _bdf_width(label, _FONT) // 2, 9, label, COL_DAY)
+        _centre(img, cx - 0.5, 9, label, COL_DAY)
         icon = icon_for(d.get("type"))
         if icon is not None:
             img.paste(icon, (cx - 5, 16))
@@ -239,16 +261,14 @@ def render_forecast_page(rep, name, units) -> Image.Image:
                 val = '<1"' if units != "metric" else "<1cm"
         else:
             val, col = temp(d.get("high"), units), COL_HIGH
-        _text(img, cx - _bdf_width(val, _FONT) // 2, 27, val, col)
+        _centre(img, cx - 0.5, 27, val, col)
     return img
 
 
 def card_pages(rep, name, metrics, window, units) -> list:
     """Page specs for one resort: ("lines", [3 lines]) … then ("forecast",)."""
     lines = stat_lines(rep, metrics, window, units)
-    n_pages = max(1, -(-len(lines) // 3))
-    per = -(-len(lines) // n_pages) if lines else 0          # 4 lines → 2 + 2, not 3 + 1
-    pages = [("lines", lines[i:i + per]) for i in range(0, len(lines), per)] if lines else [("lines", [])]
+    pages = [("lines", lines[i:i + 3]) for i in range(0, len(lines), 3)] or [("lines", [])]
     if metrics.get("forecast", True) and rep.get("forecast"):
         pages.append(("forecast", None))
     return pages

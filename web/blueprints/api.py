@@ -917,7 +917,7 @@ def snow_report_test():
     """Fetch every listed resort now (in parallel) and render what the panel would show."""
     from concurrent.futures import ThreadPoolExecutor
     from plugins.snow_report import ots, render as R
-    from plugins.snow_report.manager import display_name, metrics_of, units, window_of
+    from plugins.snow_report.manager import display_name, metrics_of, units, window_of, windows_of
 
     cfg = request.get_json(force=True) or {}
     resorts = [r for r in cfg.get("resorts") or [] if r.get("id")][:12]
@@ -944,7 +944,8 @@ def snow_report_test():
             bits.append(f"{round(rep.get('runs_open') or 0)}/{round(rep['runs_total'])} runs")
         if rep.get("base_cm") is not None:
             bits.append(f"base {R.depth(rep['base_cm'], u)}")
-        bits.append(f"new {w}h {R.depth((rep.get('new_cm') or {}).get(w) or 0, u)}")
+        for win in windows_of(cfg):
+            bits.append(f"new {win}h {R.depth((rep.get('new_cm') or {}).get(win) or 0, u)}")
         statuses.append({"name": name, "ok": True, "text": ", ".join(bits)})
 
     shown = [(r, rep) for r, rep in zip(resorts, reps)
@@ -964,8 +965,8 @@ def snow_report_test():
             if rep.get("error"):
                 frames.append(R.render_error(name, rep["error"]))
                 continue
-            pages = R.card_pages(rep, name, m, w, u)
-            frames += [R.render_page(rep, name, p, w, u, m.get("temp", True), 0) for p in pages[:2]]
+            pages = R.card_pages(rep, name, m, windows_of(cfg), u)
+            frames += [R.render_page(rep, name, p, windows_of(cfg), u, m.get("temp", True), 0) for p in pages[:2]]
     note = ""
     if cfg.get("display_mode") != "rows" and len(shown) > 4:
         note = f"Showing the first 4 of {len(shown)} resorts."

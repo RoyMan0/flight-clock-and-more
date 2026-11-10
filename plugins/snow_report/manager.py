@@ -10,7 +10,8 @@ Config (plugins.snow_report):
   seconds_per_resort  cards: time per resort (split across its pages)
   metrics          {new, base, runs, lifts, temp, forecast}: shown on cards
   row_columns      rows: up to 3 of new/base/runs/lifts
-  new_window       "24" / "48" / "72" hours of new snow
+  new_windows      any of "24" / "48" / "72" (hours of new snow; one card line each,
+                   rows use the first). Older configs have a single new_window.
   hide_closed      skip resorts that aren't open
   scroll_speed     rows: px/frame when there are more than 3 resorts
   morning_only     only show 6–10 am
@@ -90,9 +91,17 @@ def metrics_of(config: dict) -> dict:
     return {**DEFAULT_METRICS, **(config.get("metrics") or {})}
 
 
+def windows_of(config: dict) -> list:
+    ws = config.get("new_windows")
+    if ws is None:
+        ws = [config.get("new_window", "24")]
+    ws = [w for w in ("24", "48", "72") if w in {str(x) for x in ws}]
+    return ws or ["24"]
+
+
 def window_of(config: dict) -> str:
-    w = str(config.get("new_window", "24"))
-    return w if w in ("24", "48", "72") else "24"
+    """The shortest ticked window — rows mode's New column."""
+    return windows_of(config)[0]
 
 
 class SnowReportPlugin(BasePlugin):
@@ -248,7 +257,7 @@ class SnowReportPlugin(BasePlugin):
     # ------------------------------------------------------------------
 
     def _build_seq(self) -> list:
-        m, w, u = metrics_of(self.config), window_of(self.config), units()
+        m, w, u = metrics_of(self.config), windows_of(self.config), units()
         seq = []
         for resort, rep in self.entries():
             name = display_name(resort, rep)
@@ -264,7 +273,7 @@ class SnowReportPlugin(BasePlugin):
         resort, rep, page, name, _n = self._seq[i]
         if page[0] == "error":
             return R.render_error(name, rep.get("error") or "No data")
-        return R.render_page(rep, name, page, window_of(self.config), units(),
+        return R.render_page(rep, name, page, windows_of(self.config), units(),
                              metrics_of(self.config).get("temp", True), self._frame)
 
     def _draw_cards(self):
@@ -331,7 +340,7 @@ class SnowReportPlugin(BasePlugin):
         ents = self.entries()
         if not ents:
             return None
-        out = {"mode": self._mode(), "units": units(), "window": window_of(self.config),
+        out = {"mode": self._mode(), "units": units(), "windows": windows_of(self.config),
                "resorts": [{"name": display_name(r, rep), **{k: rep.get(k) for k in (
                    "id", "open", "opening_date", "base_cm", "summit_cm", "new_cm", "runs_open", "runs_total",
                    "runs_pct", "lifts_open", "lifts_total", "weather", "forecast", "error")}} for r, rep in ents]}

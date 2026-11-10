@@ -675,9 +675,17 @@
             </div>
             <div class="col-md-6">
               <label class="form-label">New snow over the last</label>
-              <select class="form-select form-select-sm bg-dark text-light border-secondary w-auto" x-model="pluginConfigs.snow_report.new_window">
-                <option value="24">24 hours</option><option value="48">48 hours</option><option value="72">72 hours</option>
-              </select>
+              <div class="d-flex gap-3">
+                <template x-for="w in ['24', '48', '72']" :key="w">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" :id="'snowW_' + w"
+                           :checked="pluginConfigs.snow_report.new_windows.includes(w)"
+                           @change="toggleSnowWindow(w, $event.target.checked)">
+                    <label class="form-check-label" :for="'snowW_' + w" x-text="w + ' hours'"></label>
+                  </div>
+                </template>
+              </div>
+              <div class="form-text text-muted">Each one ticked is its own line on the cards. Rows show the shortest.</div>
             </div>
 
             <!-- Resorts -->
@@ -2482,7 +2490,7 @@ function configPage() {
       flight_tracker:          {},
       specific_flight_tracker: { tracked_callsigns: [] },
       stock_ticker:            { etf_symbols: [], stock_symbols: [] },
-      snow_report:             { resorts: [], metrics: {}, row_columns: ['new', 'runs'] },
+      snow_report:             { resorts: [], metrics: {}, row_columns: ['new', 'runs'], new_windows: ['24'] },
       sports:                  { favorite_teams: [], show_all_leagues: [], leagues: {} },
       world_daylight:          { show_time: true, show_date: true, show_temp: true },
       ap_news:                 { feeds: { top_news: true, technology: false, world_news: false, politics: false, sports: false, entertainment: false, business: false, science: false, us_news: false } },
@@ -2674,9 +2682,10 @@ function configPage() {
         cfgs.now_playing = np;
       }
       if (cfgs.snow_report) {
-        const sr = { display_mode: 'cards', transition: 'scroll', seconds_per_resort: 8, new_window: '24',
+        const sr = { display_mode: 'cards', transition: 'scroll', seconds_per_resort: 8,
                      hide_closed: false, morning_only: false, scroll_speed: 1, ...cfgs.snow_report };
-        sr.new_window = String(sr.new_window);
+        sr.new_windows = (sr.new_windows || [String(sr.new_window || '24')]).map(String);
+        delete sr.new_window;
         sr.metrics = { new: true, base: true, runs: true, lifts: true, temp: true, forecast: true, ...(sr.metrics || {}) };
         sr.row_columns = sr.row_columns || ['new', 'runs'];
         // Entries from the old version (numeric OnTheSnow ids that no longer work) are dropped
@@ -3292,6 +3301,13 @@ function configPage() {
       const list = this.pluginConfigs.snow_report.resorts, j = idx + d;
       if (j < 0 || j >= list.length) return;
       [list[idx], list[j]] = [list[j], list[idx]];
+    },
+
+    toggleSnowWindow(w, on) {
+      const ws = this.pluginConfigs.snow_report.new_windows.filter(x => x !== w);
+      if (on) ws.push(w);
+      const next = ['24', '48', '72'].filter(x => ws.includes(x));
+      this.pluginConfigs.snow_report.new_windows = next.length ? next : [w];   // keep at least one
     },
 
     toggleSnowColumn(key, on) {
