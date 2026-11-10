@@ -183,6 +183,10 @@ Current song: title marquee across the top (green, 5x7 font), 21×21 artwork bot
   - `lastfm.py` — `user.getrecenttracks` "now playing" (catch-all for scrobbling devices, e.g. iPhone Apple Music via a scrobbler app). No progress data → no bar. Grey-star placeholder art is ignored.
 - There is **no public live now-playing API for Apple Music on iPhone**; that's why Mac (live) + Last.fm exist. Don't add a background helper on the Mac — the user rejected that.
 - `manager.first_playing()` / `attach_art()` are shared with `POST /api/now_playing/test`. Artwork is cached per track (30 entries).
+- **`style`**: `art` (default), `eq` (16 segmented rainbow bars y0–29, progress bar y31, full height when there's no progress) or `eq_text` (bars y0–22, a tom-thumb "Title - Artist" marquee y24–29, progress bar y31). The Pi never has the audio, and Spotify's audio-analysis/audio-features endpoints are closed to new apps, so the EQ is **estimated**:
+  - `features.py` looks up tempo/energy/danceability/loudness/acousticness once per song, in `update()` (never on the draw path), and only when the style isn't `art`. The chain is ReccoBeats `audio-features?ids=` (accepts a Spotify ID **or an ISRC**) → for Mac/Last.fm a Deezer search gives the ISRC (and its own `bpm`/`gain` as a fallback). Both are free with no key. Results, including misses (retried after 1 day, or 2 min after a network error), are cached in `DATA_ROOT/data/now_playing/features.json`.
+  - `eq.Analyzer` builds the bars from a beat grid at the song's tempo, anchored to its playback position (`song_seconds()`; Last.fm counts from `first_seen`): kick/snare/hats shaped by energy, danceability and acousticness, smoothed noise, and soft-knee compression. Bars fall at a fixed rate, and peak caps hold and then drop.
+  - `describe()` adds `style` and, for EQ styles, `eq`/`eq_peaks` (16 levels 0–1) for the Mac app's high-res screens.
 
 ### System Stats Plugin (`plugins/system_stats/`)
 

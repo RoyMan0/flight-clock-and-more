@@ -12,6 +12,9 @@ Config (plugins.now_playing):
   sources        {"spotify": true, "mac": false, "lastfm": false}
   mac_host, mac_user, lastfm_user
   scroll_speed   px/frame for long lines
+  style          "art" (artwork + details), "eq" (EQ bars + progress) or
+                 "eq_text" (smaller EQ + one tiny scrolling title/artist line + progress).
+                 The EQ is estimated from the song's tempo/energy (features.py, eq.py).
 Secrets: spotify_client_id, spotify_refresh_token, lastfm_api_key
 
 Takes its normal turn in the rotation; skipped when nothing is playing.
@@ -26,6 +29,8 @@ from typing import Optional
 import requests
 
 from plugins.base_plugin import BasePlugin
+from plugins.now_playing import features
+from plugins.now_playing.eq import Analyzer, TinyMarquee, render_eq
 from plugins.now_playing.render import make_marquees, prepare_art, render_frame
 from plugins.transit.render import push_pil_to_canvas
 
@@ -38,6 +43,7 @@ SOURCE_RETRY_SECS = 60          # skip a source this long after it errors (e.g. 
                                 # while the internet is down) so the next one is reached fast
 _source_skip_until: dict = {}   # source → time.monotonic() it may be tried again
 DEFAULT_SCROLL_SPEED = 1.0
+STYLES = ("art", "eq", "eq_text")
 
 _art_cache: "OrderedDict[str, object]" = OrderedDict()   # art_key → 21×21 image (or None)
 _art_lock = threading.Lock()
@@ -126,6 +132,18 @@ def first_playing(config: dict, statuses: list = None):
     return None
 
 
+def style_of(config: dict) -> str:
+    s = config.get("style", "art")
+    return s if s in STYLES else "art"
+
+
+def song_seconds(track: dict, now: float) -> float:
+    """Playback position for the EQ's beat grid; sources without one count from when we first saw it."""
+    if track.get("progress_ms") is not None:
+        return track["progress_ms"] / 1000.0 + (now - track.get("fetched_at", now))
+    return now - track.get("first_seen", now)
+
+
 def progress_fraction(track: dict, now: float):
     """0..1 interpolated since the last fetch, or None when the source has no duration."""
     dur, pos = track.get("duration_ms"), track.get("progress_ms")
@@ -148,6 +166,10 @@ class NowPlayingPlugin(BasePlugin):
         self._track: Optional[dict] = None
         self._marquees = None
         self._marquee_key = None
+        self._eq = None                   # (track key, has features) → Analyzer
+        self._eq_key = None
+        self._tiny = None
+        self._hue = 0.0
 
     @property
     def enabled(self) -> bool:
@@ -160,12 +182,15 @@ class NowPlayingPlugin(BasePlugin):
         if self._marquees:
             for m in self._marquees:
                 m.reset()
+        if self._tiny:
+            self._tiny.reset()
 
     def on_config_change(self, new_config: dict):
         super().on_config_change(new_config)
         with self._lock:
             self._track = None
         self._marquees = self._marquee_key = None
+        self._eq = self._eq_key = self._tiny = None
 
     @property
     def update_interval(self) -> float:
@@ -179,6 +204,12 @@ class NowPlayingPlugin(BasePlugin):
                 log.debug(f"[now_playing] {s['source']}: {s['text']}")
         if track:
             track["fetched_at"] = time.monotonic()
+            with self._lock:
+                prev = self._track
+            same = prev and features.track_key(prev) == features.track_key(track)
+            track["first_seen"] = prev.get("first_seen", track["fetched_at"]) if same else track["fetched_at"]
+            if style_of(self.config) != "art":
+                track["features"] = features.lookup(track)     # network only once per song
         with self._lock:
             self._track = track
 
@@ -207,15 +238,40 @@ class NowPlayingPlugin(BasePlugin):
         track = self._current()
         if not track:
             return None
-        return {k: track.get(k) for k in ("title", "artist", "album", "source", "art_url", "art_key")} | {
+        out = {k: track.get(k) for k in ("title", "artist", "album", "source", "art_url", "art_key")} | {
             "has_art": track.get("art") is not None,
             "progress": progress_fraction(track, time.monotonic()),
+            "style": style_of(self.config),
         }
+        an = self._eq
+        if out["style"] != "art" and an is not None:
+            out["eq"] = [round(v, 2) for v in an.shown]
+            out["eq_peaks"] = [round(v, 2) for v in an.peaks]
+        return out
+
+    def _draw_eq(self, track: dict, style: str):
+        now = time.monotonic()
+        key = (features.track_key(track), track.get("features") is not None)
+        if key != self._eq_key:
+            self._eq = Analyzer(track.get("features"), seed=hash(key[0]) & 0xFFFF)
+            self._eq_key = key
+            self._tiny = TinyMarquee(track)
+        self._eq.levels(song_seconds(track, now))
+        self._hue = (self._hue + 0.0015) % 1.0
+        frame = render_eq(self._eq, progress_fraction(track, now), self._hue,
+                          self._tiny if style == "eq_text" else None)
+        push_pil_to_canvas(frame, self.display_manager)
+        if style == "eq_text":
+            self._tiny.tick(self._scroll_speed())
+        return True
 
     def draw(self) -> bool:
         track = self._current()
         if not track:
             return False
+        style = style_of(self.config)
+        if style != "art":
+            return self._draw_eq(track, style)
         key = (track["source"], track["title"], track["artist"], track["album"])
         if key != self._marquee_key:
             self._marquees = make_marquees(track)

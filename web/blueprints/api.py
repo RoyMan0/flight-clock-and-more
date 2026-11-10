@@ -860,21 +860,45 @@ def ssh_key():
 def now_playing_test():
     """Check each enabled source for an unsaved config; render the frame that would show."""
     from PIL import Image
-    from plugins.now_playing.manager import first_playing
+    from plugins.now_playing import features
+    from plugins.now_playing.eq import Analyzer, TinyMarquee, render_eq
+    from plugins.now_playing.manager import first_playing, style_of
     from plugins.now_playing.render import make_marquees, render_frame
 
     data = request.get_json(force=True) or {}
     statuses = []
     track = first_playing(data, statuses)
-    image = None
-    if track:
-        dur, pos = track.get("duration_ms"), track.get("progress_ms")
-        frame = render_frame(*make_marquees(track), track.get("art"),
-                             (pos / dur) if dur and pos is not None else None)
+    image, frames, eq_note = None, [], None
+
+    def png(frame):
         buf = io.BytesIO()
         frame.resize((64 * 6, 32 * 6), Image.NEAREST).save(buf, format="PNG")
-        image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    return jsonify({"statuses": statuses, "image": image,
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+    if track:
+        dur, pos = track.get("duration_ms"), track.get("progress_ms")
+        progress = (pos / dur) if dur and pos is not None else None
+        style = style_of(data)
+        if style == "art":
+            image = png(render_frame(*make_marquees(track), track.get("art"), progress))
+        else:
+            # A second of the EQ from where the song is now, three frames apart
+            f = features.lookup(track)
+            an, tiny = Analyzer(f, seed=1), TinyMarquee(track)
+            start = (pos or 0) / 1000.0
+            for i in range(25):
+                an.levels(start + i / 10)
+                if i in (8, 16, 24):
+                    frames.append(png(render_eq(an, progress, i / 600, tiny if style == "eq_text" else None)))
+                tiny.tick(1.0)
+            image = frames[0]
+            v = features.with_defaults(f)
+            eq_note = (f"EQ from {features.source_of(track)}: {round(v['tempo'])} BPM, "
+                       f"energy {round(v['energy'] * 100)}%, danceability {round(v['danceability'] * 100)}%"
+                       if f and "energy" in f else
+                       f"EQ from Deezer: {round(v['tempo'])} BPM (energy unknown — using a typical song)"
+                       if f else "Couldn't find this song's tempo — the EQ uses a typical song's feel.")
+    return jsonify({"statuses": statuses, "image": image, "frames": frames, "eq_note": eq_note,
                     "playing": f"{track['title']} — {track['artist']}" if track else None})
 
 

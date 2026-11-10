@@ -172,6 +172,7 @@
       "display_duration": 20,
       "update_interval": 5,
       "scroll_speed": 1,
+      "style": "art",
       "source_order": ["spotify", "mac", "lastfm"],
       "sources": {"spotify": true, "mac": false, "lastfm": false},
       "mac_host": "",

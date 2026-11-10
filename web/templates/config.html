@@ -1363,6 +1363,28 @@
               </div>
             </div>
 
+            <!-- Style -->
+            <div class="col-12">
+              <label class="form-label">Style</label>
+              <template x-for="o in [
+                  {v: 'art', t: 'Album art', d: 'Title across the top, artwork, artist and album, progress bar.'},
+                  {v: 'eq', t: 'EQ bars', d: 'Full-panel EQ bars with the progress bar under them.'},
+                  {v: 'eq_text', t: 'EQ bars + song', d: 'Shorter EQ bars, the title and artist scrolling in a tiny font, and the progress bar.'}]" :key="o.v">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="npStyle" :id="'npStyle_' + o.v" :value="o.v"
+                         x-model="pluginConfigs.now_playing.style">
+                  <label class="form-check-label" :for="'npStyle_' + o.v">
+                    <span x-text="o.t"></span> <span class="small text-muted" x-text="'— ' + o.d"></span>
+                  </label>
+                </div>
+              </template>
+              <div class="form-text text-muted" x-show="pluginConfigs.now_playing.style !== 'art'">
+                The Pi can't hear the music, so the bars are an estimate: they pulse to the song's real tempo, and how hard they
+                bounce comes from its energy and danceability (looked up once per song, free, from ReccoBeats and Deezer).
+                Unknown songs get a typical song's feel.
+              </div>
+            </div>
+
             <!-- Source order -->
             <div class="col-12">
               <label class="form-label">Sources <span class="text-muted small">(checked top to bottom — the first one playing is shown)</span></label>
@@ -1534,8 +1556,14 @@
                 </template>
                 <li class="text-muted" x-show="!(nowPlaying.test?.statuses || []).length">No sources are turned on.</li>
               </ul>
-              <img x-show="nowPlaying.test?.image" :src="nowPlaying.test?.image" alt="Now playing preview"
+              <div class="small text-muted mb-1" x-show="nowPlaying.test?.eq_note" x-text="nowPlaying.test?.eq_note"></div>
+              <img x-show="nowPlaying.test?.image && !(nowPlaying.test?.frames || []).length" :src="nowPlaying.test?.image" alt="Now playing preview"
                    class="border border-secondary rounded" style="image-rendering:pixelated;max-width:100%;width:384px">
+              <div class="d-flex flex-wrap gap-2">
+                <template x-for="(f, i) in (nowPlaying.test?.frames || [])" :key="i">
+                  <img :src="f" alt="EQ preview" class="border border-secondary rounded" style="image-rendering:pixelated;width:100%;max-width:256px">
+                </template>
+              </div>
             </div>
           </div>
           <div class="mt-3 d-flex gap-2 align-items-center">
@@ -2493,7 +2521,7 @@ function configPage() {
         cfgs.ai_usage = au;
       }
       if (cfgs.now_playing) {
-        const np = { scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '', ...cfgs.now_playing };
+        const np = { scroll_speed: 1, style: 'art', mac_host: '', mac_user: '', lastfm_user: '', ...cfgs.now_playing };
         const all = ['spotify', 'mac', 'lastfm'];
         np.source_order = [...(np.source_order || []).filter(s => all.includes(s)), ...all.filter(s => !(np.source_order || []).includes(s))];
         np.sources = { spotify: true, mac: false, lastfm: false, ...(np.sources || {}) };
