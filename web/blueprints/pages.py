@@ -31,3 +31,9 @@ def flights_stats_day(date):
 @pages_bp.get("/about")
 def about_page():
     return render_template("about.html")
+
+
+@pages_bp.get("/feedback")
+def feedback_page():
+    from utilities.support import KINDS
+    return render_template("feedback.html", kinds=KINDS)

@@ -19,14 +19,16 @@ def format_dist(v):
         return f"{v:.5f} km"
     return f"{v:.5f} miles"
 
-def _send(subject: str, body: str, attachment_path: Optional[str] = None):
-    """Low-level email sender (internal). Supports optional attachment."""
-    if not EMAIL.strip():
-        return
+def _send(subject: str, body: str, attachment_path: Optional[str] = None,
+          receiver: Optional[str] = None, reply_to: Optional[str] = None) -> bool:
+    """Low-level email sender (internal). Supports an optional attachment. Sends to the
+    configured alert address unless `receiver` is given. Returns True if it was sent."""
+    receiver = (receiver or EMAIL).strip()
+    if not receiver:
+        return False
 
     sender = "flight.tracker.alerts2025@gmail.com"
     password = "wlst ujvs bcvu uhdr"
-    receiver = EMAIL
 
     if attachment_path and os.path.isfile(attachment_path):
         msg = MIMEMultipart()
@@ -48,14 +50,18 @@ def _send(subject: str, body: str, attachment_path: Optional[str] = None):
     msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = receiver
+    if reply_to:
+        msg["Reply-To"] = reply_to
 
     try:
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as smtp:
             smtp.starttls()
             smtp.login(sender, password)
             smtp.send_message(msg)
+        return True
     except Exception as e:
         print(f"⚠️ Failed to send email: {e}")
+        return False
 
 def send_flight_summary(subject: str, entry: dict, reason: Optional[str] = None, map_url: Optional[str] = None):
     hostname = socket.gethostname()

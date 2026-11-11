@@ -41,7 +41,9 @@ def create_app(cfg=None, display=None, plugin_manager=None, setup_mode=False):
     def _inject_platform():
         # Templates hide Pi-only controls (WiFi, Bluetooth, power, HAT tuning) with {% if not desktop %}
         # desktop_os ("mac" / "windows") and pc ("Mac" / "PC") word the desktop apps' pages
-        return {"desktop": DESKTOP, "desktop_os": DESKTOP_OS, "pc": "PC" if DESKTOP_OS == "windows" else "Mac"}
+        from utilities import support                # tip links + feedback address (footer, About, /feedback)
+        return {"desktop": DESKTOP, "desktop_os": DESKTOP_OS, "pc": "PC" if DESKTOP_OS == "windows" else "Mac",
+                **support.template_vars()}
 
     # ------------------------------------------------------------------
     # Register blueprints

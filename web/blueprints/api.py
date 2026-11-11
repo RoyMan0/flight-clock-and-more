@@ -70,6 +70,24 @@ def status():
 
 
 # ------------------------------------------------------------------
+# Feedback (the /feedback page) → emailed to the maker
+# ------------------------------------------------------------------
+
+@api_bp.post("/feedback")
+def feedback_send():
+    from utilities import support
+    d = request.get_json(force=True) or {}
+    try:
+        support.send_feedback(d.get("kind", ""), d.get("message", ""), d.get("name", ""), d.get("email", ""))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)})
+    except Exception as e:
+        log.warning(f"[feedback] not sent: {e}")
+        return jsonify({"ok": False, "error": str(e), "mailto": True})
+    return jsonify({"ok": True})
+
+
+# ------------------------------------------------------------------
 # Home location helpers (config page)
 # ------------------------------------------------------------------
 

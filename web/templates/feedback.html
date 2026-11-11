@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Feedback – LED Matrix{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <h4 class="fw-bold mb-0"><i class="bi bi-chat-heart me-2" style="color:#7df9aa"></i>Issues? Ideas? Contact me!</h4>
+    <p class="text-muted small mb-0">Something not working, or an idea for a new module? It goes straight to my inbox.</p>
+  </div>
+</div>
+
+<div class="card mb-4" style="max-width:720px" x-data="feedbackForm()">
+  <div class="card-body">
+    <template x-if="!sent">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label d-block">What's it about?</label>
+          {% for k in kinds %}
+          <input type="radio" class="btn-check" name="fbKind" id="fbKind{{ loop.index }}" value="{{ k }}" x-model="kind">
+          <label class="btn btn-outline-info btn-sm me-1" for="fbKind{{ loop.index }}">{{ k }}</label>
+          {% endfor %}
+        </div>
+        <div class="col-12">
+          <label class="form-label">Message</label>
+          <textarea class="form-control bg-dark text-light border-secondary" rows="7" maxlength="5000" x-model="message"
+                    placeholder="What happened, or what would you like to see? For a problem, say what you were doing and what the display showed."></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Your name <span class="text-muted small">(optional)</span></label>
+          <input type="text" class="form-control bg-dark text-light border-secondary" maxlength="100" x-model="name">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Your email <span class="text-muted small">(optional, so I can reply)</span></label>
+          <input type="email" class="form-control bg-dark text-light border-secondary" maxlength="200" x-model="email">
+        </div>
+        <div class="col-12 d-flex align-items-center gap-3 flex-wrap">
+          <button class="btn btn-success" @click="send()" :disabled="busy || message.trim().length < 3">
+            <i class="bi bi-send me-1"></i><span x-text="busy ? 'Sending…' : 'Send'"></span>
+          </button>
+          <span class="small" :class="error ? 'text-warning' : 'text-muted'"
+                x-text="error || 'Your device type and its name are included to help me track down problems.'"></span>
+        </div>
+        <div class="col-12" x-show="mailto">
+          <a class="btn btn-outline-light btn-sm" :href="mailtoLink()" target="_blank">
+            <i class="bi bi-envelope me-1"></i>Send it from your email app instead
+          </a>
+          <span class="small text-muted ms-2">or write to {{ feedback_email }}</span>
+        </div>
+      </div>
+    </template>
+    <template x-if="sent">
+      <div class="text-center py-4">
+        <i class="bi bi-check-circle" style="font-size:2.5rem;color:#7df9aa"></i>
+        <h5 class="mt-2 mb-1">Thanks! It's on its way.</h5>
+        <p class="text-muted small mb-3" x-text="email ? 'I\'ll reply to ' + email + ' if there\'s anything to follow up.' : 'Add your email next time if you\'d like a reply.'"></p>
+        <button class="btn btn-outline-info btn-sm" @click="reset()">Send another</button>
+      </div>
+    </template>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function feedbackForm() {
+  return {
+    kind: 'Issue', message: '', name: '', email: '', busy: false, sent: false, error: '', mailto: false,
+    async send() {
+      this.busy = true; this.error = ''; this.mailto = false;
+      try {
+        const r = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: this.kind, message: this.message, name: this.name, email: this.email }) }).then(r => r.json());
+        if (r.ok) this.sent = true;
+        else { this.error = r.error || "Couldn't send it."; this.mailto = !!r.mailto; }
+      } catch (e) {
+        this.error = "Couldn't reach the clock to send it."; this.mailto = true;
+      }
+      this.busy = false;
+    },
+    mailtoLink() {
+      const body = this.message + (this.name ? '\n\n— ' + this.name : '');
+      return 'mailto:{{ feedback_email }}?subject=' + encodeURIComponent('Flight Clock ' + this.kind.toLowerCase()) +
+             '&body=' + encodeURIComponent(body);
+    },
+    reset() { this.message = ''; this.sent = false; this.error = ''; this.mailto = false; },
+  };
+}
+</script>
+{% endblock %}

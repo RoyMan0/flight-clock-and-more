@@ -79,6 +79,35 @@
         </p>
       </div>
     </div>
+
+    <!-- Tips and feedback (also linked from every page's footer) -->
+    <div class="row g-3 mt-2 pt-3 border-top border-secondary" id="support">
+      <div class="col-lg-7">
+        <h6 class="fw-bold mb-1"><i class="bi bi-heart-fill me-2" style="color:#f7a1c4"></i>Love the Flight Clock? Send me a tip!</h6>
+        <p class="text-muted small mb-2">If the Flight Clock makes you smile, a tip helps keep new modules coming.
+          Scan a code with your phone's camera, or tap a button.</p>
+        <div class="d-flex flex-wrap gap-3">
+          <div class="text-center">
+            <a href="{{ venmo_url }}" target="_blank" rel="noopener">
+              <img src="/static/qr-venmo.svg" alt="Venmo QR code" width="132" height="132" class="rounded bg-white p-1"></a>
+            <div class="mt-1"><a class="btn btn-sm text-white" style="background:#008CFF" href="{{ venmo_url }}" target="_blank" rel="noopener">
+              Venmo @{{ venmo_handle }}</a></div>
+          </div>
+          <div class="text-center">
+            <a href="{{ paypal_url }}" target="_blank" rel="noopener">
+              <img src="/static/qr-paypal.svg" alt="PayPal QR code" width="132" height="132" class="rounded bg-white p-1"></a>
+            <div class="mt-1"><a class="btn btn-sm text-white" style="background:#003087" href="{{ paypal_url }}" target="_blank" rel="noopener">
+              PayPal</a></div>
+            <div class="text-muted" style="font-size:.72rem">{{ paypal_email }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <h6 class="fw-bold mb-1"><i class="bi bi-chat-dots me-2" style="color:#7df9aa"></i>Issues? Ideas? Contact me!</h6>
+        <p class="text-muted small mb-2">Found a bug, or have an idea for a module? Send it from here and it comes straight to me.</p>
+        <a href="/feedback" class="btn btn-outline-info btn-sm"><i class="bi bi-send me-1"></i>Send feedback</a>
+      </div>
+    </div>
   </div>
 </div>
 
