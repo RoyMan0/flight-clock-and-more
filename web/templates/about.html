@@ -106,6 +106,15 @@
         <h6 class="fw-bold mb-1"><i class="bi bi-chat-dots me-2" style="color:#7df9aa"></i>Issues? Ideas? Contact me!</h6>
         <p class="text-muted small mb-2">Found a bug, or have an idea for a module? Send it from here and it comes straight to me.</p>
         <a href="/feedback" class="btn btn-outline-info btn-sm"><i class="bi bi-send me-1"></i>Send feedback</a>
+        {% if desktop %}
+        <h6 class="fw-bold mb-1 mt-3"><i class="bi bi-grid-3x3-gap-fill me-2" style="color:#ffb347"></i>Want the real LED clock?</h6>
+        <p class="text-muted small mb-2">Build one on a Raspberry Pi with a 64×32 LED panel: parts list and a one-command install.</p>
+        <a href="{{ pi_project_url }}" target="_blank" rel="noopener" class="btn btn-outline-warning btn-sm"><i class="bi bi-cpu me-1"></i>Flight Clock for Raspberry Pi</a>
+        {% else %}
+        <h6 class="fw-bold mb-1 mt-3"><i class="bi bi-laptop me-2" style="color:#ffb347"></i>Want it on your computer too?</h6>
+        <p class="text-muted small mb-2">The same clock and modules for Mac and Windows: no Pi needed, with flip-board, e-ink and retro-case looks.</p>
+        <a href="{{ app_project_url }}" target="_blank" rel="noopener" class="btn btn-outline-warning btn-sm"><i class="bi bi-download me-1"></i>Flight Clock for Mac &amp; Windows</a>
+        {% endif %}
       </div>
     </div>
   </div>
