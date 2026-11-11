@@ -59,6 +59,13 @@
 
   h2 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
   .sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .tip-card { margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(247,161,196,.35); }
+  .tip-title { font-weight: 700; color: #f7a1c4; margin-bottom: 4px; }
+  .tip-card p { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0 0 10px; }
+  .tip-row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .tip-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; }
+  .tip-opt img { background: #fff; border-radius: 8px; padding: 4px; }
+  .tip-btn { color: #fff; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
 
   .card {
     background: var(--surface);
@@ -479,6 +486,23 @@
 
     <div class="card" id="review-card" style="padding:16px; font-size:13px; line-height:1.8;">
       <!-- filled by JS -->
+    </div>
+
+    <!-- A gentle tip ask (utilities/support.py holds the links) -->
+    <div class="card tip-card">
+      <div class="tip-title">♥ A small request</div>
+      <p>Flight Clock is free, and I've put hundreds of hours into building it. If it brings you some joy,
+         a tip of any size helps me keep improving it. Totally optional, and thank you either way!</p>
+      <div class="tip-row">
+        <a href="{{ venmo_url }}" target="_blank" rel="noopener" class="tip-opt">
+          <img src="/static/qr-venmo.svg" alt="Venmo QR code" width="104" height="104">
+          <span class="tip-btn" style="background:#008CFF">Venmo @{{ venmo_handle }}</span>
+        </a>
+        <a href="{{ paypal_url }}" target="_blank" rel="noopener" class="tip-opt">
+          <img src="/static/qr-paypal.svg" alt="PayPal QR code" width="104" height="104">
+          <span class="tip-btn" style="background:#003087">PayPal</span>
+        </a>
+      </div>
     </div>
 
     <div class="btn-row">
