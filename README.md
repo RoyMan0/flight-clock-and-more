@@ -60,7 +60,7 @@ The web page also has a live mirror of the panel, flight logs and maps (closest 
 | [Raspberry Pi 3A+](https://www.adafruit.com/product/4027) | A 3B+ or 4 also works. A Pi Zero flickers; a Pi 5 isn't supported by the LED library yet. |
 | [Adafruit RGB Matrix Bonnet](https://www.adafruit.com/product/3211) | Sits on the Pi and drives the panel. |
 | [64×32 RGB LED panel, P4](https://www.adafruit.com/product/2278) | About 10 × 5 in. Any 64×32 panel works: P3 or P2.5 for a smaller clock. |
-| [USB-C to 5 V barrel adapter](https://www.adafruit.com/product/6030) | Plugs into the bonnet, which powers the panel *and* the Pi, so a phone charger is all you need. Use a USB-C charger of 15 W or more. |
+| [USB-C to 5 V barrel adapter](https://www.adafruit.com/product/6030) | Plugs into the bonnet, which powers the panel *and* the Pi, so a phone charger is all you need: any USB-C charger of **10 W or more**, or a USB-C port on a computer or laptop. |
 | [Tinted acrylic](https://www.adafruit.com/product/4749) + [clear double-sided tape](https://www.amazon.com/EZlifego-Multipurpose-Removable-Transparent-Household/dp/B07VNSXY31) | Optional, but it makes the panel much easier to read. The acrylic is a little larger than a P4 panel. |
 | microSD card | Any size, 8 GB or more. |
 | [Small CPU heatsink](https://www.adafruit.com/product/3084) | |
@@ -79,7 +79,7 @@ Don't want to solder, print a case or run an installer? I'll build one for you: 
 
 - **What you get:** a finished clock (Raspberry Pi, bonnet, 64×32 LED panel, tinted acrylic front, 3D-printed case and USB-C power adapter) with the software installed and tested.
 - **What changes the price:** the panel size (P4 is about 10 × 5 in; a smaller P3 or P2.5 is also possible), the case colour, and whether you want a USB-C charger included.
-- **Setting it up:** plug it in, and it shows a QR code to join its **FltClk** Wi-Fi from your phone. Pick your home Wi-Fi, then the setup wizard asks for your location and modules. No computer needed.
+- **Setting it up:** plug it into any USB-C charger (10 W or more) or a computer's USB-C port, and it shows a QR code to join its **FltClk** Wi-Fi from your phone. Pick your home Wi-Fi, then the setup wizard asks for your location and modules. No computer needed. Afterwards, change anything from the clock's web page on your home network (see [Finding your clock's web page](#finding-your-clocks-web-page)).
 
 Email me at **[rdhobbs@gmail.com](mailto:rdhobbs@gmail.com?subject=Flight%20Clock%20build)** with what you'd like and roughly where you are (for shipping), and I'll get back to you with a price and timing.
 
@@ -107,6 +107,8 @@ From a terminal on your computer (Terminal on a Mac, PowerShell on Windows):
 ssh yourusername@flightclock.local
 ```
 
+If that name isn't found, use the Pi's IP address instead (`ssh yourusername@192.168.x.x`); your router's list of connected devices shows it.
+
 ### 3. Run the installer
 
 ```bash
@@ -120,7 +122,20 @@ The installer sets up everything: system packages, the LED library (this part ta
 
 ### 4. Finish in your browser
 
-Open **http://flightclock.local:8080** (your hostname) on your phone or computer. The setup wizard asks for your location (type your address, or enter latitude and longitude), the modules you want, and your keys. Then it starts the clock.
+Open your clock's web page on your phone or computer (see below). The setup wizard asks for your location (type your address, or enter latitude and longitude), the modules you want, and your keys. Then it starts the clock.
+
+#### Finding your clock's web page
+
+The clock's settings live on a web page served by the clock itself, at **`http://<your clock's IP address>:8080`**, for example `http://192.168.1.42:8080`.
+
+- It only works **on your home network**: your phone or computer has to be on the same Wi-Fi as the clock. It isn't reachable from the internet.
+- **Finding the IP address:**
+  - The installer prints it at the end ("Web dashboard: http://192.168.x.x:8080").
+  - Your router's app or admin page lists it under connected devices, named after your hostname (e.g. `flightclock`).
+  - Over SSH: `hostname -I`.
+- `http://flightclock.local:8080` (your hostname) also works on iPhones, iPads and Macs, and often on Windows, but not always on Android, so the IP address is the reliable one.
+- **Bookmark it**, or on a phone use *Add to Home Screen*, so it's one tap away.
+- **Tip:** in your router's settings, reserve the clock's IP address (often called a *DHCP reservation* or *fixed IP*), so the address and your bookmark never change.
 
 If the Pi can't join your Wi-Fi, it makes its own network called **FltClk** and shows a QR code on the panel: scan it with your phone to set up Wi-Fi from there.
 
@@ -140,7 +155,7 @@ Planes overhead are found free (adsb.lol, with OpenSky and Flightradar24 as back
 
 ## Using it
 
-- **Settings:** http://flightclock.local:8080/config. Every module has a **Test** button that shows exactly what the panel will display.
+- **Settings:** `http://<your clock's IP>:8080/config` (see [Finding your clock's web page](#finding-your-clocks-web-page)). Every module has a **Test** button that shows exactly what the panel will display.
 - **Display page:** show any module now, or play the maze.
 - **Updates:** **Check for Updates** on the dashboard pulls the latest version and restarts the clock.
 - **Panel looks wrong?** Config → System Settings has the panel options: LED Pixel Order (swapped colours), GPIO Slowdown (flicker), and HAT PWM Mode if you soldered the bridge.
