@@ -13,6 +13,9 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 
 from utilities.paths import DESKTOP
 
+import logging
+log = logging.getLogger(__name__)
+
 
 
 # Modules offered in the first-boot wizard: (id, label, what it needs).
@@ -377,12 +380,23 @@ def setup_save():
 
 @setup_bp.post("/setup/locate")
 def setup_locate():
-    """Mac app: coordinates from the Mac's location (the desktop launcher sets current_app.locate_cb)."""
+    """Desktop app: coordinates from the computer's location (the launcher sets current_app.locate_cb)."""
     locate_cb = getattr(current_app, "locate_cb", None)
     if not locate_cb:
         return jsonify({"ok": False, "error": "not available"}), 404
     try:
         return jsonify({"ok": True, **locate_cb()})
+    except Exception as e:
+        log.warning(f"[setup] locate failed: {e}")
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@setup_bp.post("/setup/geocode")
+def setup_geocode():
+    """Address or place name → candidate coordinates (utilities/geocode.py)."""
+    from utilities import geocode
+    try:
+        return jsonify({"ok": True, "results": geocode.search((request.get_json(force=True) or {}).get("q", ""))})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

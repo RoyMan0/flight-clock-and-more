@@ -16,6 +16,9 @@ api_bp = Blueprint("api", __name__)
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 from utilities.paths import DATA_ROOT, DESKTOP
 
+import logging
+log = logging.getLogger(__name__)
+
 CLOSEST_FILE  = os.path.join(DATA_ROOT, "close.txt")
 FARTHEST_FILE = os.path.join(DATA_ROOT, "farthest.txt")
 HISTORY_FILE  = os.path.join(DATA_ROOT, "data", "flight_history.json")
@@ -64,6 +67,33 @@ def status():
     pm = _pm()
     status_data = pm.get_status() if pm else {}
     return jsonify(status_data)
+
+
+# ------------------------------------------------------------------
+# Home location helpers (config page)
+# ------------------------------------------------------------------
+
+@api_bp.post("/location/geocode")
+def location_geocode():
+    """Address or place name → candidate coordinates (utilities/geocode.py)."""
+    from utilities import geocode
+    try:
+        return jsonify({"ok": True, "results": geocode.search((request.get_json(force=True) or {}).get("q", ""))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@api_bp.post("/location/locate")
+def location_locate():
+    """Desktop app only: coordinates from the computer's location (current_app.locate_cb)."""
+    locate_cb = getattr(current_app, "locate_cb", None)
+    if not locate_cb:
+        return jsonify({"ok": False, "error": "not available on this device"}), 404
+    try:
+        return jsonify({"ok": True, **locate_cb()})
+    except Exception as e:
+        log.warning(f"[api] locate failed: {e}")
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @api_bp.get("/system")

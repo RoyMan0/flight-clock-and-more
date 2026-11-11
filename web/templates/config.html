@@ -507,6 +507,29 @@
               <input type="text" class="form-control bg-dark text-light border-secondary"
                      x-model="sysCfg.location.journey_code" maxlength="3" style="text-transform:uppercase">
             </div>
+            <div class="col-12">
+              <label class="form-label">Find Home Address</label>
+              <div class="input-group">
+                <input type="text" class="form-control bg-dark text-light border-secondary" x-model="homeQ"
+                       placeholder="Street address, town or postcode" @keydown.enter.prevent="findHome()">
+                <button class="btn btn-outline-info" type="button" @click="findHome()" :disabled="homeBusy">
+                  <i class="bi bi-search me-1"></i>Find
+                </button>
+                {% if desktop %}
+                <button class="btn btn-outline-secondary" type="button" @click="useMyLocation()" :disabled="homeBusy"
+                        title="Use this {{ pc }}'s location">
+                  <i class="bi bi-geo-alt me-1"></i>Use my {{ pc }}'s location
+                </button>
+                {% endif %}
+              </div>
+              <div class="list-group mt-1" x-show="homeResults.length">
+                <template x-for="p in homeResults" :key="p.lat + ',' + p.lon">
+                  <button type="button" class="list-group-item list-group-item-action bg-dark text-light border-secondary small"
+                          @click="pickHome(p)" x-text="p.name"></button>
+                </template>
+              </div>
+              <div class="text-muted small mt-1" x-text="homeMsg || 'Fills in the coordinates below; then Save.'"></div>
+            </div>
             <div class="col-md-6">
               <label class="form-label">Home Latitude</label>
               <input type="number" class="form-control bg-dark text-light border-secondary"
@@ -2516,6 +2539,7 @@ function configPage() {
       now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
+    homeQ: '', homeResults: [], homeMsg: '', homeBusy: false,
     secrets: {},
     backups: [],
     saved: false,
@@ -2749,6 +2773,40 @@ function configPage() {
     setDuration(pid, val) {
       if (!this.pluginConfigs[pid]) this.pluginConfigs[pid] = {};
       this.pluginConfigs[pid].display_duration = parseInt(val);
+    },
+
+    // Home location: address lookup, or (desktop app) the computer's own location
+    pickHome(p) {
+      this.sysCfg.location.location_home = [+(+p.lat).toFixed(4), +(+p.lon).toFixed(4)];
+      this.homeResults = [];
+      this.homeMsg = '✓ ' + p.name + ' — Save to keep it.';
+    },
+    async findHome() {
+      const q = this.homeQ.trim();
+      if (!q) { this.homeMsg = 'Type an address or place name first.'; return; }
+      this.homeBusy = true; this.homeResults = []; this.homeMsg = 'Looking up…';
+      try {
+        const r = await fetch('/api/location/geocode', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                          body: JSON.stringify({ q }) }).then(r => r.json());
+        if (!r.ok) throw new Error(r.error || 'lookup failed');
+        if (!r.results.length) this.homeMsg = 'No match. Try adding the town or country.';
+        else if (r.results.length === 1) this.pickHome(r.results[0]);
+        else { this.homeResults = r.results; this.homeMsg = 'Pick the right one:'; }
+      } catch (e) {
+        this.homeMsg = "Couldn't look that up (" + e.message + ').';
+      }
+      this.homeBusy = false;
+    },
+    async useMyLocation() {
+      this.homeBusy = true; this.homeResults = []; this.homeMsg = 'Locating… (allow access if asked)';
+      try {
+        const r = await fetch('/api/location/locate', { method: 'POST' }).then(r => r.json());
+        if (!r.ok) throw new Error(r.error || 'location unavailable');
+        this.pickHome({ lat: r.lat, lon: r.lon, name: r.label || 'Location found' });
+      } catch (e) {
+        this.homeMsg = "Couldn't get your location (" + e.message + ').';
+      }
+      this.homeBusy = false;
     },
 
     async saveOrder() {

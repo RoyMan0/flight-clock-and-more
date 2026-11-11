@@ -61,7 +61,8 @@ A separate repo, `Flight-Clock-App`, runs this codebase as a standalone Mac app.
   `_block_pi_only_on_desktop` in `api.py` returns 404 for the matching `/api/system/*` endpoints. The setup wizard skips its WiFi step.
 - **Hooks the Mac app sets on the Flask app:**
   - `restart_cb`, used by `/api/system/restart-app` and `/setup/finish` in place of `systemctl restart`.
-  - `locate_cb`, used by `/setup/locate` for the wizard's "Use my Mac's location".
+  - `locate_cb`, used by `/setup/locate` (wizard) and `/api/location/locate` (config page) for "Use my Mac's/PC's location". Neither shows on the Pi.
+- **Home location by address** (Pi and desktop): the wizard's "Find your address" (`/setup/geocode`) and the config page's "Find Home Address" (`/api/location/geocode`) use `utilities/geocode.py`: OpenStreetMap Nominatim (full addresses; identifying User-Agent, only on a button press per its usage policy), falling back to Open-Meteo's geocoder (place names). Several matches are listed to pick from; the pick fills the lat/lon fields, which stay editable.
 - **`GET /api/display/frame`**: the raw 64×32 RGB snapshot (6,144 bytes, with an `X-Brightness` header), polled at 10 fps by the Mac panel window.
 - **`describe()` and `GET /api/display/model`** (Mac flip-board and colour e-ink screens): each plugin's `describe()` returns a JSON-safe dict of what it is showing now: data, page index and view mode, **not** pixels or scroll offsets. The Mac app draws it at high resolution from its own layouts (`desktop/panel/js/layouts/<plugin>.js` in Flight-Clock-App).
   - `PluginManager.describe_active()` wraps the active plugin's model. The endpoint adds `rev`, a CRC of the model, so clients redraw only on change.

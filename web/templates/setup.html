@@ -192,6 +192,20 @@
   }
   .note a { color: var(--blue); text-decoration: none; }
 
+  /* Home location: address search */
+  .addr-row { display: flex; gap: 8px; }
+  .addr-row input { flex: 1; min-width: 0; }
+  .addr-row .btn { width: auto; padding: 10px 16px; font-size: 14px; }
+  .addr-results { margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .addr-results:empty { display: none; }
+  .addr-results button {
+    display: block; width: 100%; text-align: left; background: var(--surface); color: var(--text);
+    border: none; border-bottom: 1px solid var(--border); padding: 9px 12px; font-size: 13px; cursor: pointer;
+  }
+  .addr-results button:last-child { border-bottom: none; }
+  .addr-results button:hover { background: var(--border); }
+  .addr-status { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 1em; }
+
   .spinner {
     width: 16px; height: 16px; border: 2px solid transparent;
     border-top-color: currentColor; border-radius: 50%;
@@ -265,13 +279,18 @@
       📍 Use my {{ pc }}'s location
     </button>
     {% endif %}
-    <div class="note">
-      Enter your home coordinates. You can find them by searching your address on
-      <a href="#" onclick="return false;">maps.google.com</a> and reading the URL, or use
-      <a href="https://www.latlong.net" target="_blank">latlong.net</a>.
-    </div>
 
     <div class="card" style="padding:16px;">
+      <div class="field" style="margin-bottom:16px;">
+        <label>{% if desktop %}Or find your address{% else %}Find your address{% endif %}</label>
+        <div class="addr-row">
+          <input type="text" id="addr-q" placeholder="Street address, town or postcode" autocomplete="street-address"
+                 onkeydown="if (event.key === 'Enter') { event.preventDefault(); findAddress(); }">
+          <button class="btn btn-ghost" id="addr-btn" onclick="findAddress()">Find</button>
+        </div>
+        <div class="addr-results" id="addr-results"></div>
+        <div class="addr-status" id="addr-status">Fills in the coordinates below. You can also type them in yourself.</div>
+      </div>
       <div class="row2">
         <div class="field">
           <label>Latitude</label>
@@ -744,11 +763,46 @@ function showFinish() {
   }, 1000);
 }
 
+// ── Home location: address → coordinates (OpenStreetMap lookup on the device) ──
+function setHome(lat, lon, label) {
+  document.getElementById('loc-lat').value = (+lat).toFixed(4);
+  document.getElementById('loc-lon').value = (+lon).toFixed(4);
+  document.getElementById('addr-results').innerHTML = '';
+  document.getElementById('addr-status').textContent = '✓ ' + label;
+}
+
+async function findAddress() {
+  const q = document.getElementById('addr-q').value.trim();
+  const btn = document.getElementById('addr-btn'), list = document.getElementById('addr-results');
+  const status = document.getElementById('addr-status');
+  if (!q) { status.textContent = 'Type an address or place name first.'; return; }
+  btn.disabled = true; status.textContent = 'Looking up…'; list.innerHTML = '';
+  try {
+    const r = await fetch('/setup/geocode', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ q }) }).then(r => r.json());
+    if (!r.ok) throw new Error(r.error || 'lookup failed');
+    if (!r.results.length) status.textContent = 'No match. Try adding the town or country, or enter coordinates below.';
+    else if (r.results.length === 1) setHome(r.results[0].lat, r.results[0].lon, r.results[0].name);
+    else {
+      status.textContent = 'Pick the right one:';
+      for (const p of r.results) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = p.name;
+        b.onclick = () => setHome(p.lat, p.lon, p.name);
+        list.appendChild(b);
+      }
+    }
+  } catch (e) {
+    status.textContent = "Couldn't look that up (" + e.message + '). Enter the coordinates below instead.';
+  }
+  btn.disabled = false;
+}
+
 {% if desktop %}
 // ── Desktop app: fill in coordinates from the computer's location ─────────
 async function useMacLocation() {
   const btn = document.getElementById('locate-btn');
-  btn.disabled = true; btn.textContent = 'Locating…';
+  btn.disabled = true; btn.textContent = 'Locating… (allow access if asked)';
   try {
     const r = await fetch('/setup/locate', { method: 'POST' }).then(r => r.json());
     if (!r.ok) throw new Error(r.error || 'location unavailable');
@@ -757,7 +811,7 @@ async function useMacLocation() {
     btn.textContent = '✓ ' + (r.label || 'Location found');
   } catch (e) {
     btn.textContent = "📍 Use my {{ pc }}'s location";
-    alert("Couldn't get your location (" + e.message + "). Enter the coordinates below instead.");
+    alert("Couldn't get your location (" + e.message + "). Find your address or enter the coordinates instead.");
   }
   btn.disabled = false;
 }
