@@ -17,7 +17,9 @@ Config (plugins.now_playing):
                  The EQ is estimated from the song's tempo/energy (features.py, eq.py).
 Secrets: spotify_client_id, spotify_refresh_token, lastfm_api_key
 
-Takes its normal turn in the rotation; skipped when nothing is playing.
+Takes its normal turn in the rotation while a song is playing, or paused (Spotify and
+the Music app report pauses) within PAUSE_KEEP_SECS of music last playing, so a song
+paused for a phone call stays up. Skipped when nothing is playing.
 """
 
 import logging
@@ -31,7 +33,7 @@ import requests
 from plugins.base_plugin import BasePlugin
 from plugins.now_playing import features
 from plugins.now_playing.eq import Analyzer, TinyMarquee, render_eq
-from plugins.now_playing.render import make_marquees, prepare_art, render_frame
+from plugins.now_playing.render import MATRIX_W, draw_paused, make_marquees, prepare_art, render_frame
 from plugins.transit.render import push_pil_to_canvas
 
 log = logging.getLogger(__name__)
@@ -39,6 +41,8 @@ log = logging.getLogger(__name__)
 SOURCES = ("spotify", "mac", "lastfm")
 SOURCE_NAMES = {"spotify": "Spotify", "mac": "Mac Music app", "lastfm": "Last.fm"}
 STALE_SECS = 30                 # forget a track if updates stop arriving
+PAUSE_KEEP_SECS = 30 * 60       # show a paused song this long after music last played; a session
+                                # that was already paused (e.g. Spotify's from yesterday) never shows
 SOURCE_RETRY_SECS = 60          # skip a source this long after it errors (e.g. Spotify
                                 # while the internet is down) so the next one is reached fast
 _source_skip_until: dict = {}   # source → time.monotonic() it may be tried again
@@ -105,8 +109,9 @@ def attach_art(config: dict, track: dict):
 
 
 def first_playing(config: dict, statuses: list = None):
-    """Check enabled sources in order; return the first playing track (with art) or None.
-    If `statuses` is given, a status line per checked source is appended to it."""
+    """Check enabled sources in order; return the first playing track (with art), else the first
+    paused one, else None. If `statuses` is given, a status line per checked source is appended."""
+    paused = None
     for source in enabled_sources(config):
         name = SOURCE_NAMES[source]
         # The config page's Test (statuses given) always tries every source
@@ -121,6 +126,12 @@ def first_playing(config: dict, statuses: list = None):
             if statuses is not None:
                 statuses.append({"source": source, "name": name, "ok": False, "text": str(e)})
             continue
+        if track and track.get("paused"):
+            if statuses is not None:
+                statuses.append({"source": source, "name": name, "ok": True,
+                                 "text": f"Paused: {track['title']} — {track['artist']}"})
+            paused = paused or track
+            continue
         if track:
             attach_art(config, track)
             if statuses is not None:
@@ -129,29 +140,32 @@ def first_playing(config: dict, statuses: list = None):
             return track
         if statuses is not None:
             statuses.append({"source": source, "name": name, "ok": True, "text": "Nothing playing"})
-    return None
+    if paused:
+        attach_art(config, paused)
+    return paused
 
 
-SKIPPABLE = ("spotify", "mac")      # sources that can change the song (Last.fm only reports it)
+CONTROLLABLE = ("spotify", "mac")   # sources that can change the song (Last.fm only reports it)
+ACTIONS = ("next", "previous", "playpause")
 
 
-def skip(config: dict, track: dict, direction: str, local=None):
-    """Next / previous song for the current track's source. `local(source, direction)` is the
-    desktop app's hook (app.media_cb): it controls a player on the same computer and returns
-    True if it did, so Spotify works there without the Web API. Raises with a readable message."""
-    if direction not in ("next", "previous"):
-        raise ValueError("direction must be next or previous")
+def control(config: dict, track: dict, action: str, local=None):
+    """Next / previous song or play-pause for the current track's source. `local(source, action)`
+    is the desktop app's hook (app.media_cb): it controls a player on the same computer and
+    returns True if it did, so Spotify works there without the Web API. Raises with a readable message."""
+    if action not in ACTIONS:
+        raise ValueError(f"action must be one of {', '.join(ACTIONS)}")
     source = (track or {}).get("source")
-    if source not in SKIPPABLE:
-        raise RuntimeError(f"{SOURCE_NAMES.get(source, 'This source')} can't change songs")
-    if local and local(source, direction):
+    if source not in CONTROLLABLE:
+        raise RuntimeError(f"{SOURCE_NAMES.get(source, 'This source')} can't control playback")
+    if local and local(source, action):
         return
     if source == "spotify":
         from plugins.now_playing.sources import spotify
-        spotify.skip(direction)
+        spotify.control(action, paused=bool(track.get("paused")))
     else:
         from plugins.now_playing.sources import mac_music
-        mac_music.skip(config.get("mac_host", "").strip(), config.get("mac_user", "").strip(), direction)
+        mac_music.control(config.get("mac_host", "").strip(), config.get("mac_user", "").strip(), action)
 
 
 def style_of(config: dict) -> str:
@@ -162,16 +176,17 @@ def style_of(config: dict) -> str:
 def song_seconds(track: dict, now: float) -> float:
     """Playback position for the EQ's beat grid; sources without one count from when we first saw it."""
     if track.get("progress_ms") is not None:
-        return track["progress_ms"] / 1000.0 + (now - track.get("fetched_at", now))
+        return track["progress_ms"] / 1000.0 + (0 if track.get("paused") else now - track.get("fetched_at", now))
     return now - track.get("first_seen", now)
 
 
 def progress_fraction(track: dict, now: float):
-    """0..1 interpolated since the last fetch, or None when the source has no duration."""
+    """0..1 interpolated since the last fetch (held while paused), or None when the source has no duration."""
     dur, pos = track.get("duration_ms"), track.get("progress_ms")
     if not dur or pos is None:
         return None
-    pos += (now - track.get("fetched_at", now)) * 1000
+    if not track.get("paused"):
+        pos += (now - track.get("fetched_at", now)) * 1000
     return max(0.0, min(1.0, pos / dur))
 
 
@@ -192,6 +207,7 @@ class NowPlayingPlugin(BasePlugin):
         self._eq_key = None
         self._tiny = None
         self._hue = 0.0
+        self._last_playing_at = None      # monotonic time a source was last seen playing (see PAUSE_KEEP_SECS)
 
     @property
     def enabled(self) -> bool:
@@ -224,6 +240,13 @@ class NowPlayingPlugin(BasePlugin):
         for s in errors:
             if not s["ok"]:
                 log.debug(f"[now_playing] {s['source']}: {s['text']}")
+        if track and track.get("paused"):
+            # Keep a song paused mid-listen; ignore sessions that were already paused
+            last = self._last_playing_at
+            if last is None or time.monotonic() - last > PAUSE_KEEP_SECS:
+                track = None
+        elif track:
+            self._last_playing_at = time.monotonic()
         if track:
             track["fetched_at"] = time.monotonic()
             with self._lock:
@@ -262,7 +285,8 @@ class NowPlayingPlugin(BasePlugin):
             return None
         out = {k: track.get(k) for k in ("title", "artist", "album", "source", "art_url", "art_key")} | {
             "has_art": track.get("art") is not None,
-            "can_skip": track.get("source") in SKIPPABLE,
+            "can_skip": track.get("source") in CONTROLLABLE,
+            "paused": bool(track.get("paused")),
             "progress": progress_fraction(track, time.monotonic()),
             "style": style_of(self.config),
         }
@@ -279,10 +303,14 @@ class NowPlayingPlugin(BasePlugin):
             self._eq = Analyzer(track.get("features"), seed=hash(key[0]) & 0xFFFF)
             self._eq_key = key
             self._tiny = TinyMarquee(track)
-        self._eq.levels(song_seconds(track, now))
-        self._hue = (self._hue + 0.0015) % 1.0
+        paused = bool(track.get("paused"))
+        self._eq.levels(song_seconds(track, now), playing=not paused)   # paused: the bars fall
+        if not paused:
+            self._hue = (self._hue + 0.0015) % 1.0
         frame = render_eq(self._eq, progress_fraction(track, now), self._hue,
                           self._tiny if style == "eq_text" else None)
+        if paused:
+            draw_paused(frame, center=(MATRIX_W // 2, 12))
         push_pil_to_canvas(frame, self.display_manager)
         if style == "eq_text":
             self._tiny.tick(self._scroll_speed())
@@ -300,6 +328,8 @@ class NowPlayingPlugin(BasePlugin):
             self._marquees = make_marquees(track)
             self._marquee_key = key
         frame = render_frame(*self._marquees, track.get("art"), progress_fraction(track, time.monotonic()))
+        if track.get("paused"):
+            draw_paused(frame)
         push_pil_to_canvas(frame, self.display_manager)
         speed = self._scroll_speed()
         for m in self._marquees:

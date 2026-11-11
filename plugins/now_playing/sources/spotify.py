@@ -158,8 +158,8 @@ def is_connected() -> bool:
 # ------------------------------------------------------------------
 
 def parse_currently_playing(data: dict):
-    """Spotify currently-playing JSON → track dict, or None when nothing is playing."""
-    if not data or not data.get("is_playing") or not data.get("item"):
+    """Spotify currently-playing JSON → track dict (with "paused"), or None when there's no track."""
+    if not data or not data.get("item"):
         return None
     item = data["item"]
     if data.get("currently_playing_type") == "episode" or item.get("type") == "episode":
@@ -182,14 +182,20 @@ def parse_currently_playing(data: dict):
         "art_key": item.get("id") or art,
         "progress_ms": data.get("progress_ms"),
         "duration_ms": item.get("duration_ms"),
+        "paused": not data.get("is_playing"),
     }
 
 
-def skip(direction: str):
-    """Next / previous track on whichever device is playing ("next" or "previous")."""
+def control(action: str, paused: bool = False):
+    """"next", "previous" or "playpause" (pause, or resume when `paused`) on the active device."""
+    if action == "playpause":
+        method, path = "PUT", "play" if paused else "pause"
+    else:
+        method, path = "POST", action
+
     def post():
-        return requests.post(f"{API}/me/player/{direction}", timeout=10,
-                             headers={"Authorization": f"Bearer {_token()}"})
+        return requests.request(method, f"{API}/me/player/{path}", timeout=10,
+                                headers={"Authorization": f"Bearer {_token()}"})
     r = post()
     if r.status_code == 401 and "scope" not in r.text.lower():     # expired token: retry once
         with _lock:
@@ -199,12 +205,12 @@ def skip(direction: str):
         return
     text = r.text.lower()
     if "scope" in text or "permission" in text:
-        raise SpotifyError("Reconnect Spotify in Settings → Now Playing to allow skipping songs")
+        raise SpotifyError("Reconnect Spotify in Settings → Now Playing to allow controlling playback")
     if r.status_code == 404:
         raise SpotifyError("No active Spotify device")
     if r.status_code == 403:
-        raise SpotifyError("Spotify didn't allow it (skipping needs Spotify Premium)")
-    raise SpotifyError(f"Spotify skip failed ({r.status_code})")
+        raise SpotifyError("Spotify didn't allow it (playback control needs Spotify Premium)")
+    raise SpotifyError(f"Spotify {path} failed ({r.status_code})")
 
 
 def now_playing():

@@ -886,28 +886,28 @@ def ssh_key():
     return jsonify({"ok": True, "key": key, "command": ssh_remote.authorize_command(key)})
 
 
-@api_bp.post("/now_playing/skip")
-def now_playing_skip():
-    """Next / previous song ({"direction": "next" | "previous"}): the desktop panel's ⏮ ⏭ buttons."""
-    from plugins.now_playing.manager import skip
+@api_bp.post("/now_playing/control")
+def now_playing_control():
+    """{"action": "previous" | "playpause" | "next"}: the desktop panel's ⏮ ⏯ ⏭ buttons."""
+    from plugins.now_playing.manager import control
     pm = _pm()
     plugin = pm._plugins.get("now_playing") if pm else None
     track = plugin._current() if plugin else None
     if not track:
         return jsonify({"ok": False, "error": "Nothing is playing"})
     try:
-        skip(plugin.config, track, (request.get_json(force=True) or {}).get("direction", "next"),
-             local=getattr(current_app, "media_cb", None))
+        control(plugin.config, track, (request.get_json(force=True) or {}).get("action", ""),
+                local=getattr(current_app, "media_cb", None))
     except Exception as e:
-        log.info(f"[now_playing] skip failed: {e}")
+        log.info(f"[now_playing] control failed: {e}")
         return jsonify({"ok": False, "error": str(e)})
 
-    def refresh():                           # show the new song without waiting for the next poll
+    def refresh():                           # show the change without waiting for the next poll
         time.sleep(0.8)
         try:
             plugin.update()
         except Exception as e:
-            log.debug(f"[now_playing] refresh after skip failed: {e}")
+            log.debug(f"[now_playing] refresh after control failed: {e}")
     threading.Thread(target=refresh, daemon=True).start()
     return jsonify({"ok": True})
 

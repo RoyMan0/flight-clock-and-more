@@ -21,12 +21,13 @@ from utilities.paths import DESKTOP
 log = logging.getLogger(__name__)
 
 # Only talks to Music if it's already running, so polling never launches the app.
+# The last field is the player state ("playing" / "paused").
 TRACK_SCRIPT = '''
 if application "Music" is running then
     tell application "Music"
-        if player state is playing then
+        if player state is playing or player state is paused then
             set t to current track
-            return (name of t) & tab & (artist of t) & tab & (album of t) & tab & ((duration of t) as text) & tab & ((player position) as text) & tab & (persistent ID of t)
+            return (name of t) & tab & (artist of t) & tab & (album of t) & tab & ((duration of t) as text) & tab & ((player position) as text) & tab & (persistent ID of t) & tab & ((player state) as text)
         end if
     end tell
 end if
@@ -96,7 +97,7 @@ def _ssh(host: str, user: str, remote_cmd: str, stdin: str, timeout: float = 8) 
 
 
 def parse_track(output: str):
-    """osascript output → track dict, or None when nothing is playing."""
+    """osascript output → track dict (with "paused"), or None when nothing is playing or paused."""
     line = (output or "").strip("\n")
     if not line.strip():
         return None
@@ -120,13 +121,17 @@ def parse_track(output: str):
         "art_key": pid,
         "progress_ms": int(p * 1000) if p is not None else None,
         "duration_ms": int(d * 1000) if d is not None else None,
+        "paused": len(parts) > 6 and parts[6].strip() == "paused",
     }
 
 
-def skip(host: str, user: str, direction: str):
-    """Next / previous track in the Music app ("next" or "previous")."""
-    cmd = "next track" if direction == "next" else "previous track"
-    _ssh(host, user, "osascript -", f'if application "Music" is running then tell application "Music" to {cmd}\n')
+MUSIC_COMMANDS = {"next": "next track", "previous": "previous track", "playpause": "playpause"}
+
+
+def control(host: str, user: str, action: str):
+    """Next / previous track or play-pause in the Music app."""
+    _ssh(host, user, "osascript -",
+         f'if application "Music" is running then tell application "Music" to {MUSIC_COMMANDS[action]}\n')
 
 
 def now_playing(host: str, user: str):

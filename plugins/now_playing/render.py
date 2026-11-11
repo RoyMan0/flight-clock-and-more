@@ -97,6 +97,26 @@ def prepare_art(data: bytes):
         return None
 
 
+COL_PAUSED = (230, 150, 0)
+
+
+def draw_paused(img: Image.Image, center=None):
+    """Paused: a ❚❚ badge (over the artwork, or at `center`) and an amber progress bar."""
+    cx, cy = center or (ART_X + ART_SIZE // 2, ART_Y + ART_SIZE // 2)
+    px = img.load()
+    for y in range(cy - 5, cy + 6):                   # dark badge, 11×11
+        for x in range(cx - 5, cx + 6):
+            if 0 <= x < MATRIX_W and 0 <= y < MATRIX_H:
+                r, g, b = px[x, y]
+                px[x, y] = (r // 8, g // 8, b // 8)
+    for x in (cx - 3, cx - 2, cx + 2, cx + 3):        # two bars, 2 px wide, 7 tall
+        for y in range(cy - 3, cy + 4):
+            px[x, y] = (235, 235, 235)
+    for x in range(MATRIX_W):
+        if px[x, BAR_Y] == COL_FILL:
+            px[x, BAR_Y] = COL_PAUSED
+
+
 def _draw_note(img: Image.Image):
     """Placeholder when there's no artwork: a dim box with a music note."""
     px = img.load()
