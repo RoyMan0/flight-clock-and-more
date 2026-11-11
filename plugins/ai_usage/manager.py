@@ -213,7 +213,7 @@ class AiUsagePlugin(BasePlugin):
         return time.monotonic() - self._start >= self.display_duration
 
     def describe(self):
-        from plugins.ai_usage.render import PROVIDERS, countdown, effective_pct, time_labels
+        from plugins.ai_usage.render import PROVIDERS, bar_colour, countdown, effective_pct, time_labels
         pages = self._pages()
         if not pages:
             return None
@@ -232,6 +232,11 @@ class AiUsagePlugin(BasePlugin):
         cr, wr = usage.get("current_reset"), usage.get("weekly_reset")
         out.update(current_pct=effective_pct(usage.get("current_pct"), cr, now),
                    weekly_pct=effective_pct(usage.get("weekly_pct"), wr, now))
+        # The panel's bar colours (render.BAR_LEVELS), so the app's screens match the LED exactly
+        for k in ("current", "weekly"):
+            pct = out[f"{k}_pct"]
+            if pct is not None:
+                out[f"{k}_color"] = list(bar_colour(pct))
         if fmt != "off":
             out["current_reset"], out["weekly_reset"] = time_labels(cr, wr, clock_format())
             out["current_countdown"], out["weekly_countdown"] = countdown(cr, now), countdown(wr, now)

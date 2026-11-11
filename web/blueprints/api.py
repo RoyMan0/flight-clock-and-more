@@ -5,6 +5,7 @@ REST API blueprint — all endpoints under /api/
 import base64
 import io
 import json
+import re
 import os
 import time
 import subprocess
@@ -190,6 +191,21 @@ def display_frame():
         mimetype="application/octet-stream",
         headers={"Cache-Control": "no-store", "X-Brightness": str(d.brightness)},
     )
+
+
+@api_bp.get("/display/sample/<plugin_id>")
+def display_sample(plugin_id):
+    """One module's LED picture from its current data, as raw 64×32 RGB like /display/frame
+    (the desktop app's style browser). 204 when the module has nothing to show."""
+    from web import plugin_preview as pp
+    if not re.fullmatch(r"[a-z_]{1,40}", plugin_id or ""):
+        return Response(status=404)
+    cfg = _cfg()
+    frame = pp.sample_frame(_pm(), plugin_id, cfg.get_all_secrets() if cfg else {})
+    if frame is None:
+        return Response(status=204)
+    return Response(frame.convert("RGB").tobytes(), mimetype="application/octet-stream",
+                    headers={"Cache-Control": "no-store"})
 
 
 @api_bp.get("/display/model")

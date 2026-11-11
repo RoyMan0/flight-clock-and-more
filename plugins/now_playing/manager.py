@@ -243,12 +243,21 @@ class NowPlayingPlugin(BasePlugin):
         if self._tiny:
             self._tiny.reset()
 
+    _SOURCE_KEYS = ("sources", "source_order", "mac_host", "mac_user", "lastfm_user")
+
     def on_config_change(self, new_config: dict):
+        old = dict(self.config or {})
         super().on_config_change(new_config)
-        with self._lock:
-            self._track = None
+        # Keep the song through a style change: forgetting it blanked the module until the next
+        # poll (the app's screens showed the last LED frame, frozen, meanwhile)
+        if any(old.get(k) != new_config.get(k) for k in self._SOURCE_KEYS):
+            with self._lock:
+                self._track = None
         self._marquees = self._marquee_key = None
         self._eq = self._eq_key = self._tiny = None
+        if self.enabled:
+            from utilities.background import run_once
+            run_once("now_playing-config", self.update)        # the new style's song features now
 
     @property
     def update_interval(self) -> float:

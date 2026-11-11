@@ -155,13 +155,20 @@ def draw_host_line(img, y, name: str, right_text: str = "", right_colour=COL_UPT
     _bdf_draw(img, LEFT, y + 1, shorten(name, max(1, room // 4)), _FONT, COL_HOST)
 
 
-def draw_stat_row(img, y, key: str, stats: dict, conn: dict, units: str):
+def has_temps(keys, stats: dict) -> bool:
+    """Whether any of these rows shows a temperature (the right-hand column)."""
+    return any(stats.get(f"{k}_temp") is not None for k in keys if k in ("cpu", "gpu"))
+
+
+def draw_stat_row(img, y, key: str, stats: dict, conn: dict, units: str, temps: bool = True):
+    """temps: the machine shows temperatures, so percentages sit in the middle column;
+    without any, they go to the right edge."""
     label, colour = STATS[key]
     _bdf_draw(img, LEFT, y, label, _FONT, colour)
     bar_y = y + BAR_OFFSET
     if key in ("cpu", "gpu", "mem"):
         pct = stats.get(f"{key}_pct")
-        _right(img, VALUE_RIGHT, y, "..." if pct is None else f"{round(pct)}%", COL_VALUE)
+        _right(img, VALUE_RIGHT if temps else TEMP_RIGHT, y, "..." if pct is None else f"{round(pct)}%", COL_VALUE)
         temp = stats.get(f"{key}_temp") if key != "mem" else None
         if temp is not None:
             _right(img, TEMP_RIGHT, y, fmt_temp(temp, units), temp_colour(temp))
@@ -201,8 +208,9 @@ def build_sections(results: list, units: str) -> list:
 
         def draw(img, y, n=name, k=keys, s=stats, c=conn, u=up):
             draw_host_line(img, y, n, u)
+            t = has_temps(k, s)
             for i, key in enumerate(k):
-                draw_stat_row(img, y + ROW_H * (i + 1), key, s, c, units)
+                draw_stat_row(img, y + ROW_H * (i + 1), key, s, c, units, t)
         sections.append((section_height(len(keys)), draw))
     return sections
 

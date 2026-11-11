@@ -175,3 +175,64 @@ def render(pm, pid: str, unsaved: dict, secrets: dict) -> tuple:
         if not unique or f.tobytes() != unique[-1].tobytes():
             unique.append(f)
     return unique[:MAX_FRAMES], ""
+
+
+# ------------------------------------------------------------------
+# The desktop app's style browser: one LED frame per module, from live data
+# ------------------------------------------------------------------
+
+_SAMPLE_CACHE: dict = {}            # pid → (monotonic time, frame or None)
+SAMPLE_TTL = 60.0
+
+
+def _copy_state(live, display):
+    """A throwaway copy of a running module with its current data, drawing on `display`.
+    Values that can't be deep-copied (locks, threads, sessions) are shared, read-only."""
+    tmp = object.__new__(type(live))
+    lock = getattr(live, "_lock", None)
+    if lock is not None:
+        lock.acquire()
+    try:
+        for k, v in live.__dict__.items():
+            if k == "display_manager":
+                continue
+            try:
+                tmp.__dict__[k] = copy.deepcopy(v)
+            except Exception:
+                tmp.__dict__[k] = v
+    finally:
+        if lock is not None:
+            lock.release()
+    tmp.display_manager = display
+    return tmp
+
+
+def sample_frame(pm, pid: str, secrets: dict):
+    """The module's LED picture right now (a PIL image), or None when it has nothing to show
+    (not set up, no data yet). Never touches the real panel or the live module."""
+    hit = _SAMPLE_CACHE.get(pid)
+    if hit and time.monotonic() - hit[0] < SAMPLE_TTL:
+        return hit[1]
+    frame = None
+    try:
+        if pid in PREVIEWABLE:
+            frames, _msg = render(pm, pid, {}, secrets)
+            frame = frames[-1] if frames else None
+        else:
+            live = pm._plugins.get(pid) if pm else None
+            if live is not None and live.has_content():
+                display = _fake_display()
+                tmp = _copy_state(live, display)
+                try:
+                    tmp.reset()
+                except Exception:
+                    pass
+                drew = False
+                for _ in range(30):                     # let scenes and transitions settle
+                    drew = bool(tmp.draw()) or drew
+                frame = _snapshot(display) if drew else None
+    except Exception as e:
+        log.info(f"[preview] sample {pid}: {e}")
+        frame = None
+    _SAMPLE_CACHE[pid] = (time.monotonic(), frame)
+    return frame
