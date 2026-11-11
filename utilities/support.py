@@ -23,6 +23,7 @@ FEEDBACK_EMAIL = "rdhobbs@gmail.com"
 PI_PROJECT_URL = "https://github.com/RoyMan0/flight-clock-and-more"
 APP_PROJECT_URL = "https://github.com/RoyMan0/Flight-Clock-App/releases/latest"
 APP_PUBLIC = False      # the app's repo is private for now: the Pi's About page says "coming soon"
+BUILD_PRICE = "$230–250"   # built-to-order clocks (README "Have one built for you", the app's About page)
 
 KINDS = ("Issue", "Idea", "Question", "Other")
 MAX_MESSAGE = 5000
@@ -34,7 +35,8 @@ _lock = threading.Lock()
 def template_vars() -> dict:
     return {"venmo_url": VENMO_URL, "venmo_handle": VENMO_HANDLE, "paypal_url": PAYPAL_URL,
             "paypal_email": PAYPAL_EMAIL, "feedback_email": FEEDBACK_EMAIL,
-            "pi_project_url": PI_PROJECT_URL, "app_project_url": APP_PROJECT_URL, "app_public": APP_PUBLIC}
+            "pi_project_url": PI_PROJECT_URL, "app_project_url": APP_PROJECT_URL, "app_public": APP_PUBLIC,
+            "build_price": BUILD_PRICE}
 
 
 def device() -> str:

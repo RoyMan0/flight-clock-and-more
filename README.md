@@ -10,6 +10,8 @@ Everything is set up from a web page on your phone or computer: no config files,
 |:---:|:---:|:---:|
 | <img src="docs/photos/flights.webp" alt="Flight tracker: route, distance, aircraft" width="100%"> | <img src="docs/photos/clock-alerts.webp" alt="Clock with an airport delay alert" width="100%"> | <img src="docs/photos/flight-to-news.webp" alt="A flight, then breaking news" width="100%"> |
 
+> **Want one without building it?** I'll build a Flight Clock for you: **$230–250**, depending on the panel and case. Email me at [rdhobbs@gmail.com](mailto:rdhobbs@gmail.com?subject=Flight%20Clock%20build). See [Have one built for you](#have-one-built-for-you).
+
 > **Don't have a Pi?** Run Flight Clock on your **Mac or Windows PC** instead: same modules, in a window or on your desktop, with extra looks the LED panel can't do (vintage airport flip board, colour e-ink, retro clock cases, music visualizers).
 > → **Flight Clock for Mac and Windows: coming soon.**
 
@@ -68,6 +70,18 @@ The web page also has a live mirror of the panel, flight logs and maps (closest 
 | Bluetooth speaker | Optional, for the plane and score sounds. |
 
 A soldering iron is only needed for the optional PWM bridge on the bonnet (GPIO 4 to 18), which makes the panel smoother. The Pi 3 looks fine without it.
+
+---
+
+## Have one built for you
+
+Don't want to solder, print a case or run an installer? I'll build one for you: **$230–250**, depending on the parts.
+
+- **What you get:** a finished clock (Raspberry Pi, bonnet, 64×32 LED panel, tinted acrylic front, 3D-printed case and USB-C power adapter) with the software installed and tested.
+- **What changes the price:** the panel size (P4 is about 10 × 5 in; a smaller P3 or P2.5 is also possible), the case colour, and whether you want a USB-C charger included.
+- **Setting it up:** plug it in, and it shows a QR code to join its **FltClk** Wi-Fi from your phone. Pick your home Wi-Fi, then the setup wizard asks for your location and modules. No computer needed.
+
+Email me at **[rdhobbs@gmail.com](mailto:rdhobbs@gmail.com?subject=Flight%20Clock%20build)** with what you'd like and roughly where you are (for shipping), and I'll get back to you with a price and timing.
 
 ---
 
