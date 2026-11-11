@@ -132,6 +132,28 @@ def first_playing(config: dict, statuses: list = None):
     return None
 
 
+SKIPPABLE = ("spotify", "mac")      # sources that can change the song (Last.fm only reports it)
+
+
+def skip(config: dict, track: dict, direction: str, local=None):
+    """Next / previous song for the current track's source. `local(source, direction)` is the
+    desktop app's hook (app.media_cb): it controls a player on the same computer and returns
+    True if it did, so Spotify works there without the Web API. Raises with a readable message."""
+    if direction not in ("next", "previous"):
+        raise ValueError("direction must be next or previous")
+    source = (track or {}).get("source")
+    if source not in SKIPPABLE:
+        raise RuntimeError(f"{SOURCE_NAMES.get(source, 'This source')} can't change songs")
+    if local and local(source, direction):
+        return
+    if source == "spotify":
+        from plugins.now_playing.sources import spotify
+        spotify.skip(direction)
+    else:
+        from plugins.now_playing.sources import mac_music
+        mac_music.skip(config.get("mac_host", "").strip(), config.get("mac_user", "").strip(), direction)
+
+
 def style_of(config: dict) -> str:
     s = config.get("style", "art")
     return s if s in STYLES else "art"
@@ -240,6 +262,7 @@ class NowPlayingPlugin(BasePlugin):
             return None
         out = {k: track.get(k) for k in ("title", "artist", "album", "source", "art_url", "art_key")} | {
             "has_art": track.get("art") is not None,
+            "can_skip": track.get("source") in SKIPPABLE,
             "progress": progress_fraction(track, time.monotonic()),
             "style": style_of(self.config),
         }

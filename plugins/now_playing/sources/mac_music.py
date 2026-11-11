@@ -123,6 +123,12 @@ def parse_track(output: str):
     }
 
 
+def skip(host: str, user: str, direction: str):
+    """Next / previous track in the Music app ("next" or "previous")."""
+    cmd = "next track" if direction == "next" else "previous track"
+    _ssh(host, user, "osascript -", f'if application "Music" is running then tell application "Music" to {cmd}\n')
+
+
 def now_playing(host: str, user: str):
     return parse_track(_ssh(host, user, "osascript -", TRACK_SCRIPT))
 

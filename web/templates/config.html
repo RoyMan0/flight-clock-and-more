@@ -1591,6 +1591,13 @@
                   <span class="small ms-2" :class="nowPlaying.spotify.connected ? 'text-success' : 'text-warning'"
                         x-text="nowPlaying.spotify.connected ? ('Connected as ' + nowPlaying.spotify.user) : 'Not connected'"></span>
                 </div>
+                {% if desktop %}
+                <div class="small text-muted mb-2">
+                  <i class="bi bi-skip-forward me-1"></i>The clock's ⏮ ⏭ buttons control the Spotify app on this {{ pc }} directly.
+                  For music playing on another device, they use this connection: if you connected before the buttons existed,
+                  click <strong>Connect Spotify</strong> once more to allow skipping.
+                </div>
+                {% endif %}
                 <div class="alert alert-warning py-2 px-3 small mb-2">
                   <i class="bi bi-exclamation-triangle me-1"></i>
                   Connecting Spotify directly needs a <strong>Spotify Premium</strong> subscription (Spotify requires it for developer apps).

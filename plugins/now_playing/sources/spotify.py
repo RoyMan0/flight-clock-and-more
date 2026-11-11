@@ -26,7 +26,9 @@ AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API = "https://api.spotify.com/v1"
 REDIRECT_URI = "http://127.0.0.1:8888/callback"
-SCOPES = "user-read-currently-playing user-read-playback-state"
+# user-modify-playback-state: the desktop app's ⏮ ⏭ buttons. Connections made before it was
+# added lack it; skip() then asks the user to reconnect.
+SCOPES = "user-read-currently-playing user-read-playback-state user-modify-playback-state"
 
 _lock = threading.Lock()
 _access = {"token": None, "expires": 0.0}
@@ -181,6 +183,28 @@ def parse_currently_playing(data: dict):
         "progress_ms": data.get("progress_ms"),
         "duration_ms": item.get("duration_ms"),
     }
+
+
+def skip(direction: str):
+    """Next / previous track on whichever device is playing ("next" or "previous")."""
+    def post():
+        return requests.post(f"{API}/me/player/{direction}", timeout=10,
+                             headers={"Authorization": f"Bearer {_token()}"})
+    r = post()
+    if r.status_code == 401 and "scope" not in r.text.lower():     # expired token: retry once
+        with _lock:
+            _access["token"] = None
+        r = post()
+    if r.status_code in (200, 202, 204):
+        return
+    text = r.text.lower()
+    if "scope" in text or "permission" in text:
+        raise SpotifyError("Reconnect Spotify in Settings → Now Playing to allow skipping songs")
+    if r.status_code == 404:
+        raise SpotifyError("No active Spotify device")
+    if r.status_code == 403:
+        raise SpotifyError("Spotify didn't allow it (skipping needs Spotify Premium)")
+    raise SpotifyError(f"Spotify skip failed ({r.status_code})")
 
 
 def now_playing():
