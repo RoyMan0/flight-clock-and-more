@@ -35,15 +35,17 @@ def mark_just_set_up():
         log.debug(f"[address] couldn't mark setup: {e}")
 
 
-def startup_seconds() -> int:
-    """How long to show the card at this start (and clear the setup marker)."""
+def startup_seconds(on_boot: bool = True) -> int:
+    """How long to show the card at this start (and clear the setup marker). on_boot is the
+    display.show_address_at_startup switch: off skips ordinary restarts, but the card still
+    shows after the setup wizard, when the person needs the address."""
     if os.path.exists(JUST_SET_UP):
         try:
             os.remove(JUST_SET_UP)
         except OSError:
             pass
         return AFTER_SETUP_SECONDS
-    return BOOT_SECONDS
+    return BOOT_SECONDS if on_boot else 0
 
 
 def local_ip() -> str:
@@ -90,6 +92,8 @@ def show(display, seconds: float, port: int = 8080, wait_for_network: float = 30
     """Show the card for `seconds` once the clock has an address. While it's still joining
     Wi-Fi (just after setup), shows "Joining Wi-Fi..." for up to `wait_for_network` seconds;
     with no address by then it gives up quietly. Never raises: the clock must start anyway."""
+    if seconds <= 0:
+        return
     try:
         from plugins.transit.render import push_pil_to_canvas
         deadline = time.monotonic() + wait_for_network

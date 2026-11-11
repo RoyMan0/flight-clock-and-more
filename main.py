@@ -153,7 +153,8 @@ def main():
     if not args.no_hardware:
         from core import address_card
         web_port = (cfg.get("web") or {}).get("port", 8080)
-        address_card.show(display, address_card.startup_seconds(), port=web_port)
+        on_boot = (cfg.get("display") or {}).get("show_address_at_startup", True) is not False
+        address_card.show(display, address_card.startup_seconds(on_boot), port=web_port)
 
     # ------------------------------------------------------------------
     # Run main loop (blocks)

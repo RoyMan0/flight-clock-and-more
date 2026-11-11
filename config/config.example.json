@@ -12,7 +12,8 @@
     "pwm_bits": 11,
     "pwm_lsb_nanoseconds": 130,
     "hat_pwm_enabled": false,
-    "led_rgb_sequence": "RBG"
+    "led_rgb_sequence": "RBG",
+    "show_address_at_startup": true
   },
   "location": {
     "location_home": [0.0, 0.0],

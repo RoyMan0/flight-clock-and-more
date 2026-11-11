@@ -130,7 +130,7 @@ The clock's settings live on a web page served by the clock itself, at **`http:/
 
 - It only works **on your home network**: your phone or computer has to be on the same Wi-Fi as the clock. It isn't reachable from the internet.
 - **Finding the IP address:**
-  - The clock shows it on its screen ("Settings at 192.168.x.x, port 8080") for a few seconds every time it starts, and for a full minute right after the setup wizard.
+  - The clock shows it on its screen ("Settings at 192.168.x.x, port 8080") for a few seconds every time it starts, and for a full minute right after the setup wizard. Once you've bookmarked it, you can turn this off in Config → System Settings.
   - The installer prints it at the end ("Web dashboard: http://192.168.x.x:8080").
   - Your router's app or admin page lists it under connected devices, named after your hostname (e.g. `flightclock`).
   - Over SSH: `hostname -I`.
