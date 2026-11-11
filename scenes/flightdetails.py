@@ -119,13 +119,16 @@ class FlightDetailsScene(object):
 
             # Add airline name if there is one
             airline = self._data[self._data_index]["airline"]
+            # Only the flight number's digits get the numeric colour, never digits in the
+            # airline's name (e.g. "S7 Airlines", "21 Air"). (Upstream fix, Jun 2026.)
+            alpha_len = len(airline) + 1 if airline else 0
             if airline:
                 flight_no = f"{airline} {flight_no}"
 
-            for ch in flight_no:
+            for i, ch in enumerate(flight_no):
                 colour = (
                     FLIGHT_NUMBER_NUMERIC_COLOUR
-                    if ch.isnumeric()
+                    if ch.isnumeric() and i >= alpha_len
                     else FLIGHT_NUMBER_ALPHA_COLOUR
                 )
 

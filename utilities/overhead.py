@@ -790,6 +790,13 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def grab_data(self):
+        # One fetch at a time: when the APIs hang, starting a new one every poll piled up
+        # threads (each holding its responses) until a small Pi ran out of memory.
+        # _grab() clears _processing when it finishes. (Upstream fix, Jun 2026.)
+        with self._lock:
+            if self._processing:
+                return
+            self._processing = True
         Thread(target=self._grab, daemon=True).start()
 
     @property
@@ -818,6 +825,14 @@ class Overhead:
     # ------------------------------------------------------------------
 
     def _grab(self):
+        try:
+            self._grab_once()
+        finally:
+            # Whatever happened, let the next grab_data() start one (it skips while this is set)
+            with self._lock:
+                self._processing = False
+
+    def _grab_once(self):
         with self._lock:
             self._new_data   = False
             self._processing = True
