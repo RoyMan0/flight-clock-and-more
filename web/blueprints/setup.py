@@ -12,6 +12,7 @@ import sys
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request
 
 from utilities.paths import DESKTOP
+from core.setup_mode import HOTSPOT_IP
 
 import logging
 log = logging.getLogger(__name__)
@@ -133,6 +134,11 @@ def root():
     return redirect("/setup")
 
 
+def _short_hostname() -> str:
+    import socket
+    return socket.gethostname().split(".")[0]
+
+
 @setup_bp.get("/setup")
 def setup_page():
     cfg = _cfg()
@@ -170,6 +176,8 @@ def setup_page():
         flights_email=flights_cfg.get("email", ""),
         timezones=_get_timezones(),
         current_timezone=sys_tz,
+        hotspot_ip=HOTSPOT_IP,
+        pi_hostname=_short_hostname(),
     )
 
 
@@ -413,6 +421,9 @@ def setup_finish():
         return jsonify({"ok": True})
 
     # Restart the app via systemd (which will now have WiFi and skip setup mode)
+    from core.address_card import mark_just_set_up
+    mark_just_set_up()                  # the restarted clock shows its address for a minute
+
     def _restart():
         time.sleep(0.8)
         subprocess.run(["sudo", "systemctl", "restart", "its-a-plane"],

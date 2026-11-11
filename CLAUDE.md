@@ -78,6 +78,12 @@ A separate repo, `Flight-Clock-App`, runs this codebase as a standalone Mac app.
   - The Now Playing Mac source runs `osascript` locally instead of over SSH when `DESKTOP`.
   - In software mode, `_SoftwareCanvas` is a no-op sink; the canvas mirror holds the frame.
 
+### Finding the clock on the home network (`core/address_card.py`)
+
+People reach the settings at `http://<Pi IP>:8080`, only on their home network, so the Pi tells them the address:
+- **On the panel at startup** (`main.py`, just before `pm.run()`, Pi only): "Settings at <IP> / port 8080 / on your Wi-Fi" for `BOOT_SECONDS` (20 s), or `AFTER_SETUP_SECONDS` (60 s) on the first start after the setup wizard (`/setup/finish` writes `DATA_ROOT/data/just_set_up`; `startup_seconds()` consumes it). While the Wi-Fi is still coming up it shows "Joining Wi-Fi..." for up to 30 s, then gives up quietly. `local_ip()` uses a UDP socket's outgoing address (no packet sent), falling back to `hostname -I`. It never raises: the clock must start.
+- **The wizard's last screen**, when the page was opened through the FltClk hotspot (`location.hostname == HOTSPOT_IP`): no redirect (that address dies when the Pi joins the home Wi-Fi). Instead: switch back to home Wi-Fi, read the address off the clock, open `http://<IP>:8080` and bookmark it; `http://<hostname>.local:8080` is offered for Apple devices.
+
 ### Plugin System (`core/plugin_manager.py`)
 
 The main loop runs at 10 fps. Every frame, `_dispatch()` is called:

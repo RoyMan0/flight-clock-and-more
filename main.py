@@ -147,6 +147,15 @@ def main():
             log.warning(f"Web server failed to start: {e}")
 
     # ------------------------------------------------------------------
+    # The settings page's address on the panel for a moment (a minute right
+    # after the setup wizard), so people can find it on their home network
+    # ------------------------------------------------------------------
+    if not args.no_hardware:
+        from core import address_card
+        web_port = (cfg.get("web") or {}).get("port", 8080)
+        address_card.show(display, address_card.startup_seconds(), port=web_port)
+
+    # ------------------------------------------------------------------
     # Run main loop (blocks)
     # ------------------------------------------------------------------
     pm.run()

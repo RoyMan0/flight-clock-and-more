@@ -502,12 +502,27 @@
   <a id="dashboard-link" href="/" class="btn btn-primary" style="max-width:240px; margin:0 auto; text-decoration:none; display:block; text-align:center; padding:14px;">
     Go to Dashboard
   </a>
+  <!-- Set up through the FltClk hotspot: this page's address stops working once the clock
+       joins the home Wi-Fi, so say how to find its new one (the panel shows it, core/address_card.py) -->
+  <div id="hotspot-finish" style="display:none; text-align:left; max-width:420px; margin:0 auto;">
+    <p>Your clock is joining your Wi-Fi now and restarting with your settings.</p>
+    <ol style="padding-left:20px; line-height:1.6;">
+      <li>Switch this phone or computer back to <strong>your home Wi-Fi</strong>.</li>
+      <li>For the next minute, the clock shows its address, like <strong>192.168.1.42</strong> and <strong>port 8080</strong>.</li>
+      <li>Open <strong>http://&lt;that address&gt;:8080</strong> in your browser, for example <strong>http://192.168.1.42:8080</strong>,
+          and <strong>bookmark it</strong> (or <em>Add to Home Screen</em>). That's where all the settings are.</li>
+    </ol>
+    <p style="font-size:13px; color:var(--muted);">On an iPhone, iPad or Mac, <strong id="local-url"></strong> usually works too.
+       The page only works on your home network. The clock shows its address again every time it starts.</p>
+  </div>
 </div>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────
 // The Mac app has no WiFi step: the Mac is already online
 const DESKTOP = {{ 'true' if desktop else 'false' }};
+const HOTSPOT_IP = {{ hotspot_ip|tojson }};
+const PI_HOSTNAME = {{ pi_hostname|tojson }};
 const STEPS = DESKTOP ? ['location','api','plugins','review'] : ['wifi','location','api','plugins','review'];
 let currentStep = 0;
 let selectedSSID = '';
@@ -748,6 +763,14 @@ function showFinish() {
   }
 
   const host = window.location.hostname;
+  if (host === HOTSPOT_IP) {            // through the FltClk hotspot: the clock is about to leave it
+    fin.querySelectorAll('p, #dashboard-link, #redirect-countdown').forEach(el => {
+      if (!el.closest('#hotspot-finish')) el.style.display = 'none';
+    });
+    document.getElementById('local-url').textContent = 'http://' + (PI_HOSTNAME || 'flightclock') + '.local:8080';
+    document.getElementById('hotspot-finish').style.display = 'block';
+    return;
+  }
   document.getElementById('dashboard-url').textContent = 'http://' + host + ':8080';
   document.getElementById('dashboard-link').href = 'http://' + host + ':8080';
 
