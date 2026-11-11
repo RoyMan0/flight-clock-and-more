@@ -4,12 +4,16 @@ A Raspberry Pi clock on a 64×32 RGB LED panel. It shows the time and weather, a
 
 Everything is set up from a web page on your phone or computer: no config files, no command line after the install.
 
+<img src="docs/photos/two-clocks.jpg" alt="Two Flight Clocks on a desk: the clock and weather, and a flight from Denver to San Francisco" width="100%">
+
+| A plane overhead | Clock, weather and alerts | A flight, then the news |
+|:---:|:---:|:---:|
+| <img src="docs/photos/flights.webp" alt="Flight tracker: route, distance, aircraft" width="100%"> | <img src="docs/photos/clock-alerts.webp" alt="Clock with an airport delay alert" width="100%"> | <img src="docs/photos/flight-to-news.webp" alt="A flight, then breaking news" width="100%"> |
+
 > **Don't have a Pi?** Run Flight Clock on your **Mac or Windows PC** instead: same modules, in a window or on your desktop, with extra looks the LED panel can't do (vintage airport flip board, colour e-ink, retro clock cases, music visualizers).
-> → **[Flight Clock for Mac and Windows](https://github.com/RoyMan0/Flight-Clock-App/releases/latest)**
+> → **Flight Clock for Mac and Windows: coming soon.**
 
 <img src="docs/app-styles.png" alt="The Mac and Windows app: flip board, e-ink, visualizer and retro cases" width="100%">
-
-<!-- Photos of the finished clock go here, e.g. ![Flight Clock](docs/clock.jpg) -->
 
 ---
 
@@ -37,6 +41,13 @@ Turn on any of these and set their order and time on screen:
 | **Maze** | Watch it build and solve mazes, or play one from your phone. |
 
 The web page also has a live mirror of the panel, flight logs and maps (closest and farthest planes you've spotted), and a Display page to show any module on demand.
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/photos/flight-and-clock.jpg" alt="A flight from Toronto to Raleigh next to the clock" width="100%"><br>A flight and the clock | <img src="docs/photos/radar.jpg" alt="Radar view of the planes nearby" width="100%"><br>Radar view | <img src="docs/photos/world-daylight.jpg" alt="World map with day and night" width="100%"><br>World Daylight |
+| <img src="docs/photos/sports.jpg" alt="A live soccer score" width="100%"><br>Sports | <img src="docs/photos/transit.jpg" alt="Train arrivals" width="100%"><br>Transit | <img src="docs/photos/now-playing.jpg" alt="The song playing now with album art" width="100%"><br>Now Playing |
+| <img src="docs/photos/world-clock.jpg" alt="The time in four cities" width="100%"><br>World Clock | <img src="docs/photos/system-stats.jpg" alt="CPU, memory and disk" width="100%"><br>System Stats | <img src="docs/photos/ai-usage.jpg" alt="Claude plan usage" width="100%"><br>AI Usage |
+| <img src="docs/photos/snow-report.jpg" alt="A ski resort's snow report" width="100%"><br>Snow Report | | |
 
 ---
 
@@ -66,7 +77,7 @@ You'll need a computer with an SD card reader for the first step. It takes about
 
 ### 1. Put Raspberry Pi OS on the SD card
 
-1. Install **[Raspberry Pi Imager](https://www.raspberrypi.com/software/)** and choose **Raspberry Pi OS Lite (64-bit)** (under *Raspberry Pi OS (other)*).
+1. Install **[Raspberry Pi Imager](https://www.raspberrypi.com/software/)** and choose **Raspberry Pi OS Lite (64-bit)**, under *Raspberry Pi OS (other)*. Lite is the version **without a desktop**: the clock runs headless, and you set it up from your phone or computer, so no monitor, keyboard or mouse is needed. (The regular desktop version wastes memory the Pi needs and can make the panel flicker.)
 2. In the Imager's settings, set:
    - a **hostname** (e.g. `flightclock`), a **username** and **password**,
    - your **Wi-Fi** name and password (exactly, it's case-sensitive),
@@ -125,7 +136,9 @@ Planes overhead are found free (adsb.lol, with OpenSky and Flightradar24 as back
 
 ## Help, ideas and tips
 
-Stuck setting it up, or have an idea for a new module? Open an [issue](https://github.com/RoyMan0/flight-clock-and-more/issues), or use **Issues? Ideas? Contact me!** at the bottom of your clock's web page; it comes straight to me.
+**Need help?** Please [open an issue](https://github.com/RoyMan0/flight-clock-and-more/issues) on GitHub. That's the best way to reach me, and the answer helps the next person with the same problem. Include what you were doing, what you expected and what happened instead; for a Pi problem, the last lines of `journalctl -u its-a-plane -n 50` help a lot.
+
+Ideas for new modules are welcome too, as an issue or with **Issues? Ideas? Contact me!** at the bottom of your clock's web page.
 
 If you enjoy your Flight Clock, tips are always appreciated:
 
@@ -143,3 +156,9 @@ Flight Clock grew out of **[plane-tracker-rgb-pi](https://github.com/c0wsaysmoo/
 Since then I've rebuilt a lot of it and added a lot on top: the module system and all the modules beyond the clock and flights, the web setup wizard and config pages, the one-command installer, the flight lookup chain, logs and maps, and the Mac and Windows app.
 
 The LED panel runs on Henner Zeller's [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix). Weather from [Tomorrow.io](https://www.tomorrow.io), aircraft positions from [adsb.lol](https://adsb.lol), [OpenSky](https://opensky-network.org) and [Flightradar24](https://www.flightradar24.com), place names from [GeoNames](https://www.geonames.org) and [OpenStreetMap](https://www.openstreetmap.org).
+
+---
+
+## License
+
+[GPL-3.0](LICENSE), the same license as the original its-a-plane-python this project is built on.

@@ -27,3 +27,6 @@ rgbmatrix/
 
 # Downloaded team logos (cached at runtime)
 assets/sports/logos/*/
+
+# Raw photos/videos for the README (resized copies live in docs/)
+demoimg/
