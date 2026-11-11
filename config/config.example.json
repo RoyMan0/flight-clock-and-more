@@ -182,6 +182,7 @@
       "update_interval": 5,
       "scroll_speed": 1,
       "style": "art",
+      "show_info": true,
       "source_order": ["spotify", "mac", "lastfm"],
       "sources": {"spotify": true, "mac": false, "lastfm": false},
       "mac_host": "",

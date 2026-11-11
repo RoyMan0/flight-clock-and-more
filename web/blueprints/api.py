@@ -935,8 +935,8 @@ def now_playing_test():
     """Check each enabled source for an unsaved config; render the frame that would show."""
     from PIL import Image
     from plugins.now_playing import features
-    from plugins.now_playing.eq import Analyzer, TinyMarquee, render_eq
-    from plugins.now_playing.manager import first_playing, style_of
+    from plugins.now_playing.eq import Analyzer, TinyMarquee, render_style
+    from plugins.now_playing.manager import first_playing, show_info, style_of
     from plugins.now_playing.render import make_marquees, render_frame
 
     data = request.get_json(force=True) or {}
@@ -958,12 +958,15 @@ def now_playing_test():
         else:
             # A second of the EQ from where the song is now, three frames apart
             f = features.lookup(track)
-            an, tiny = Analyzer(f, seed=1), TinyMarquee(track)
+            an, tiny, trail = Analyzer(f, seed=1), TinyMarquee(track), None
+            info = show_info(data)
             start = (pos or 0) / 1000.0
             for i in range(25):
                 an.levels(start + i / 10)
+                frame, trail = render_style(style, an, start + i / 10, progress if info else None,
+                                            i / 600, tiny if info else None, trail)
                 if i in (8, 16, 24):
-                    frames.append(png(render_eq(an, progress, i / 600, tiny if style == "eq_text" else None)))
+                    frames.append(png(frame))
                 tiny.tick(1.0)
             image = frames[0]
             v = features.with_defaults(f)
@@ -1122,7 +1125,7 @@ def ai_usage_test():
     for p in enabled_providers(cfg):
         status = {"provider": p, "name": names[p], "ok": False, "image": None}
         try:
-            usage = providers.fetch(p, credentials_path(cfg, p))
+            usage = providers.fetch(p, credentials_path(cfg, p), interactive=True)
         except providers.LoginNeeded as e:
             status["text"] = f"Login needed: {e}"
         except Exception as e:

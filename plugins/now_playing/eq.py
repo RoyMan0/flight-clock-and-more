@@ -14,12 +14,14 @@ across polls), and each instrument layer is shaped by the song's numbers:
 
 Bars jump up and fall back at a fixed rate with peak caps, like a real analyser.
 
-Layouts (64×32):
-  eq         bars y0-29, progress bar y31 (bars use the full height without one)
-  eq_text    bars y0-22, "Title · Artist" marquee in tom-thumb y24-29, progress y31
-  eq_mirror  bars grow up and down from a centre line (a reflected spectrum), progress y31
-  eq_wave    an oscilloscope line built from the levels, with fading trails, progress y31
+Styles:
+  eq         segmented rainbow bars with peak caps
+  eq_mirror  bars grow up and down from a centre line (a reflected spectrum)
+  eq_wave    an oscilloscope line built from the levels, with fading trails
   eq_burst   the bands as spokes radiating from the centre, with a beat-pulsing core
+Each one fills the panel, or, with the song info on (show_info), y0-22 above a
+"Title - Artist" marquee in tom-thumb (y24-29) and the progress bar (y31).
+render_style() draws any of them; visual_height() is the area they get.
 """
 
 import colorsys
@@ -225,11 +227,27 @@ class TinyMarquee:
 
 # ---- more styles ------------------------------------------------------------------
 
-def render_mirror(an: Analyzer, progress, hue_shift: float = 0.0) -> Image.Image:
-    """Bars from the centre line (y15) up and down; the lower half is a dimmer reflection."""
+def visual_height(progress, marquee) -> int:
+    """Rows the visual gets: above the marquee, above the progress bar, or the whole panel."""
+    if marquee is not None:
+        return TEXT_Y - 1
+    return BAR_Y - 1 if progress is not None else MATRIX_H
+
+
+def _finish(img: Image.Image, progress, marquee):
+    if marquee is not None:
+        marquee.paste_into(img, TEXT_Y)
+    draw_progress(img, progress)
+    return img
+
+
+def render_mirror(an: Analyzer, progress, hue_shift: float = 0.0, marquee: "TinyMarquee" = None) -> Image.Image:
+    """Bars from a centre line up and down; the lower half is a dimmer reflection."""
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     px = img.load()
-    mid, half = 15, 15
+    hgt = visual_height(progress, marquee)
+    mid = (hgt - 1) // 2
+    half, below = mid + 1, hgt - 1 - mid
     for b in range(BANDS):
         x0 = b * (BAR_W + BAR_GAP)
         h = int(round(an.shown[b] * half))
@@ -241,14 +259,13 @@ def render_mirror(an: Analyzer, progress, hue_shift: float = 0.0) -> Image.Image
             down = tuple(v * 2 // 5 for v in up)
             for dx in range(BAR_W):
                 px[x0 + dx, mid - s] = up
-                if mid + 1 + s < BAR_Y:
+                if s < below:
                     px[x0 + dx, mid + 1 + s] = down
         pk = int(round(an.peaks[b] * half))
         if pk > h and pk > 0:
             for dx in range(BAR_W):
                 px[x0 + dx, mid - pk + 1] = (235, 235, 235)
-    draw_progress(img, progress)
-    return img
+    return _finish(img, progress, marquee)
 
 
 def wave_samples(an: Analyzer, t: float, n: int) -> list:
@@ -269,35 +286,42 @@ def wave_samples(an: Analyzer, t: float, n: int) -> list:
     return [v / peak for v in out]
 
 
-def render_wave(an: Analyzer, t: float, progress, trail: Image.Image, hue_shift: float = 0.0):
+def render_wave(an: Analyzer, t: float, progress, trail: Image.Image, hue_shift: float = 0.0,
+                marquee: "TinyMarquee" = None):
     """Oscilloscope with phosphor trails: the previous frame fades, the new line is drawn on
     top. Returns (frame, trail) — keep the trail for the next call."""
-    trail = Image.eval(trail, lambda v: v * 3 // 5) if trail is not None else Image.new("RGB", (MATRIX_W, MATRIX_H))
+    hgt = visual_height(progress, marquee)
+    if trail is None or trail.size != (MATRIX_W, hgt):
+        trail = Image.new("RGB", (MATRIX_W, hgt))
+    else:
+        trail = Image.eval(trail, lambda v: v * 3 // 5)
     px = trail.load()
-    amp = 13 * (0.35 + 0.65 * sum(an.shown) / BANDS)
-    ys = [15 + amp * v for v in wave_samples(an, t, MATRIX_W)]
+    amp = (hgt / 2 - 2) * (0.35 + 0.65 * sum(an.shown) / BANDS)
+    ys = [(hgt - 1) / 2 + amp * v for v in wave_samples(an, t, MATRIX_W)]
     r, g, b = colorsys.hsv_to_rgb((0.36 + hue_shift) % 1.0, 0.7, 1.0)
     col = (int(r * 255), int(g * 255), int(b * 255))
     prev = None
     for x, yf in enumerate(ys):
-        y = int(round(max(0, min(29, yf))))
+        y = int(round(max(0, min(hgt - 1, yf))))
         lo, hi = (y, y) if prev is None else (min(prev, y), max(prev, y))
         for yy in range(lo, hi + 1):                      # join steep steps so the line never breaks
             px[x, yy] = col
         prev = y
-    frame = trail.copy()
-    draw_progress(frame, progress)
-    return frame, trail
+    frame = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
+    frame.paste(trail, (0, 0))
+    return _finish(frame, progress, marquee), trail
 
 
 _SPOKES = 32
 
 
-def render_burst(an: Analyzer, t: float, progress, hue_shift: float = 0.0) -> Image.Image:
+def render_burst(an: Analyzer, t: float, progress, hue_shift: float = 0.0,
+                 marquee: "TinyMarquee" = None) -> Image.Image:
     """32 spokes (the 16 bands, mirrored left/right) from the centre; length = level."""
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
     px = img.load()
-    cx, cy = 31.5, 15.0
+    hgt = visual_height(progress, marquee)
+    cx, cy, squash = 31.5, (hgt - 1) / 2, 0.55 * hgt / 30
     spin = t * 0.15
     for k in range(_SPOKES):
         q = k % (_SPOKES // 2)                          # each half repeats the bands …
@@ -309,8 +333,8 @@ def render_burst(an: Analyzer, t: float, progress, hue_shift: float = 0.0) -> Im
         reach = 4 + level * 38
         r = 3.0
         while r <= reach:
-            x, y = int(round(cx + ca * r)), int(round(cy + sa * r * 0.55))
-            if 0 <= x < MATRIX_W and 0 <= y < BAR_Y:
+            x, y = int(round(cx + ca * r)), int(round(cy + sa * r * squash))
+            if 0 <= x < MATRIX_W and 0 <= y < hgt:
                 fade = 1 - 0.6 * (r / 31)
                 cr, cg, cb = colorsys.hsv_to_rgb((band / BANDS * 0.8 + hue_shift) % 1.0, 1.0, fade)
                 px[x, y] = (int(cr * 255), int(cg * 255), int(cb * 255))
@@ -319,17 +343,24 @@ def render_burst(an: Analyzer, t: float, progress, hue_shift: float = 0.0) -> Im
     for dy in range(-core, core + 1):
         for dx in range(-core, core + 1):
             if dx * dx + dy * dy <= core * core:
-                px[int(cx) + dx, int(cy) + dy] = (255, 255, 255)
-    draw_progress(img, progress)
-    return img
+                px[int(cx) + dx, int(round(cy)) + dy] = (255, 255, 255)
+    return _finish(img, progress, marquee)
 
 
 def render_eq(an: Analyzer, progress, hue_shift: float = 0.0, marquee: TinyMarquee = None) -> Image.Image:
     img = Image.new("RGB", (MATRIX_W, MATRIX_H), (0, 0, 0))
-    if marquee is not None:
-        draw_bars(img, an, 23, hue_shift)
-        marquee.paste_into(img, TEXT_Y)
-    else:
-        draw_bars(img, an, 30 if progress is not None else MATRIX_H, hue_shift)
-    draw_progress(img, progress)
-    return img
+    draw_bars(img, an, visual_height(progress, marquee), hue_shift)
+    return _finish(img, progress, marquee)
+
+
+def render_style(style: str, an: Analyzer, t: float, progress, hue_shift: float = 0.0,
+                 marquee: TinyMarquee = None, trail=None):
+    """Any EQ style (anything else, e.g. the desktop's viz_* styles, draws as "eq").
+    Returns (frame, trail); only eq_wave uses the trail — keep it for the next call."""
+    if style == "eq_mirror":
+        return render_mirror(an, progress, hue_shift, marquee), None
+    if style == "eq_wave":
+        return render_wave(an, t, progress, trail, hue_shift, marquee)
+    if style == "eq_burst":
+        return render_burst(an, t, progress, hue_shift, marquee), None
+    return render_eq(an, progress, hue_shift, marquee), None

@@ -29,8 +29,32 @@
     .stat-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: .5px; }
     #preview-img, .matrix-live { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; }
     .matrix-live { image-rendering: auto; border: 2px solid #2a2d35; border-radius: 10px; background: #000; }
+    .fc-plugin-link:hover span { text-decoration: underline; }
+    @keyframes fc-flash { 0%, 60% { box-shadow: 0 0 0 3px rgba(125, 249, 170, .75); } 100% { box-shadow: 0 0 0 3px rgba(125, 249, 170, 0); } }
+    .fc-flash { animation: fc-flash 1.8s ease-out; border-radius: .5rem; }
   </style>
   <script>
+    // Copy text for a "Copy" button; el (optional) says "Copied" for a moment. The clipboard API
+    // isn't available everywhere (plain-http LAN pages, some app web views), so fall back to a
+    // hidden textarea and execCommand.
+    window.fcCopy = async (text, el) => {
+      let ok = false;
+      try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+      if (!ok) {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { ok = document.execCommand('copy'); } catch (e) {}
+        ta.remove();
+      }
+      if (el) {
+        const was = el.dataset.label || el.textContent;
+        el.dataset.label = was;
+        el.textContent = ok ? 'Copied' : 'Select and copy';
+        setTimeout(() => { el.textContent = was; }, 1500);
+      }
+      return ok;
+    };
     // Display names for every plugin — the one list shared by Dashboard, Config and Display.
     window.PLUGIN_NAMES = {
       clock_weather: 'Clock & Weather', flight_tracker: 'Flight Tracker',

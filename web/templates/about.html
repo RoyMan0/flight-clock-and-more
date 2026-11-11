@@ -935,14 +935,19 @@
         <div class="subsection-title mt-3"><i class="bi bi-bar-chart-fill me-2"></i>Styles</div>
         <ul class="text-muted small mb-2">
           <li><strong>Album art</strong> (the default): the layout described above.</li>
-          <li><strong>EQ bars</strong>: 16 rainbow bars bouncing across the whole panel like a stereo's spectrum display, with white peak markers that hang for a moment and drop. The progress bar runs underneath.</li>
-          <li><strong>EQ bars + song</strong>: shorter bars, with the title and artist scrolling underneath in a tiny font, then the progress bar.</li>
+          <li><strong>EQ bars</strong>: 16 rainbow bars bouncing like a stereo's spectrum display, with white peak markers that hang for a moment and drop.</li>
+          <li><strong>EQ mirror</strong>: the bars grow up and down from a centre line, with a dimmer reflection below.</li>
+          <li><strong>Scope</strong>: a glowing oscilloscope line with fading trails.</li>
+          <li><strong>Starburst</strong>: the spectrum as rainbow spokes bursting from a centre that pulses on the beat.</li>
         </ul>
+        <p class="text-muted small mb-2">
+          <strong>Show the song, artist and progress</strong> (on by default) keeps the title and artist scrolling under the visual in a tiny font, with the progress bar.
+          Turned off, the visual fills the panel and the song shows for a few seconds when it starts (and while it's paused).
+        </p>
         <p class="text-muted small mb-0">
           The Pi can't hear your music, so the EQ is an estimate. When a new song starts, the Pi looks up its tempo, energy, danceability and loudness. The lookup is free, uses ReccoBeats and Deezer, and happens once per song.
           The bars pulse in time with the song's real tempo: kick drums in the bass bars, snares in the middle bars, hi-hats in the high bars.
           A calm acoustic song looks calm, and a loud dance track bounces hard. Songs that can't be found get a typical song's feel.
-          Without a progress bar (Last.fm), the bars use the full height.
         </p>
       </div>
     </div>

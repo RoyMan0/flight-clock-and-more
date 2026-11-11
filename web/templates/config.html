@@ -173,7 +173,8 @@
                          :checked="pluginConfigs[pid]?.enabled !== false"
                          @change="togglePlugin(pid, $event.target.checked)">
                 </div>
-                <span class="flex-grow-1 fw-semibold" style="min-width:0;overflow-wrap:anywhere" x-text="pluginName(pid)"></span>
+                <a href="#" class="flex-grow-1 fw-semibold text-light text-decoration-none fc-plugin-link" style="min-width:0;overflow-wrap:anywhere"
+                   title="Go to its settings" @click.prevent="goToPlugin(pid)"><span x-text="pluginName(pid)"></span><i class="bi bi-arrow-down-right-circle ms-1 small text-muted"></i></a>
                 <div class="d-flex align-items-center gap-1 flex-shrink-0">
                   <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
                          style="width:65px"
@@ -1544,8 +1545,7 @@
               <label class="form-label">Style</label>
               <template x-for="o in [
                   {v: 'art', t: 'Album art', d: 'Title across the top, artwork, artist and album, progress bar.'},
-                  {v: 'eq', t: 'EQ bars', d: 'Full-panel EQ bars with the progress bar under them.'},
-                  {v: 'eq_text', t: 'EQ bars + song', d: 'Shorter EQ bars, the title and artist scrolling in a tiny font, and the progress bar.'},
+                  {v: 'eq', t: 'EQ bars', d: 'Segmented rainbow analyser bars with falling peaks.'},
                   {v: 'eq_mirror', t: 'EQ mirror', d: 'Bars growing up and down from a centre line, like a reflected spectrum.'},
                   {v: 'eq_wave', t: 'Scope', d: 'A glowing oscilloscope line with fading trails.'},
                   {v: 'eq_burst', t: 'Starburst', d: 'The spectrum as rainbow spokes bursting from a pulsing centre.'}]" :key="o.v">
@@ -1584,6 +1584,14 @@
                 The Pi can't hear the music, so the bars are an estimate: they pulse to the song's real tempo, and how hard they
                 bounce comes from its energy and danceability (looked up once per song, free, from ReccoBeats and Deezer).
                 Unknown songs get a typical song's feel.
+              </div>
+              <div class="form-check form-switch mt-2" x-show="pluginConfigs.now_playing.style !== 'art'">
+                <input class="form-check-input" type="checkbox" id="npShowInfo" x-model="pluginConfigs.now_playing.show_info">
+                <label class="form-check-label" for="npShowInfo">Show the song, artist and progress</label>
+                <div class="form-text text-muted">
+                  On: the title and artist stay on screen with a progress bar. Off: the visual fills the screen,
+                  and the song shows for a few seconds when it starts.
+                </div>
               </div>
             </div>
 
@@ -1693,7 +1701,7 @@
                     <div class="d-flex gap-2">
                       <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" rows="2" readonly
                                 x-text="nowPlaying.macCommand"></textarea>
-                      <button class="btn btn-outline-secondary btn-sm" @click="navigator.clipboard?.writeText(nowPlaying.macCommand)">Copy</button>
+                      <button class="btn btn-outline-secondary btn-sm" @click="fcCopy(nowPlaying.macCommand, $el)">Copy</button>
                     </div>
                   </div>
                   <div class="col-12 small text-danger" x-show="nowPlaying.macError" x-text="nowPlaying.macError"></div>
@@ -1947,7 +1955,7 @@
                   <div class="d-flex gap-2">
                     <textarea class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" rows="3" readonly
                               x-text="sysStats.sshCommand"></textarea>
-                    <button class="btn btn-outline-secondary btn-sm flex-shrink-0" @click="navigator.clipboard?.writeText(sysStats.sshCommand)">Copy</button>
+                    <button class="btn btn-outline-secondary btn-sm flex-shrink-0" @click="fcCopy(sysStats.sshCommand, $el)">Copy</button>
                   </div>
                 </div>
                 <div class="small text-danger mt-1" x-show="sysStats.sshError" x-text="sysStats.sshError"></div>
@@ -1983,7 +1991,7 @@
                 <input class="form-check-input" type="checkbox" x-model="pluginConfigs.ai_usage.enabled">
                 <label class="form-check-label fw-semibold">Enabled</label>
               </div>
-              <div class="form-text text-muted">Your Claude and ChatGPT Codex subscription limits: the 5-hour "Current" window and the weekly limit, with reset times. Free: it reads the login you make on this Pi, no API key needed.</div>
+              <div class="form-text text-muted">Your Claude and ChatGPT Codex subscription limits: the 5-hour "Current" window and the weekly limit, with reset times. Free: it reads the login you make on this {{ pc if desktop else 'Pi' }}, no API key needed.</div>
             </div>
             <div class="col-md-6">
               <label class="form-label">Reset Times</label>
@@ -2008,9 +2016,22 @@
                     <input class="form-check-input" type="checkbox" x-model="pluginConfigs.ai_usage.providers[p.id].enabled">
                     <label class="form-check-label fw-semibold" x-text="p.name"></label>
                   </div>
-                  <div class="form-text text-muted mb-2">
-                    Set up once over SSH on the Pi: <code class="text-break" x-text="p.install"></code> then <code class="text-break" x-text="p.login"></code>
+                  <div class="form-text text-muted mb-1">
+                    {% if desktop %}Set up once in {% if desktop_os == 'windows' %}PowerShell{% else %}Terminal{% endif %} on this {{ pc }}:{% else %}Set up once over SSH on the Pi:{% endif %}
                   </div>
+                  <template x-for="(cmd, i) in [p.install, p.login]" :key="i">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <span class="small text-muted flex-shrink-0" x-text="(i + 1) + '.'"></span>
+                      <code class="text-break flex-grow-1 user-select-all" style="min-width:0" x-text="cmd"></code>
+                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 flex-shrink-0" @click="fcCopy(cmd, $el)">Copy</button>
+                    </div>
+                  </template>
+                  {% if desktop_os == 'mac' %}
+                  <div class="form-text text-muted mb-2" x-show="p.id === 'claude'">
+                    Already use Claude Code on this Mac? Skip both: Flight Clock reads its login from your Keychain. macOS asks once; choose <em>Always Allow</em>.
+                    The login renews whenever Claude Code runs, so if it's been idle for a while, open it once.
+                  </div>
+                  {% endif %}
                   <label class="form-label small mb-1">Credentials file <span class="text-muted">(blank = default)</span></label>
                   <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary"
                          :placeholder="p.defaultPath" x-model="pluginConfigs.ai_usage.providers[p.id].credentials_path">
@@ -2569,7 +2590,7 @@ function configPage() {
       maze:                    { size: 'M', style: 'random', solver: 'rotate', solve_speed: 2, theme: 'random', celebrate: true, play_idle_minutes: 3 },
       calendar:                { display_mode: 'detailed', days_ahead: 3, events_per_visit: 5, seconds_per_event: 6, scroll_speed: 1, reminders: false, reminder_minutes: 10, sources: [] },
       ai_usage:                { seconds_per_provider: 10, reset_format: 'times', providers: { claude: { enabled: true, credentials_path: '' }, codex: { enabled: false, credentials_path: '' } } },
-      now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '' },
+      now_playing:             { source_order: ['spotify', 'mac', 'lastfm'], sources: { spotify: true, mac: false, lastfm: false }, scroll_speed: 1, mac_host: '', mac_user: '', lastfm_user: '', show_info: true },
     },
     sysCfg: { display: {}, location: { location_home: [null, null] }, flights: {}, web: {} },
     homeQ: '', homeResults: [], homeMsg: '', homeBusy: false,
@@ -2620,10 +2641,12 @@ function configPage() {
     aiUsage: {
       saved: false, testing: false, test: null,
       providers: [
-        { id: 'claude', name: 'Claude', defaultPath: '~/.claude/.credentials.json',
-          install: 'curl -fsSL https://claude.ai/install.sh | bash', login: 'claude auth login' },
+        { id: 'claude', name: 'Claude',
+          defaultPath: {% if desktop_os == 'mac' %}"Claude Code's login in the Keychain"{% else %}'~/.claude/.credentials.json'{% endif %},
+          install: {% if desktop_os == 'windows' %}'irm https://claude.ai/install.ps1 | iex'{% else %}'curl -fsSL https://claude.ai/install.sh | bash'{% endif %},
+          login: 'claude auth login' },
         { id: 'codex', name: 'ChatGPT Codex', defaultPath: '~/.codex/auth.json',
-          install: 'npm install -g @openai/codex', login: 'codex login --device-auth' },
+          install: 'npm install -g @openai/codex', login: {% if desktop %}'codex login'{% else %}'codex login --device-auth'{% endif %} },
       ],
     },
     nowPlaying: {
@@ -2745,7 +2768,8 @@ function configPage() {
         cfgs.ai_usage = au;
       }
       if (cfgs.now_playing) {
-        const np = { scroll_speed: 1, style: 'art', mac_host: '', mac_user: '', lastfm_user: '', ...cfgs.now_playing };
+        const np = { scroll_speed: 1, style: 'art', mac_host: '', mac_user: '', lastfm_user: '', show_info: true, ...cfgs.now_playing };
+        if (np.style === 'eq_text') { np.style = 'eq'; np.show_info = true; }   // "EQ bars + song" is now EQ bars + the switch
         const all = ['spotify', 'mac', 'lastfm'];
         np.source_order = [...(np.source_order || []).filter(s => all.includes(s)), ...all.filter(s => !(np.source_order || []).includes(s))];
         np.sources = { spotify: true, mac: false, lastfm: false, ...(np.sources || {}) };
@@ -2783,6 +2807,23 @@ function configPage() {
       if (cfgs.transit) this.transitInit();
       if (cfgs.world_clock) this.worldClockInit();
       if (cfgs.now_playing) this.loadSpotifyStatus();
+    },
+
+    // The module's settings card (found by its fields, so every card works without an id)
+    goToPlugin(pid) {
+      const needle = `pluginConfigs.${pid}.`;
+      const el = [...document.querySelectorAll('input, select, textarea')]
+        .find(e => [...e.attributes].some(a => a.name.startsWith('x-model') && a.value.startsWith(needle)));
+      if (!el) return;
+      const card = el.closest('.card');
+      // A card taller than the window (e.g. System Settings, where Clock & Weather lives): go to the field
+      const target = card && card.offsetHeight < window.innerHeight * 1.5 ? card : el;
+      target.scrollIntoView({ behavior: 'smooth', block: target === el ? 'center' : 'start' });
+      const flash = target === el ? (el.closest('.row') || el) : card;
+      flash.classList.remove('fc-flash');
+      void flash.offsetWidth;
+      flash.classList.add('fc-flash');
+      setTimeout(() => flash.classList.remove('fc-flash'), 1800);
     },
 
     moveUp(idx) {

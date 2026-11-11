@@ -14,6 +14,11 @@ so after refreshing the new tokens are written back to the same file (same
 owner and mode) to keep the CLI's login valid. `claude setup-token` tokens
 can't be used: they lack the user:profile scope the usage endpoint needs.
 
+On a Mac (the desktop app), Claude Code keeps its login in the login Keychain
+("Claude Code-credentials") instead of the file. That is read with `security`
+(macOS asks once to allow it) and only read: Claude Code refreshes it whenever
+it runs, and rewriting another app's Keychain item could lock Claude Code out.
+
 fetch() returns {current_pct, current_reset, weekly_pct, weekly_reset} with
 percentages 0-100 and resets as epoch seconds (or None).
 """
@@ -23,6 +28,8 @@ import glob
 import json
 import logging
 import os
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -52,6 +59,14 @@ LOGIN_HINTS = {
     "claude": "run 'claude auth login' on the Pi",
     "codex": "run 'codex login --device-auth' on the Pi",
 }
+if sys.platform != "linux":                  # the desktop app, logged in on this computer
+    LOGIN_HINTS = {
+        "claude": "log in to Claude Code on this computer ('claude auth login' in a terminal)",
+        "codex": "run 'codex login' in a terminal on this computer",
+    }
+KEYCHAIN_SERVICE = "Claude Code-credentials"
+KEYCHAIN_RETRY_SECS = 3600       # after a refused or failed Keychain read, don't ask again for an hour
+_keychain_blocked_until = 0.0
 
 
 class LoginNeeded(Exception):
@@ -140,6 +155,44 @@ def _claude_refresh(path: str, data: dict) -> dict:
     return data
 
 
+def _keychain_claude(interactive=False):
+    """Claude Code's login from the macOS Keychain (None when there isn't one). After a refusal
+    the background poll leaves it alone for an hour; the Test button (interactive) asks again."""
+    global _keychain_blocked_until
+    if not interactive and time.time() < _keychain_blocked_until:
+        raise LoginNeeded("the Keychain didn't give Flight Clock Claude Code's login "
+                          "(it asks again within the hour)")
+    try:
+        r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+                           capture_output=True, text=True, timeout=120)   # waits while macOS asks
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _keychain_blocked_until = time.time() + KEYCHAIN_RETRY_SECS
+        raise LoginNeeded(f"couldn't read the Keychain ({e.__class__.__name__})")
+    if r.returncode == 44:                    # errSecItemNotFound: not logged in on this Mac
+        return None
+    if r.returncode != 0:                     # e.g. "Deny" in the macOS prompt
+        _keychain_blocked_until = time.time() + KEYCHAIN_RETRY_SECS
+        raise LoginNeeded("the Keychain didn't allow reading Claude Code's login — "
+                          "click Test and choose Always Allow")
+    try:
+        return json.loads(r.stdout.strip())
+    except ValueError:
+        raise LoginNeeded("Claude Code's Keychain entry isn't in the expected format")
+
+
+def _claude_keychain(interactive: bool) -> dict:
+    data = _keychain_claude(interactive)
+    if data is None:
+        raise LoginNeeded(f"no Claude login — {LOGIN_HINTS['claude']}")
+    oauth = data.get("claudeAiOauth") or {}
+    if not oauth.get("accessToken"):
+        raise LoginNeeded("no Claude login in the Keychain")
+    if (oauth.get("expiresAt") or 0) / 1000 < time.time():
+        # Read-only (see the top): Claude Code renews it the next time it runs
+        raise LoginNeeded("Claude Code's login has expired — open Claude Code once to renew it")
+    return _claude_usage(data, None, False)
+
+
 def _claude(path: str, allow_refresh: bool) -> dict:
     data = _read_json(path)
     oauth = data.get("claudeAiOauth") or {}
@@ -147,7 +200,10 @@ def _claude(path: str, allow_refresh: bool) -> dict:
         raise LoginNeeded("no Claude login in credentials file")
     if allow_refresh and (oauth.get("expiresAt") or 0) / 1000 < time.time() + REFRESH_MARGIN:
         data = _claude_refresh(path, data)
+    return _claude_usage(data, path, allow_refresh)
 
+
+def _claude_usage(data: dict, path, allow_refresh: bool) -> dict:
     def get(d):
         return requests.get(CLAUDE_USAGE_URL, timeout=TIMEOUT, headers={
             "Authorization": f"Bearer {d['claudeAiOauth']['accessToken']}",
@@ -156,11 +212,12 @@ def _claude(path: str, allow_refresh: bool) -> dict:
         })
 
     r = get(data)
-    if r.status_code == 401 and allow_refresh:
+    if r.status_code == 401 and allow_refresh and path:
         data = _claude_refresh(path, data)
         r = get(data)
     if r.status_code in (401, 403):
-        raise LoginNeeded(f"usage request rejected ({r.status_code})")
+        raise LoginNeeded(f"usage request rejected ({r.status_code})"
+                          + ("" if path else " — open Claude Code once to renew its login"))
     r.raise_for_status()
     j = r.json()
     five, week = j.get("five_hour") or {}, j.get("seven_day") or {}
@@ -257,8 +314,12 @@ _FETCHERS = {"claude": _claude, "codex": _codex}
 _LOCKS = {p: threading.Lock() for p in _FETCHERS}
 
 
-def fetch(provider: str, credentials_path: str = "", allow_refresh: bool = True) -> dict:
+def fetch(provider: str, credentials_path: str = "", allow_refresh: bool = True, interactive: bool = False) -> dict:
+    """interactive: a person asked (the Test button), so the Mac may show its Keychain prompt again."""
     path = find_credentials(provider, credentials_path)
+    if not path and provider == "claude" and sys.platform == "darwin" and not (credentials_path or "").strip():
+        with _LOCKS[provider]:
+            return _claude_keychain(interactive)               # Claude Code on this Mac
     if not path:
         raise LoginNeeded(f"no credentials file — {LOGIN_HINTS[provider]}")
     with _LOCKS[provider]:
