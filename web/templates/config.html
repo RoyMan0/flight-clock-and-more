@@ -1545,7 +1545,10 @@
               <template x-for="o in [
                   {v: 'art', t: 'Album art', d: 'Title across the top, artwork, artist and album, progress bar.'},
                   {v: 'eq', t: 'EQ bars', d: 'Full-panel EQ bars with the progress bar under them.'},
-                  {v: 'eq_text', t: 'EQ bars + song', d: 'Shorter EQ bars, the title and artist scrolling in a tiny font, and the progress bar.'}]" :key="o.v">
+                  {v: 'eq_text', t: 'EQ bars + song', d: 'Shorter EQ bars, the title and artist scrolling in a tiny font, and the progress bar.'},
+                  {v: 'eq_mirror', t: 'EQ mirror', d: 'Bars growing up and down from a centre line, like a reflected spectrum.'},
+                  {v: 'eq_wave', t: 'Scope', d: 'A glowing oscilloscope line with fading trails.'},
+                  {v: 'eq_burst', t: 'Starburst', d: 'The spectrum as rainbow spokes bursting from a pulsing centre.'}]" :key="o.v">
                 <div class="form-check">
                   <input class="form-check-input" type="radio" name="npStyle" :id="'npStyle_' + o.v" :value="o.v"
                          x-model="pluginConfigs.now_playing.style">
@@ -1554,6 +1557,29 @@
                   </label>
                 </div>
               </template>
+              {% if desktop %}
+              <div class="small fw-semibold mt-2 mb-1">Visualizers <span class="text-muted fw-normal">— full-screen, this {{ pc }}'s window only</span></div>
+              <template x-for="o in [
+                  {v: 'viz_cycle', t: 'Cycle', d: 'A different visualizer every 30 seconds and every song.'},
+                  {v: 'viz_vortex', t: 'Vortex', d: 'A green-and-red tunnel spinning into a dark centre.'},
+                  {v: 'viz_spectrum', t: 'Spectrum', d: 'Classic segmented analyser bars with falling peaks.'},
+                  {v: 'viz_reflection', t: 'Reflection', d: 'Neon bars on a horizon with their mirror image.'},
+                  {v: 'viz_rays', t: 'Warp Rays', d: 'Light streaks pouring from the centre under a scope line.'},
+                  {v: 'viz_kaleido', t: 'Kaleidoscope', d: 'An eight-way star of wavy neon lines.'},
+                  {v: 'viz_plasma', t: 'Plasma', d: 'Swirling rainbow plasma around a dark eye.'},
+                  {v: 'viz_spiral', t: 'Red Spiral', d: 'Spinning red spiral arms with lightning from the centre.'}]" :key="o.v">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="npStyle" :id="'npStyle_' + o.v" :value="o.v"
+                         x-model="pluginConfigs.now_playing.style">
+                  <label class="form-check-label" :for="'npStyle_' + o.v">
+                    <span x-text="o.t"></span> <span class="small text-muted" x-text="'— ' + o.d"></span>
+                  </label>
+                </div>
+              </template>
+              <div class="form-text text-muted">
+                Visualizers draw in this app's window (any screen style and case). The LED panel image and the Pi show the EQ bars meanwhile.
+              </div>
+              {% endif %}
               <div class="form-text text-muted" x-show="pluginConfigs.now_playing.style !== 'art'">
                 The Pi can't hear the music, so the bars are an estimate: they pulse to the song's real tempo, and how hard they
                 bounce comes from its energy and danceability (looked up once per song, free, from ReccoBeats and Deezer).

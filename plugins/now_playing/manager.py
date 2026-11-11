@@ -12,9 +12,12 @@ Config (plugins.now_playing):
   sources        {"spotify": true, "mac": false, "lastfm": false}
   mac_host, mac_user, lastfm_user
   scroll_speed   px/frame for long lines
-  style          "art" (artwork + details), "eq" (EQ bars + progress) or
-                 "eq_text" (smaller EQ + one tiny scrolling title/artist line + progress).
+  style          "art" (artwork + details), "eq" (EQ bars + progress),
+                 "eq_text" (smaller EQ + one tiny scrolling title/artist line + progress),
+                 "eq_mirror", "eq_wave" (oscilloscope) or "eq_burst" (radial spokes).
                  The EQ is estimated from the song's tempo/energy (features.py, eq.py).
+                 Desktop app only: "viz_<preset>" — the panel window draws a full-resolution
+                 visualizer (desktop/panel/js/viz.js); the LED frame shows "eq" meanwhile.
 Secrets: spotify_client_id, spotify_refresh_token, lastfm_api_key
 
 Takes its normal turn in the rotation while a song is playing, or paused (Spotify and
@@ -32,7 +35,7 @@ import requests
 
 from plugins.base_plugin import BasePlugin
 from plugins.now_playing import features
-from plugins.now_playing.eq import Analyzer, TinyMarquee, render_eq
+from plugins.now_playing.eq import Analyzer, TinyMarquee, render_burst, render_eq, render_mirror, render_wave
 from plugins.now_playing.render import MATRIX_W, draw_paused, make_marquees, prepare_art, render_frame
 from plugins.transit.render import push_pil_to_canvas
 
@@ -47,7 +50,8 @@ SOURCE_RETRY_SECS = 60          # skip a source this long after it errors (e.g. 
                                 # while the internet is down) so the next one is reached fast
 _source_skip_until: dict = {}   # source → time.monotonic() it may be tried again
 DEFAULT_SCROLL_SPEED = 1.0
-STYLES = ("art", "eq", "eq_text")
+STYLES = ("art", "eq", "eq_text", "eq_mirror", "eq_wave", "eq_burst")
+VIZ_PRESETS = ("cycle", "vortex", "spectrum", "reflection", "rays", "kaleido", "plasma", "spiral")
 
 _art_cache: "OrderedDict[str, object]" = OrderedDict()   # art_key → 21×21 image (or None)
 _art_lock = threading.Lock()
@@ -170,6 +174,8 @@ def control(config: dict, track: dict, action: str, local=None):
 
 def style_of(config: dict) -> str:
     s = config.get("style", "art")
+    if s.startswith("viz_") and s[4:] in VIZ_PRESETS:
+        return s                                      # desktop visualizer (the LED frame draws "eq")
     return s if s in STYLES else "art"
 
 
@@ -207,6 +213,7 @@ class NowPlayingPlugin(BasePlugin):
         self._eq_key = None
         self._tiny = None
         self._hue = 0.0
+        self._trail = None                # eq_wave's fading phosphor trail
         self._last_playing_at = None      # monotonic time a source was last seen playing (see PAUSE_KEEP_SECS)
 
     @property
@@ -294,6 +301,11 @@ class NowPlayingPlugin(BasePlugin):
         if out["style"] != "art" and an is not None:
             out["eq"] = [round(v, 2) for v in an.shown]
             out["eq_peaks"] = [round(v, 2) for v in an.peaks]
+        if out["style"] != "art":
+            # The desktop visualizers run the same analyser in JS at full frame rate
+            out["features"] = features.with_defaults(track.get("features"))
+            out["position"] = round(song_seconds(track, time.monotonic()), 2)
+            out["seed"] = hash(features.track_key(track)) & 0xFFFF
         return out
 
     def _draw_eq(self, track: dict, style: str):
@@ -307,8 +319,15 @@ class NowPlayingPlugin(BasePlugin):
         self._eq.levels(song_seconds(track, now), playing=not paused)   # paused: the bars fall
         if not paused:
             self._hue = (self._hue + 0.0015) % 1.0
-        frame = render_eq(self._eq, progress_fraction(track, now), self._hue,
-                          self._tiny if style == "eq_text" else None)
+        progress = progress_fraction(track, now)
+        if style == "eq_mirror":
+            frame = render_mirror(self._eq, progress, self._hue)
+        elif style == "eq_wave":
+            frame, self._trail = render_wave(self._eq, now, progress, self._trail, self._hue)
+        elif style == "eq_burst":
+            frame = render_burst(self._eq, now, progress, self._hue)
+        else:                                         # eq, eq_text, and desktop viz_* styles
+            frame = render_eq(self._eq, progress, self._hue, self._tiny if style == "eq_text" else None)
         if paused:
             draw_paused(frame, center=(MATRIX_W // 2, 12))
         push_pil_to_canvas(frame, self.display_manager)
