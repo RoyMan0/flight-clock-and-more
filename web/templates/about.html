@@ -322,6 +322,12 @@
           <div class="color-row"><span class="color-dot" style="background:rgb(66,164,244)"></span><span>Low temperature — blue</span></div>
         </div>
         <p class="text-muted small">Each day also shows a small weather icon sourced from Tomorrow.io forecast codes.</p>
+        <p class="text-muted small">
+          <strong>Forecast by time of day</strong> (Config → Forecast Row): instead of days, the next three parts of the day:
+          <em>Morn</em> (6–11), <em>Aft</em> (12–5), <em>Eve</em> (6–11 PM) and <em>Nite</em> (midnight–5), each with its most common weather and its high/low.
+          The part you're in is included while at least three of its hours are left. <em>Scheduled</em> shows it during a window you choose
+          (say 5–10 AM, while you're getting ready) and the days the rest of the time. It costs one more Tomorrow.io call an hour.
+        </p>
 
         <!-- Alert Bar -->
         <div class="subsection-title"><i class="bi bi-exclamation-triangle me-2"></i>Alert Bar</div>
@@ -551,6 +557,7 @@
           <li>The Pi can hold <strong>several keys for each service</strong> (Config → API &amp; Metrics → Add Key). It uses the key whose monthly allowance resets soonest first, and moves to the next when one runs low; usage for each is shown there.</li>
           <li>Some people get extra free keys by signing up again with another email address. Be aware that <strong>AirLabs' terms allow one account per person</strong> and they may block keys that break this — that's at your own risk.</li>
           <li>Other ways to use fewer lookups: a smaller search radius or a higher minimum altitude on the Config page (fewer planes to look up), FlightAware's ADS-B feeder bonus, or a paid plan.</li>
+          <li><strong>Blocked Planes</strong> (Config → Overhead Flight Tracker): flight numbers or tail numbers that are never shown, e.g. a news helicopter or a local plane that circles all day. They're dropped before any lookup, so they use no credits.</li>
         </ul>
 
       </div>

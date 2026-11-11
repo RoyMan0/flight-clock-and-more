@@ -193,6 +193,15 @@ Current song: title marquee across the top (green, 5x7 font), 21×21 artwork bot
   - `eq.Analyzer` builds the bars from a beat grid at the song's tempo, anchored to its playback position (`song_seconds()`; Last.fm counts from `first_seen`): kick/snare/hats shaped by energy, danceability and acousticness, smoothed noise, and soft-knee compression. Bars fall at a fixed rate, and peak caps hold and then drop.
   - `describe()` adds `style` and, for EQ styles, `eq`/`eq_peaks` (16 levels 0–1) for the Mac app's high-res screens.
 
+### Features ported from upstream (c0wsaysmoo/plane-tracker-rgb-pi)
+
+This repo began as a copy of that project around Apr 10, 2026 (upstream commit `fbb9aa3`). Later upstream changes are ported by hand, rewritten for this code:
+- `Overhead.grab_data()` starts a fetch only when none is running (threads piled up and ran a Pi out of memory when APIs hung); `_grab()` always clears `_processing` in a `finally`.
+- Flight number colouring: digits in the airline name aren't coloured as the flight number.
+- **Blocked planes**: `plugins.flight_tracker.blocked` (flight numbers, tail numbers or ICAO hex; `overhead.blocked_set`/`is_blocked`, normalised to upper-case alphanumerics), dropped before the lookup slice so they cost no API credits.
+- **Forecast by time of day**: `plugins.clock_weather.forecast_mode` = `days` (default) · `periods` · `scheduled` (periods between `forecast_periods_start`/`_end`, wrapping midnight). `temperature.get_hourly_cached()` (one Tomorrow.io `1h` timeline call an hour, only while periods are wanted) → `build_periods()`: Nite 0–5, Morn 6–11, Aft 12–17, Eve 18–23; the current part counts while ≥ 3 of its hours are ahead; weather = the most frequent code (ties → higher code). Entries look like the daily ones plus `label`/`night`, so `scenes/daysforecast.py` draws both; `forecast_choice()` is re-checked every second, and until the hourly data arrives it shows the days (retrying every 30 s). `describe()` sends `forecast_kind` and per-entry `night`.
+- **Over the sea / remote land** for tracked flights: `cities.get_region()` (offline): the world map's 64×32 land mask + named sea/ocean boxes, or the nearest city's country (GeoNames `countryInfo.txt`, downloaded with the cities; cache v2 keeps each city's country code). Coarse cells can read an enclosed sea as land, so inside a sea box with no city within 150 km it's the sea. Shown as "over …" only when there's no nearby city or park. Upstream calls Nominatim every 15 km instead; this stays offline, within Nominatim's usage policy.
+
 ### System Stats Plugin (`plugins/system_stats/`)
 
 CPU/GPU %+temp, memory % (optional uptime, disk and network I/O) for this Pi and any number of machines over SSH (`plugins.system_stats.connections`, each with its own `metrics`, `disk_max`/`net_max`). Layout: hostname line (uptime right-aligned on it when enabled — it is not a stat row) + 8 px stat rows (text rows 0–4, gap, 1 px bar on row 6); one machine with ≤3 stats is static, otherwise a scrolling strip with dividers.

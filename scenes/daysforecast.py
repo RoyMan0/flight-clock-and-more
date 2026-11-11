@@ -5,7 +5,7 @@ from PIL import Image
 
 from utilities.animator import Animator
 from setup import colours, fonts, frames, screen
-from utilities.temperature import get_forecast_cached
+from utilities.temperature import get_forecast_cached, get_period_forecast_cached
 from config import NIGHT_START, NIGHT_END
 from rgbmatrix import graphics
 
@@ -24,11 +24,51 @@ TEMP_POSITION = DISTANCE_FROM_TOP
 NIGHT_START_TIME = datetime.strptime(NIGHT_START, "%H:%M")
 NIGHT_END_TIME = datetime.strptime(NIGHT_END, "%H:%M")
 
+def _hhmm(value, default):
+    try:
+        return datetime.strptime(str(value), "%H:%M").time()
+    except (TypeError, ValueError):
+        return datetime.strptime(default, "%H:%M").time()
+
+
+def forecast_choice(now=None) -> str:
+    """What the bottom row shows right now: "days" (the next days) or "periods" (the next
+    parts of today: Morn / Aft / Eve / Nite). clock_weather forecast_mode is "days" (default),
+    "periods", or "scheduled": periods between forecast_periods_start and _end, days otherwise."""
+    try:
+        from core.config_manager import get_config
+        cfg = get_config().get_plugin_config("clock_weather") or {}
+    except Exception:
+        return "days"
+    mode = cfg.get("forecast_mode", "days")
+    if mode == "periods":
+        return "periods"
+    if mode != "scheduled":
+        return "days"
+    t = (now or datetime.now()).time()
+    a = _hhmm(cfg.get("forecast_periods_start"), "05:00")
+    b = _hhmm(cfg.get("forecast_periods_end"), "10:00")
+    inside = a <= t < b if a <= b else (t >= a or t < b)     # the window may wrap midnight
+    return "periods" if inside else "days"
+
+
+def current_forecast():
+    """(choice, entries) for the bottom row. Day parts fall back to the daily forecast
+    until the hourly one has arrived."""
+    if forecast_choice() == "periods":
+        parts = get_period_forecast_cached()
+        if parts:
+            return "periods", parts
+    return "days", get_forecast_cached()
+
+
 class DaysForecastScene(object):
     def __init__(self):
         super().__init__()
         self._redraw_forecast = True
         self._last_hour = None
+        self._shown_choice = None
+        self._retry_at = None          # day parts wanted but not fetched yet: look again then
 
     @Animator.KeyFrame.add(0)
     def _forecast_on_reset(self):
@@ -53,16 +93,20 @@ class DaysForecastScene(object):
             return
 
         current_hour = datetime.now().hour
+        choice = forecast_choice()
 
-        if self._last_hour != current_hour or self._redraw_forecast:
+        retry = self._retry_at is not None and datetime.now() >= self._retry_at
+        if self._last_hour != current_hour or self._redraw_forecast or choice != self._shown_choice or retry:
             if self._last_hour is not None:
                 self.draw_square(0, 12, 64, 32, colours.BLACK)
 
             self._last_hour = current_hour
-            forecast = get_forecast_cached()
+            shown, forecast = current_forecast()
 
             if not forecast:
                 return
+            self._shown_choice = choice
+            self._retry_at = datetime.now() + timedelta(seconds=30) if shown != choice else None
 
             self._redraw_forecast = False
             
@@ -81,13 +125,16 @@ class DaysForecastScene(object):
                 entry_date = local_time.date()
 
                 # THE SWITCH LOGIC: 
-                # If the entry date is before today, skip to next entry.
-                if entry_date < today_local:
+                # If the entry date is before today, skip to next entry (days only;
+                # day parts are already the upcoming ones)
+                if "label" not in day and entry_date < today_local:
                     continue
                 
                 # Format the display data
-                day_name = local_time.strftime("%a")
+                day_name = day.get("label") or local_time.strftime("%a")
                 icon = day["values"]["weatherCodeFullDay"]
+                if day.get("night") and os.path.exists(os.path.join(APP_ROOT, "icons", f"{icon}1.png")):
+                    icon = f"{icon}1"                       # the night icon (moon) for Nite
                 
                 min_temp = f"{day['values']['temperatureMin']:.0f}"
                 max_temp = f"{day['values']['temperatureMax']:.0f}"
@@ -101,7 +148,7 @@ class DaysForecastScene(object):
                 min_temp_x = temp_x + max_temp_width
 
                 icon_x = offset + (space_width - ICON_SIZE) // 2
-                day_x = offset + (space_width - 12) // 2 + 1
+                day_x = offset + (space_width - len(day_name) * 4) // 2 + 1
 
                 # --- Draw to Matrix ---
                 graphics.DrawText(self.canvas, TEXT_FONT, day_x, DAY_POSITION, DAY_COLOUR, day_name)

@@ -135,14 +135,18 @@ class ClockWeatherPlugin(BasePlugin):
 
         days = []
         today = datetime.now().astimezone().date()
-        for day in get_forecast_cached() or []:
+        from scenes.daysforecast import current_forecast
+        kind, entries = current_forecast()          # the next days, or the next parts of the day
+        out["forecast_kind"] = kind
+        for day in entries or []:
             try:
                 local = datetime.fromisoformat(day["startTime"])
-                if local.date() < today:
+                if "label" not in day and local.date() < today:
                     continue
                 v = day["values"]
-                days.append({"day": local.strftime("%a"), "code": v.get("weatherCodeFullDay"),
-                             "max": round(v["temperatureMax"]), "min": round(v["temperatureMin"])})
+                days.append({"day": day.get("label") or local.strftime("%a"), "code": v.get("weatherCodeFullDay"),
+                             "max": round(v["temperatureMax"]), "min": round(v["temperatureMin"]),
+                             "night": bool(day.get("night"))})
             except Exception:
                 continue
             if len(days) == 3:

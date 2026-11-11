@@ -739,6 +739,23 @@ def _route_makes_sense(plane_lat, plane_lon,
 # Overhead class
 # ------------------------------------------------------------------
 
+
+# ── Blocked planes (flight_tracker "blocked") ────────────────────────────────
+def _norm_id(v) -> str:
+    return "".join(ch for ch in str(v or "").upper() if ch.isalnum())
+
+
+def blocked_set(entries) -> set:
+    """The ignore list, normalised: upper case, no spaces or dashes ("n-123ab" → "N123AB")."""
+    if isinstance(entries, str):
+        entries = entries.replace("\n", ",").split(",")
+    return {n for n in (_norm_id(e) for e in (entries or [])) if n}
+
+
+def is_blocked(ac: dict, blocked: set) -> bool:
+    """A position report matches by flight number/callsign, tail number or ICAO hex."""
+    return any(_norm_id(ac.get(k)) in blocked for k in ("flight", "r", "hex") if ac.get(k))
+
 class Overhead:
     def __init__(self, secrets: dict = None):
         self._secrets  = secrets or {}
@@ -848,6 +865,7 @@ class Overhead:
         min_alt      = int(ft_cfg.get("min_altitude",    8000))
         max_alt      = int(ft_cfg.get("max_altitude",    MAX_ALTITUDE))
         max_lookup   = int(ft_cfg.get("max_flight_lookup", 5))
+        blocked      = blocked_set(ft_cfg.get("blocked"))
         max_closest  = int(flights_cfg.get("max_closest",  5))
         max_farthest = int(flights_cfg.get("max_farthest", 5))
         journey_code = loc.get("journey_code", "")
@@ -927,6 +945,8 @@ class Overhead:
             # Filter by altitude, sort by distance, slice to max_lookup
             candidates = []
             for ac in aircraft_list:
+                if blocked and is_blocked(ac, blocked):
+                    continue                    # the user's ignore list: no lookup, no display
                 alt = ac.get("alt_baro")
                 if alt == "ground" or not isinstance(alt, (int, float)):
                     continue

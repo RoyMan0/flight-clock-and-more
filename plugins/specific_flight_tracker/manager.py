@@ -689,6 +689,7 @@ class SpecificFlightTrackerPlugin(BasePlugin):
             c = getattr(self._display, "_loc_cache", None) or {}
             out["city"] = (c.get("city") or {}).get("name")
             out["poi"] = (c.get("poi") or {}).get("name")
+            out["region"] = (c.get("region") or {}).get("name")
         return out
 
     def draw(self) -> bool:

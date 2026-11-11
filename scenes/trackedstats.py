@@ -1,6 +1,6 @@
 from rgbmatrix import graphics
 from utilities.animator import Animator
-from utilities.cities import get_nearest_city
+from utilities.cities import get_nearest_city, get_region
 from utilities.nps_pois import get_nearest_poi
 from setup import colours, fonts, screen
 from core.config_manager import get_config as _get_config
@@ -39,7 +39,7 @@ class TrackedStatsScene(object):
         super().__init__()
         self.stats_position = screen.WIDTH
         self._stats_all_looped = False
-        self._loc_cache = {"lat": None, "lng": None, "city": None, "poi": None}
+        self._loc_cache = {"lat": None, "lng": None, "city": None, "poi": None, "region": None}
         self._show_additional_details = True
         self._show_nearby_locations = True
 
@@ -72,6 +72,8 @@ class TrackedStatsScene(object):
                 c["lng"]  = lng
                 c["city"] = get_nearest_city(lat, lng)
                 c["poi"]  = get_nearest_poi(lat, lng)
+                # No town or park nearby: name the sea / ocean, or the country (remote land)
+                c["region"] = get_region(lat, lng) if not (c["city"] or c["poi"]) else None
             city_result = c["city"]
             poi_result  = c["poi"]
         else:
@@ -122,6 +124,12 @@ class TrackedStatsScene(object):
                 ("  ",             SUFFIX_COLOUR),
                 (f"nr {poi_result['name']}", POI_COLOUR),
             ]
+        region = self._loc_cache.get("region") if show_nearby else None
+        if region and not (city_result or poi_result):
+            segments += [
+                ("  ",             SUFFIX_COLOUR),
+                (f"over {region['name']}", CITY_COLOUR),
+            ]
 
         self.draw_square(0, STATS_ROW - 6, screen.WIDTH, screen.HEIGHT, colours.BLACK)
 
@@ -141,4 +149,4 @@ class TrackedStatsScene(object):
     def reset_tracked_stats(self):
         self.stats_position = screen.WIDTH
         self._stats_all_looped = False
-        self._loc_cache = {"lat": None, "lng": None, "city": None, "poi": None}
+        self._loc_cache = {"lat": None, "lng": None, "city": None, "poi": None, "region": None}

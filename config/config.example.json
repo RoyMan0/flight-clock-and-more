@@ -36,6 +36,9 @@
       "enabled": false,
       "display_duration": 30,
       "forecast_days": 3,
+      "forecast_mode": "days",
+      "forecast_periods_start": "05:00",
+      "forecast_periods_end": "10:00",
       "alerts": {
         "owm_precip":    false,
         "owm_wind":      false,
@@ -55,7 +58,8 @@
       "max_flight_lookup": 5,
       "radar_mode": false,
       "show_additional_details": false,
-      "sound": true
+      "sound": true,
+      "blocked": []
     },
     "specific_flight_tracker": {
       "enabled": false,

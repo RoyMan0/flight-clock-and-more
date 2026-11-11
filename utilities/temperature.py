@@ -334,3 +334,137 @@ def get_forecast_cached() -> list:
     if _forecast_next_fetch is None or datetime.now() >= _forecast_next_fetch:
         run_once("weather-forecast", _refresh_forecast)
     return _forecast_data or []
+
+
+# ── Forecast by time of day (clock_weather forecast_mode "periods" / "scheduled") ──
+# One extra Tomorrow.io call an hour, and only while that mode is in use.
+_HOURLY_CACHE_FILE = os.path.join(_CACHE_DIR, "hourly_forecast.json")
+_hourly_data: Optional[list] = None
+_hourly_next_fetch: Optional[datetime] = None
+
+# (label, first hour, last hour) — the four parts of a day
+PERIODS = (("Nite", 0, 5), ("Morn", 6, 11), ("Aft", 12, 17), ("Eve", 18, 23))
+
+
+def grab_hourly_forecast(tag="unknown") -> list:
+    """About 36 hours of hourly temperature + weather code."""
+    _flush_if_units_changed()
+    if _is_rate_limited():
+        return []
+    try:
+        resp = get_session().post(
+            f"{TOMORROW_API_URL}/timelines",
+            headers={"Accept-Encoding": "gzip", "accept": "application/json", "content-type": "application/json"},
+            params={"apikey": TOMORROW_API_KEY},
+            json={
+                "location": TEMPERATURE_LOCATION,
+                "units": _get_units(),
+                "timezone": "auto",
+                "fields": ["temperature", "weatherCode"],
+                "timesteps": ["1h"],
+                "startTime": datetime.utcnow().replace(minute=0, second=0, microsecond=0).isoformat() + "Z",
+                "endTime": (datetime.utcnow() + timedelta(hours=36)).replace(microsecond=0).isoformat() + "Z",
+            },
+            timeout=(5, 20),
+        )
+        if resp.status_code == 429:
+            _set_rate_limited()
+            return []
+        resp.raise_for_status()
+        timelines = (resp.json().get("data") or {}).get("timelines") or []
+        return (timelines[0].get("intervals") or []) if timelines else []
+    except RequestException as e:
+        logging.error(f"[HourlyForecast:{tag}] API request failed: {e}")
+        return []
+    except (KeyError, ValueError) as e:
+        logging.error(f"[HourlyForecast:{tag}] Unexpected data format: {e}")
+        return []
+
+
+def _refresh_hourly():
+    global _hourly_data, _hourly_next_fetch
+    result = grab_hourly_forecast()
+    now = datetime.now()
+    if result:
+        _hourly_data = result
+        _hourly_next_fetch = now + timedelta(seconds=_FORECAST_TTL)
+        _write_file_cache(_HOURLY_CACHE_FILE, result)
+    else:
+        _hourly_next_fetch = now + timedelta(seconds=300)
+
+
+def get_hourly_cached() -> list:
+    """Hourly intervals from the cache, never blocking (see get_temperature_cached)."""
+    global _hourly_data
+    if _hourly_data is None:
+        cached = _read_file_cache(_HOURLY_CACHE_FILE)
+        if cached:
+            _hourly_data = cached
+    if _hourly_next_fetch is None or datetime.now() >= _hourly_next_fetch:
+        run_once("weather-hourly", _refresh_hourly)
+    return _hourly_data or []
+
+
+def build_periods(hourly: list, now: Optional[datetime] = None, count: int = 3) -> list:
+    """The next `count` parts of the day from hourly intervals, shaped like the daily
+    forecast entries (startTime + values{temperatureMin, temperatureMax, weatherCodeFullDay})
+    plus a "label" and "night". The current part is included while at least 3 of its hours
+    are still ahead; otherwise the list starts with the next one. Each part's weather is
+    its most frequent code, ties going to the wetter/stormier (higher) code."""
+    now = now or datetime.now().astimezone()
+    hours = []
+    for iv in hourly or []:
+        try:
+            t = datetime.fromisoformat(str(iv["startTime"]).replace("Z", "+00:00")).astimezone(now.tzinfo)
+            v = iv.get("values") or {}
+            if v.get("temperature") is None:
+                continue
+            hours.append((t, float(v["temperature"]), int(v.get("weatherCode") or 0)))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not hours:
+        return []
+
+    def period_of(t):
+        for i, (_, a, b) in enumerate(PERIODS):
+            if a <= t.hour <= b:
+                return i
+        return 0
+
+    groups = {}                     # (date, period index) → [(t, temp, code)]
+    order = []
+    this_hour = now.replace(minute=0, second=0, microsecond=0)
+    for t, temp, code in hours:
+        if t < this_hour:
+            continue
+        key = (t.date(), period_of(t))
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append((t, temp, code))
+
+    if order:                        # a nearly-over current part is skipped
+        first = groups[order[0]]
+        if order[0] == (now.date(), period_of(now)) and len(first) < 3 and len(order) > count:
+            order = order[1:]
+
+    out = []
+    for key in order[:count]:
+        rows = groups[key]
+        temps = [r[1] for r in rows]
+        codes = {}
+        for r in rows:
+            codes[r[2]] = codes.get(r[2], 0) + 1
+        code = max(codes, key=lambda c: (codes[c], c))
+        label = PERIODS[key[1]][0]
+        out.append({
+            "startTime": rows[0][0].isoformat(),
+            "label": label,
+            "night": label == "Nite",
+            "values": {"temperatureMin": min(temps), "temperatureMax": max(temps), "weatherCodeFullDay": code},
+        })
+    return out
+
+
+def get_period_forecast_cached(count: int = 3) -> list:
+    return build_periods(get_hourly_cached(), count=count)

@@ -306,6 +306,28 @@
               <input type="number" class="form-control bg-dark text-light border-secondary"
                      x-model="pluginConfigs.clock_weather.forecast_days" min="1" max="5">
             </div>
+            <div class="col-md-5">
+              <label class="form-label">Forecast Row</label>
+              <select class="form-select bg-dark text-light border-secondary" x-model="pluginConfigs.clock_weather.forecast_mode">
+                <option value="days">Next 3 days</option>
+                <option value="periods">Time of day (Morning, Afternoon, Evening, Night)</option>
+                <option value="scheduled">Time of day in a window, days otherwise</option>
+              </select>
+            </div>
+            <div class="col-md-4" x-show="pluginConfigs.clock_weather.forecast_mode === 'scheduled'">
+              <label class="form-label">Time-of-Day Window</label>
+              <div class="d-flex align-items-center gap-1">
+                <input type="time" class="form-control bg-dark text-light border-secondary" x-model="pluginConfigs.clock_weather.forecast_periods_start">
+                <span class="text-muted small">to</span>
+                <input type="time" class="form-control bg-dark text-light border-secondary" x-model="pluginConfigs.clock_weather.forecast_periods_end">
+              </div>
+            </div>
+            <div class="col-12" x-show="(pluginConfigs.clock_weather.forecast_mode || 'days') !== 'days'">
+              <div class="text-muted" style="font-size:.75rem">
+                The next three parts of the day (e.g. at 1 PM: Afternoon, Evening, Night) with each one's weather and high/low.
+                Uses one more Tomorrow.io call an hour, well within the free plan. Until it arrives the clock shows the days.
+              </div>
+            </div>
             <div class="col-12">
               <label class="form-label">Alert Features</label>
               <div class="d-flex flex-wrap gap-3">
@@ -507,6 +529,17 @@
               <label class="form-label">Home Airport (IATA)</label>
               <input type="text" class="form-control bg-dark text-light border-secondary"
                      x-model="sysCfg.location.journey_code" maxlength="3" style="text-transform:uppercase">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Blocked Planes <span class="text-muted small">(never shown)</span></label>
+              <textarea class="form-control bg-dark text-light border-secondary" rows="2" spellcheck="false"
+                        style="text-transform:uppercase" placeholder="N12345, UAL1234"
+                        :value="(pluginConfigs.flight_tracker.blocked || []).join(', ')"
+                        @change="pluginConfigs.flight_tracker.blocked = $event.target.value.split(/[\s,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean)"></textarea>
+              <div class="text-muted" style="font-size:.7rem;margin-top:2px">
+                Flight numbers (UAL1234) or tail numbers (N12345), separated by commas or spaces. Good for a news helicopter
+                or a local plane that circles all day. They're skipped before any lookup, so they use no API credits.
+              </div>
             </div>
             <div class="col-12">
               <label class="form-label">Find Home Address</label>
@@ -2575,7 +2608,7 @@ function configPage() {
   return {
     pluginOrder: [],
     pluginConfigs: {
-      clock_weather:           {},
+      clock_weather:           { forecast_mode: 'days', forecast_periods_start: '05:00', forecast_periods_end: '10:00' },
       flight_tracker:          { sound: true },
       specific_flight_tracker: { tracked_callsigns: [] },
       stock_ticker:            { etf_symbols: [], stock_symbols: [] },
@@ -2786,6 +2819,10 @@ function configPage() {
         sr.resorts = (sr.resorts || []).filter(r => typeof r.id === 'string' && r.id.includes('/'));
         cfgs.snow_report = sr;
       }
+      if (cfgs.clock_weather) {
+        cfgs.clock_weather = { forecast_mode: 'days', forecast_periods_start: '05:00', forecast_periods_end: '10:00', ...cfgs.clock_weather };
+      }
+      if (cfgs.flight_tracker && !Array.isArray(cfgs.flight_tracker.blocked)) cfgs.flight_tracker.blocked = [];
       this.pluginConfigs = cfgs;
       // Migrate legacy naive event_datetime to UTC ISO so timezone is always correct
       const ecDt = this.pluginConfigs.event_countdown?.event_datetime;
