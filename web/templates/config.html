@@ -2438,6 +2438,17 @@
   <div x-show="activeTab === 'api'">
     <div class="row g-4">
 
+      <!-- Several clocks on the same keys: each one only counts its own use -->
+      <div class="col-12">
+        <div class="alert alert-warning small mb-0 py-2">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          <strong>Using the same keys on more than one clock?</strong> (a Pi and the Mac/PC app, or two Pis)
+          Each clock only counts its <em>own</em> lookups, so the usage below doesn't include the others. Together they can
+          use up a monthly allowance while each one thinks there's plenty left. Either give each clock its own keys, or turn off
+          the modules that use them (like Overhead Flights) on the clocks where you don't need them.
+        </div>
+      </div>
+
       <!-- AirLabs -->
       <div class="col-md-6">
         <div class="card mb-4">

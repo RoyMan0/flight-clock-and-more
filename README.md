@@ -152,6 +152,8 @@ All free. Only the weather key is needed to start; add others when you turn on t
 
 Planes overhead are found free (adsb.lol, with OpenSky and Flightradar24 as backups). Routes come from free sources first, and AirLabs and FlightAware fill in the rest, so most planes cost nothing. You can add several keys of each, and the config page shows how many lookups you've used.
 
+> **Running more than one clock?** If your Pi and the Mac/PC app (or two Pis) use the **same API keys**, they share those keys' allowances, but each clock only tracks its own usage. Neither sees the total, so together they can use up a monthly limit early. Either use **different keys on each clock**, or **turn off modules you don't need** on one of them (for example, Overhead Flights on the computer if the Pi already shows them).
+
 ---
 
 ## Using it
