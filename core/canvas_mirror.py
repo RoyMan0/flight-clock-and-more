@@ -195,10 +195,29 @@ def install():
     def Font():
         return _FontProxy(real_font_cls)
 
+    # An off-screen display (config-page Test previews, the style browser's LED samples)
+    # draws on display_manager._SoftwareCanvas. On a Pi the real C functions reject it
+    # ("expected rgbmatrix.core.Canvas, got _SoftwareCanvas"), so only the mirror copy is
+    # drawn there, and DrawText's return value (the text's width) is worked out the same
+    # way the library does: each character's width plus the kerning.
+    def _is_software(real_canvas):
+        return getattr(real_canvas, "is_software", False)
+
+    def _text_width(real_font, text, kerning):
+        width = 0
+        for ch in text:
+            w = real_font.CharacterWidth(ord(ch))
+            if w > 0:
+                width += w + kerning
+        return width
+
     def DrawText(canvas, font, x, y, color, text, *args):
         real_canvas = canvas.real if isinstance(canvas, MirrorCanvas) else canvas
         real_font = font._real if isinstance(font, _FontProxy) else font
-        result = real_text(real_canvas, real_font, x, y, color, text, *args)
+        if _is_software(real_canvas):
+            result = _text_width(real_font, text, args[0] if args else 0)
+        else:
+            result = real_text(real_canvas, real_font, x, y, color, text, *args)
         if isinstance(canvas, MirrorCanvas):
             try:
                 _mirror_text(canvas, font, x, y, color, text, args[0] if args else 0)
@@ -208,7 +227,7 @@ def install():
 
     def DrawLine(canvas, x0, y0, x1, y1, color):
         real_canvas = canvas.real if isinstance(canvas, MirrorCanvas) else canvas
-        result = real_line(real_canvas, x0, y0, x1, y1, color)
+        result = None if _is_software(real_canvas) else real_line(real_canvas, x0, y0, x1, y1, color)
         if isinstance(canvas, MirrorCanvas):
             try:
                 _mirror_line(canvas, int(x0), int(y0), int(x1), int(y1), color)
@@ -223,7 +242,7 @@ def install():
     if real_circle is not None:
         def DrawCircle(canvas, x, y, radius, color):
             real_canvas = canvas.real if isinstance(canvas, MirrorCanvas) else canvas
-            result = real_circle(real_canvas, x, y, radius, color)
+            result = None if _is_software(real_canvas) else real_circle(real_canvas, x, y, radius, color)
             if isinstance(canvas, MirrorCanvas):
                 try:
                     _mirror_circle(canvas, int(x), int(y), int(radius), color)

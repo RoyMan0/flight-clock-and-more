@@ -127,6 +127,10 @@ class _SoftwareCanvas:
     here only cost ~2,000 Python calls per frame.
     """
 
+    # The real rgbmatrix drawing functions (C) only accept their own canvas type; the
+    # graphics wrappers in canvas_mirror skip them for this one (see _is_software there).
+    is_software = True
+
     def __init__(self, width: int, height: int, pil_image: Image.Image = None):
         self.width = width
         self.height = height
