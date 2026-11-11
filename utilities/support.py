@@ -17,9 +17,7 @@ log = logging.getLogger(__name__)
 VENMO_HANDLE = "roy-hobbs"
 VENMO_URL = f"https://venmo.com/u/{VENMO_HANDLE}"
 PAYPAL_EMAIL = "rdhobbs@gmail.com"
-# Classic PayPal payment link: works for a personal account, the sender types the amount
-PAYPAL_URL = ("https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=rdhobbs%40gmail.com"
-              "&item_name=Flight+Clock+tip&currency_code=USD")
+PAYPAL_URL = "https://paypal.me/royman0"
 FEEDBACK_EMAIL = "rdhobbs@gmail.com"
 
 KINDS = ("Issue", "Idea", "Question", "Other")
