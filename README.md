@@ -13,7 +13,7 @@ Everything is set up from a web page on your phone or computer: no config files,
 > **Want one without building it?** I'll build a Flight Clock for you: **$230–250**, depending on the panel and case. Email me at [rdhobbs@gmail.com](mailto:rdhobbs@gmail.com?subject=Flight%20Clock%20build). See [Have one built for you](#have-one-built-for-you).
 
 > **Don't have a Pi?** Run Flight Clock on your **Mac or Windows PC** instead: same modules, in a window or on your desktop, with extra looks the LED panel can't do (vintage airport flip board, colour e-ink, retro clock cases, music visualizers).
-> → **[Download Flight Clock for Mac and Windows](https://github.com/RoyMan0/Flight-Clock-App/releases/latest)**
+> → **[Download Flight Clock for Mac and Windows](https://github.com/RoyMan0/Flight-Clock-App)**
 
 <img src="docs/app-styles.png" alt="The Mac and Windows app: flip board, e-ink, visualizer and retro cases" width="100%">
 
