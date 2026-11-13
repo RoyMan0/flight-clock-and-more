@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import shutil
 import threading
 from datetime import datetime
@@ -155,7 +156,17 @@ class ConfigManager:
         tmp = path + ".tmp"
         with open(tmp, "w") as f:
             json.dump(data, f, indent=2)
-        os.replace(tmp, path)
+        # On Windows the replace fails with PermissionError while another program has the file
+        # open for a moment (antivirus scanning the file just written, Dropbox, an indexer).
+        # The setup wizard writes ~15 times in a row and hit it on a first install.
+        for attempt in range(20):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     # ------------------------------------------------------------------
     # Backup / restore

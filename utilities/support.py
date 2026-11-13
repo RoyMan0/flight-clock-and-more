@@ -21,7 +21,7 @@ PAYPAL_URL = "https://paypal.me/royman0"
 FEEDBACK_EMAIL = "rdhobbs@gmail.com"
 # The two projects link to each other (About page, READMEs)
 PI_PROJECT_URL = "https://github.com/RoyMan0/flight-clock-and-more"
-APP_PROJECT_URL = "https://github.com/RoyMan0/Flight-Clock-App/releases/latest"
+APP_PROJECT_URL = "https://github.com/RoyMan0/Flight-Clock-App"
 APP_PUBLIC = True       # the app is public: the Pi's About page links to its download
 BUILD_PRICE = "$230–250"   # built-to-order clocks (README "Have one built for you", the app's About page)
 

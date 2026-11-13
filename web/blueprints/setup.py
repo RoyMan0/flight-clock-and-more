@@ -298,9 +298,9 @@ def setup_save():
     cfg.save_config_section("location", "clock_format", value=clock_format)
 
     try:
-        radius = int(loc.get("search_radius_nm", 30))
+        radius = int(loc.get("search_radius_nm", 3))
     except (TypeError, ValueError):
-        radius = 30
+        radius = 3
     cfg.save_config_section("location", "search_radius_nm", value=radius)
 
     airport = loc.get("journey_code", "").strip().upper()

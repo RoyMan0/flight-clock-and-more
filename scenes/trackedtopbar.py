@@ -5,6 +5,7 @@ from utilities.temperature import get_temperature_cached, get_forecast_cached
 from setup import colours, fonts, frames, screen
 from config import CLOCK_FORMAT, NIGHT_START, NIGHT_END
 import logging
+from utilities.timefmt import strftime
 
 CLOCK_FONT = fonts.large_bold
 CLOCK_X = 0
@@ -104,7 +105,7 @@ class TrackedTopBarScene(object):
     def _topbar_draw(self):
         now = datetime.now()
         clock_fmt = "%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M"
-        current_time = now.strftime(clock_fmt).strip()
+        current_time = strftime(now, clock_fmt).strip()
         current_date = now.strftime("%b %d")
 
         clock_color = CLOCK_NIGHT_COLOUR if self._topbar_is_night() else CLOCK_DAY_COLOUR

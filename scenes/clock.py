@@ -5,6 +5,7 @@ from setup import colours, fonts, frames
 from rgbmatrix import graphics
 import logging
 from config import CLOCK_FORMAT, NIGHT_END, NIGHT_START
+from utilities.timefmt import strftime
 
 # Configure logging
 #logging.basicConfig(filename='myapp.log', level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -99,7 +100,7 @@ class ClockScene(object):
 
         now = datetime.now()
         clock_format = "%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M"
-        current_time = now.strftime(clock_format)
+        current_time = strftime(now, clock_format)
 
         utc_sunrise, utc_sunset = self.calculate_sunrise_sunset()
         now_utc = datetime.now(timezone.utc)

@@ -23,7 +23,7 @@
     "timezone": "America/New_York",
     "journey_code": "",
     "journey_blank_filler": " ? ",
-    "search_radius_nm": 30,
+    "search_radius_nm": 3,
     "zone_home": {
       "tl_x": 0.0,
       "tl_y": 0.0,

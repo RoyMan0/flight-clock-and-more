@@ -154,6 +154,7 @@
   .plugin-row .name { flex: 1; font-size: 14px; min-width: 0; }
   .plugin-row .name small { display: block; font-size: 11.5px; opacity: .6; margin-top: 2px; }
   .key-tip { font-size: 12px; opacity: .7; margin-top: 4px; line-height: 1.35; }
+  .key-tip a { color: var(--blue); font-weight: 600; }
   .plugin-row .dur  { width: 54px; }
   .plugin-row .dur input {
     width: 100%; background: var(--bg); border: 1px solid var(--border);
@@ -351,8 +352,9 @@
         <div class="field">
           <label>Flight search radius (nm)</label>
           <input type="number" id="loc-radius" min="1" max="200"
-                 value="{{ location.get('search_radius_nm', 30) }}"
-                 placeholder="30">
+                 value="{{ location.get('search_radius_nm', 3) }}"
+                 placeholder="3">
+          <div class="key-tip">Nautical miles: 3 nm is about 3½ miles. Small = planes you can see overhead, and fewer lookups.</div>
         </div>
         <div class="field">
           <label>Home airport (IATA code)</label>
@@ -388,7 +390,8 @@
   <!-- ── Step 3: API Keys ──────────────────────────────────────── -->
   <section id="step-api">
     <h2>API Keys</h2>
-    <p class="sub">All optional — add keys to unlock specific features.</p>
+    <p class="sub">All optional, and all free: add keys to unlock specific features. Each link opens the
+      sign-up page; make an account, copy the key and paste it here.</p>
 
     <div class="card" style="padding:16px;">
       <div class="field">
@@ -397,6 +400,9 @@
                placeholder="Paste key or leave blank"
                value="{{ secrets.get('tomorrow_api_key','') }}"
                autocomplete="off">
+        <div class="key-tip">Free: 500 calls a day, plenty for the clock. The clock's current weather and forecast.
+          <a href="https://app.tomorrow.io/signup" target="_blank" rel="noopener">Get a key</a>
+          (after signing up it's under <b>Development → API Keys</b>).</div>
       </div>
       <div class="field">
         <label>AirLabs — Flight Data</label>
@@ -404,7 +410,9 @@
                placeholder="Paste key or leave blank"
                value="{{ (secrets.get('airlabs_api_keys') or [''])[0] }}"
                autocomplete="off">
-        <div class="key-tip">Free: 1,000 lookups a month.</div>
+        <div class="key-tip">Free: 1,000 lookups a month. Where each overhead flight is going, and its delays.
+          <a href="https://airlabs.co/signup" target="_blank" rel="noopener">Get a key</a>
+          (it's on your account page after you sign up).</div>
       </div>
       <div class="field">
         <label>FlightAware — Flight Data (alternative)</label>
@@ -412,7 +420,10 @@
                placeholder="Paste key or leave blank"
                value="{{ (secrets.get('flightaware_api_keys') or [''])[0] }}"
                autocomplete="off">
-        <div class="key-tip">Free: about $5 of lookups a month — $10 if you share ADS-B data with FlightAware (e.g. PiAware).</div>
+        <div class="key-tip">Free: about $5 of lookups a month ($10 if you share ADS-B data with FlightAware, e.g. PiAware),
+          used when AirLabs runs out. It asks for a card, but the clock stops using it at $4.50 a month, so it stays free.
+          <a href="https://www.flightaware.com/aeroapi/signup/personal" target="_blank" rel="noopener">Get a key</a>
+          (choose <b>Personal</b>, then <b>API Keys</b>).</div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>OpenWeatherMap — Precipitation &amp; Wind Alerts</label>
@@ -420,6 +431,10 @@
                placeholder="Paste key or leave blank"
                value="{{ secrets.get('owm_api_key','') }}"
                autocomplete="off">
+        <div class="key-tip">Free: 1,000 calls a day. Rain-starting-soon and strong-wind alerts on the clock.
+          <a href="https://home.openweathermap.org/users/sign_up" target="_blank" rel="noopener">Get a key</a>,
+          then subscribe it to <b>One Call API 3.0</b> (it asks for a card; the first 1,000 calls a day are free,
+          and you can set a daily limit of 1,000 so it never charges). A new key can take an hour to start working.</div>
       </div>
     </div>
 
@@ -745,7 +760,7 @@ async function saveAndFinish() {
       units:            document.getElementById('loc-units').value,
       clock_format:     document.getElementById('loc-clock').value,
       timezone:         document.getElementById('loc-timezone').value,
-      search_radius_nm: parseInt(document.getElementById('loc-radius').value) || 30,
+      search_radius_nm: parseInt(document.getElementById('loc-radius').value) || 3,
       journey_code:     document.getElementById('loc-airport').value.trim().toUpperCase(),
       min_altitude:     parseInt(document.getElementById('loc-minalt').value) || 8000,
       flight_email:     document.getElementById('loc-email').value.trim(),
@@ -765,14 +780,19 @@ async function saveAndFinish() {
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload),
     });
-    if (!r1.ok) throw new Error('save failed');
-
-    await fetch('/setup/finish', { method:'POST' });
-    showFinish();
+    if (!r1.ok) {
+      let why = 'the clock answered ' + r1.status;
+      try { why = (await r1.json()).error || why; } catch (_) {}
+      throw new Error(why);
+    }
   } catch(e) {
     btn.textContent = 'Save & Start'; btn.disabled = false;
-    alert('Error saving config: ' + e.message);
+    alert('Error saving config: ' + e.message + '. Please try Save & Start again.');
+    return;
   }
+  // Saved. The finish call restarts the app, which can cut its answer short: not an error.
+  try { await fetch('/setup/finish', { method:'POST' }); } catch (_) {}
+  showFinish();
 }
 
 function showFinish() {

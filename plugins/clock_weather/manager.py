@@ -17,6 +17,7 @@ from scenes.daysforecast import DaysForecastScene
 from scenes.alerts import AlertsScene
 from scenes.isspass import ISSPassScene
 from setup import frames
+from utilities.timefmt import strftime
 
 
 class _ClockWeatherDisplay(ClockScene, DateScene, TemperatureScene, DaysForecastScene, AlertsScene, ISSPassScene, Animator):
@@ -106,7 +107,7 @@ class ClockWeatherPlugin(BasePlugin):
         d = self._display
         now = datetime.now()
         out = {"view": "clock",
-               "time": now.strftime("%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M").strip(),
+               "time": strftime(now, "%l:%M" if CLOCK_FORMAT == "12hr" else "%H:%M").strip(),
                "ampm": now.strftime("%p") if CLOCK_FORMAT == "12hr" else "",
                "date": now.strftime("%b %d"), "weekday": now.strftime("%A")}
         if d is not None and getattr(d, "_iss_active", False):

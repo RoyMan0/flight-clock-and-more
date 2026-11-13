@@ -22,6 +22,7 @@ from plugins.base_plugin import BasePlugin
 from utilities.solar import angular_dist as _angular_dist, sun_geo_position as _sun_geo_position
 from utilities.temperature import get_temperature_cached, get_forecast_cached
 from config import NIGHT_START, NIGHT_END, CLOCK_FORMAT, TEMPERATURE_UNITS
+from utilities.timefmt import strftime
 
 log = logging.getLogger(__name__)
 
@@ -378,7 +379,7 @@ def _render_frame(
         time_str = date_str = temp_str = None
         if show_time:
             fmt = "%l:%M%p" if CLOCK_FORMAT == "12hr" else "%H:%M"
-            time_str = dt_local.strftime(fmt).strip().replace("AM", "A").replace("PM", "P")
+            time_str = strftime(dt_local, fmt).strip().replace("AM", "A").replace("PM", "P")
         if show_date:
             date_str = f"{dt_local.month}/{dt_local.day}"
         if show_temp and temperature is not None:
@@ -479,7 +480,7 @@ class WorldDaylightPlugin(BasePlugin):
         out = {"sun": [round(sun_lat, 1), round(sun_lon, 1)], "moon": [round(moon_lat, 1), round(moon_lon, 1)],
                "moon_phase": phase if phase is not None else 4, "night": _is_local_night()}
         if self.config.get("show_time", True):
-            out["time"] = now.strftime("%l:%M %p" if CLOCK_FORMAT == "12hr" else "%H:%M").strip()
+            out["time"] = strftime(now, "%l:%M %p" if CLOCK_FORMAT == "12hr" else "%H:%M").strip()
         if self.config.get("show_date", True):
             out["date"] = f"{now:%b} {now.day}"
         if self.config.get("show_temp", True) and temp is not None:
