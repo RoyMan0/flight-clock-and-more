@@ -66,7 +66,7 @@ The web page also has a live mirror of the panel, flight logs and maps (closest 
 | [Small CPU heatsink](https://www.adafruit.com/product/3084) | |
 | [2×20 stacking header](https://www.microcenter.com/product/480891/schmartboard-inc-schmartboard-inc-short-2x20-female-stackable-headers-qty-4) | Lifts the bonnet clear of the heatsink (not needed with the small heatsink above). |
 | M2.5 screws | To hold the bonnet on the Pi and the Pi in the case. |
-| Case | A 3D-printed case (link coming soon), or build one from wood. |
+| Case | A 3D-printed case (link coming soon for what I use!), or build one from wood or anything. Here are a few other cases that could also work (I did not try these) - [Case 1](https://makerworld.com/en/models/1583919-led-matrix-64x32-w-esp32-m4-matrix-portal-housing?from=search#profileId-1667321) [Case 2](https://makerworld.com/en/models/819892-tracker-clock-case-rgb-matrix#profileId-762764) [Case 3](https://makerworld.com/en/models/1624408-led-matrix-frame?from=search)|
 | Bluetooth speaker | Optional, for the plane and score sounds. |
 
 A soldering iron is only needed for the optional PWM bridge on the bonnet (GPIO 4 to 18), which makes the panel smoother. The Pi 3 looks fine without it.
