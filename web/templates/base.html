@@ -90,6 +90,53 @@
   </div>
 </nav>
 
+{% if update_status.available %}{# utilities/update_check.py: found by the daily check #}
+<div id="fc-update" class="container-fluid px-3 px-md-4 mb-3" style="display:none">
+  <div class="d-flex flex-wrap align-items-center gap-2 rounded px-3 py-2"
+       style="background:#1f3b2a;border:1px solid #2f7a4c;color:#d8f5e3">
+    <i class="bi bi-cloud-arrow-down-fill" style="color:#7df9aa"></i>
+    <span class="flex-grow-1" style="min-width:0" id="fc-update-text">
+      {% if desktop %}Flight Clock <strong>{{ update_status.version }}</strong> is available. Please update: your settings are kept.
+      {% else %}A Flight Clock update is ready ({{ update_status.count }} change{{ '' if update_status.count == 1 else 's' }}). Please update: it takes a minute and the clock restarts by itself.{% endif %}
+    </span>
+    <button class="btn btn-sm btn-success flex-shrink-0" id="fc-update-go">
+      {% if desktop %}<i class="bi bi-download me-1"></i>Download{% else %}<i class="bi bi-arrow-repeat me-1"></i>Update now{% endif %}</button>
+    <button class="btn btn-sm btn-outline-light flex-shrink-0" id="fc-update-later">Later</button>
+  </div>
+</div>
+<script>
+(function () {
+  const key = 'fc-update-later-{{ update_status.version or update_status.count }}';
+  const box = document.getElementById('fc-update');
+  try { if (sessionStorage.getItem(key)) return; } catch (_) {}
+  box.style.display = '';
+  document.getElementById('fc-update-later').onclick = () => {
+    box.style.display = 'none';
+    try { sessionStorage.setItem(key, '1'); } catch (_) {}
+  };
+  const go = document.getElementById('fc-update-go'), text = document.getElementById('fc-update-text');
+  go.onclick = async () => {
+    {% if desktop %}
+    fetch('/api/desktop/open/update', { method: 'POST' });
+    text.textContent = 'The download is opening in your browser. Install it over this copy; your settings are kept.';
+    {% else %}
+    if (!confirm('Install the update and restart the clock?')) return;
+    go.disabled = true;
+    text.textContent = 'Installing the update…';
+    try {
+      const d = await fetch('/api/system/update', { method: 'POST' }).then(r => r.json());
+      if (!d.ok) { text.textContent = 'The update failed: ' + (d.output || 'unknown error'); go.disabled = false; return; }
+      text.textContent = d.deps_changed
+        ? 'Installed. Adding new parts, then restarting (a few minutes on a Pi 3)…'
+        : 'Installed. Restarting…';
+      setTimeout(() => location.reload(), d.deps_changed ? 120000 : 8000);
+    } catch (_) { text.textContent = 'The update failed. Is the clock online?'; go.disabled = false; }
+    {% endif %}
+  };
+})();
+</script>
+{% endif %}
+
 <div class="container-fluid px-3 px-md-4">
   {% block content %}{% endblock %}
 </div>

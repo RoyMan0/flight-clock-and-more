@@ -593,6 +593,15 @@
               <label class="form-label">Alert Email</label>
               <input type="email" class="form-control bg-dark text-light border-secondary"
                      x-model="sysCfg.flights.email">
+              <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="emailUpdates"
+                       :checked="sysCfg.flights.email_updates !== false"
+                       @change="sysCfg.flights.email_updates = $event.target.checked">
+                <label class="form-check-label small" for="emailUpdates">Email me about updates</label>
+              </div>
+              <div class="form-text">Flight alerts go here too. When a new version of Flight Clock is out,
+                you get one email{% if not desktop %} and the settings pages show an Update now banner{% else %};
+                the settings pages and the ✈ menu show it as well{% endif %}.</div>
             </div>
             <div class="col-md-3">
               <label class="form-label">Max Closest Logged</label>

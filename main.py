@@ -147,6 +147,14 @@ def main():
             log.warning(f"Web server failed to start: {e}")
 
     # ------------------------------------------------------------------
+    # Daily update check: a banner on the settings pages, and one email per
+    # update to the Alert Email (utilities/update_check.py)
+    # ------------------------------------------------------------------
+    if not args.no_hardware:
+        from utilities import update_check
+        update_check.start()
+
+    # ------------------------------------------------------------------
     # The settings page's address on the panel for a moment (a minute right
     # after the setup wizard), so people can find it on their home network
     # ------------------------------------------------------------------

@@ -256,6 +256,7 @@
   "flights": {
     "max_closest": 5,
     "max_farthest": 5,
-    "email": ""
+    "email": "",
+    "email_updates": true
   }
 }

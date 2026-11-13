@@ -1787,16 +1787,11 @@ def enter_setup_mode():
 
 @api_bp.get("/system/check-updates")
 def check_updates():
-    try:
-        subprocess.run(["git", "fetch"], cwd=BASE_DIR, capture_output=True, timeout=15)
-        result = subprocess.run(
-            ["git", "rev-list", "HEAD..@{u}", "--count"],
-            cwd=BASE_DIR, capture_output=True, text=True, timeout=10,
-        )
-        count = int(result.stdout.strip() or "0")
-        return jsonify({"ok": True, "has_updates": count > 0, "count": count})
-    except Exception as e:
-        return jsonify({"ok": False, "has_updates": False, "error": str(e)}), 500
+    from utilities import update_check           # also refreshes the settings pages' banner
+    info = update_check.check_now()
+    if info.get("error"):
+        return jsonify({"ok": False, "has_updates": False, "error": info["error"]}), 500
+    return jsonify({"ok": True, "has_updates": bool(info.get("available")), "count": info.get("count", 0)})
 
 
 def _requirements_hash():
@@ -1843,6 +1838,8 @@ def update_app():
         updated = output != "Already up to date."
         deps_changed = False
         if updated:
+            from utilities import update_check
+            update_check.mark_installed()
             deps_changed = _requirements_hash() != req_before
             if deps_changed:
                 output += "\nInstalling updated Python dependencies before restart (may take a few minutes)…"

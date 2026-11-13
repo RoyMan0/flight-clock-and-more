@@ -84,6 +84,16 @@ People reach the settings at `http://<Pi IP>:8080`, only on their home network, 
 - **On the panel at startup** (`main.py`, just before `pm.run()`, Pi only): "Settings at <IP> / port 8080 / on your Wi-Fi" for `BOOT_SECONDS` (20 s), or `AFTER_SETUP_SECONDS` (60 s) on the first start after the setup wizard (`/setup/finish` writes `DATA_ROOT/data/just_set_up`; `startup_seconds()` consumes it). The System Settings switch `display.show_address_at_startup` (default on; a missing key counts as on) turns off the ordinary-restart card, never the after-setup one. While the Wi-Fi is still coming up it shows "Joining Wi-Fi..." for up to 30 s, then gives up quietly. `local_ip()` uses a UDP socket's outgoing address (no packet sent), falling back to `hostname -I`. It never raises: the clock must start.
 - **The wizard's last screen**, when the page was opened through the FltClk hotspot (`location.hostname == HOTSPOT_IP`): no redirect (that address dies when the Pi joins the home Wi-Fi). Instead: switch back to home Wi-Fi, read the address off the clock, open `http://<IP>:8080` and bookmark it; `http://<hostname>.local:8080` is offered for Apple devices.
 
+### Update notices (`utilities/update_check.py`)
+
+About once a day (first check 90 s after start; `main.py` on the Pi, the shells' `start_update_checks()` in the app) it looks for a newer Flight Clock:
+- **Pi:** `git fetch` + commits in `HEAD..@{u}`. The dashboard's Check for Updates uses the same `check_now()`; a successful `POST /api/system/update` calls `mark_installed()`.
+- **Desktop app:** the shell registers `set_checker(fn, on_new)`: `fn` reads the app's GitHub `releases/latest` and returns `{"version", "url"}` (the installer for this computer) or None; `on_new` shows the native alert and the ✈ menu item.
+
+When one is found:
+- every page built on `base.html` shows a banner (`update_status` from the context processor): **Update now** on the Pi (confirm → `/api/system/update`), **Download** in the app (`/api/desktop/open/update`). **Later** hides it for the browser session.
+- **one email** to the Alert Email (`flights.email`) unless `flights.email_updates` is false (the switch under that field; a missing key means on), sent through `email_alerts._send(receiver=…)`. The Pi emails once when updates appear and again only after they've been installed (it pulls every commit, so per-commit emails would be spam); the app emails once per version. What was notified is kept in `DATA_ROOT/data/update_check.json`, so restarts don't repeat it.
+
 ### Plugin System (`core/plugin_manager.py`)
 
 The main loop runs at 10 fps. Every frame, `_dispatch()` is called:
